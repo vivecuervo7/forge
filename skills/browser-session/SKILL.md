@@ -86,7 +86,7 @@ node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-registry.mjs invoke <name> '<json-args>
 
 The registry dynamic-imports the snippet, extracts the `run` body, prepends precondition checks, inlines `args`, and shells out to `playwright-cli -s=forge run-code "..."`. Output is one line of JSON:
 
-- `{"ok":true,"tier":"library","useCount":4,"output":"..."}` — success. Stats bumped, history appended.
+- `{"ok":true,"tier":"library","useCount":4,"hadResult":true,"result":<value>}` — success. Stats bumped, history appended. `result` holds whatever the snippet's `run()` returned (parsed as JSON if structured). `hadResult: false` means the snippet ran successfully but returned `undefined` — common for side-effectful snippets that just *do* something (delete an email, click a button) without computing a value. Both forms are normal; report what makes sense to the user (the value if there is one, "done" if not).
 - `{"ok":false,"stage":"precondition","error":"precondition: url expected /github\\.com\\.+\\/pull\\/\\d+/ but on https://www.google.com"}` — preconditions failed. Don't retry blindly. Surface the reason and ask the user how to proceed (e.g. navigate first, then retry).
 - `{"ok":false,"stage":"run","error":"..."}` — the snippet itself threw. In a future step this will trigger a `snippet-repair` agent. For now, report the error and tell the user the snippet may have drifted under DOM changes.
 

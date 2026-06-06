@@ -39,7 +39,7 @@
 // History events are appended to <snippet>.history.jsonl in the snippet's tier dir.
 // stats.json is updated atomically (read → mutate → write).
 
-import { readFileSync, writeFileSync, readdirSync, existsSync, statSync, appendFileSync, renameSync, unlinkSync } from 'node:fs'
+import { readFileSync, writeFileSync, readdirSync, existsSync, statSync, appendFileSync, renameSync, unlinkSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
 import { spawnSync } from 'node:child_process'
@@ -510,9 +510,22 @@ return await __wrRun(page, args);
   //   ```js
   //   <code we just sent — already in our repo, pure noise>
   //   ```
-  // We surface only the result. If parsing fails, fall back to a truncated raw
-  // tail so the caller can still see something.
-  const result = extractResult(r.stdout || '')
+  // Playwright-cli OMITS the entire "### Result" block when the snippet's
+  // return value is undefined. extracted.hadResult disambiguates that case from
+  // a snippet that explicitly returned null.
+  const extracted = extractResult(r.stdout || '')
+
+  // Optional debug dump — set FORGE_DEBUG=1 to capture raw stdout/stderr to disk.
+  // Files land in $FORGE_ROOT/debug/ so they don't clutter the data root.
+  if (process.env.FORGE_DEBUG) {
+    const dbgDir = join(ROOT, 'debug')
+    try { mkdirSync(dbgDir, { recursive: true }) } catch {}
+    const ts = nowIso().replace(/[:.]/g, '-')
+    try {
+      writeFileSync(join(dbgDir, `${ts}-${name}.stdout.txt`), r.stdout || '', 'utf8')
+      writeFileSync(join(dbgDir, `${ts}-${name}.stderr.txt`), r.stderr || '', 'utf8')
+    } catch {}
+  }
 
   // If we promoted, also regenerate the index so the new tier shows up correctly.
   if (promotion) regenerateIndex()
@@ -522,7 +535,8 @@ return await __wrRun(page, args);
     tier: entry.tier,
     useCount: entry.useCount,
     promoted: promotion,
-    result,
+    hadResult: extracted.hadResult,
+    result: extracted.value,
   }) + '\n')
 }
 
@@ -530,14 +544,16 @@ function extractResult(stdout) {
   // Match the "### Result\n...\n### Ran Playwright code" block; the value is whatever's
   // between those headers. If there's no "Ran Playwright code" trailer, take everything
   // after "### Result" to EOF.
+  //
+  // Returns:
+  //   { hadResult: true,  value: <parsed value> } — snippet explicitly returned something
+  //   { hadResult: true,  value: null }            — snippet returned null
+  //   { hadResult: false, value: null }            — snippet returned undefined (no result block)
   const match = stdout.match(/### Result\n([\s\S]*?)(?:\n### Ran Playwright code|$)/)
-  if (!match) return null
+  if (!match) return { hadResult: false, value: null }
   const raw = match[1].trim()
-  if (!raw) return null
-  // Try to parse as JSON for structured output (objects, arrays, numbers, booleans).
-  // String values from JSON.stringify in the snippet come quoted; non-JSON values
-  // (bare text returned by an evaluate, or undefined → empty) flow through as-is.
-  try { return JSON.parse(raw) } catch { return raw }
+  if (!raw) return { hadResult: true, value: null }
+  try { return { hadResult: true, value: JSON.parse(raw) } } catch { return { hadResult: true, value: raw } }
 }
 
 async function main() {
