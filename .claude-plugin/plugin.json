@@ -1,0 +1,10 @@
+{
+  "name": "forge",
+  "description": "Drive your live browser session from Claude — attach over CDP, invoke replayable snippets, author new ones on demand",
+  "version": "0.1.0",
+  "author": {
+    "name": "Isaac Dedini"
+  },
+  "license": "MIT",
+  "keywords": ["browser", "playwright", "cdp", "automation", "snippets", "productivity"]
+}
