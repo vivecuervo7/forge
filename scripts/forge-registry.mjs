@@ -195,12 +195,18 @@ function regexLiteral(re) {
 // Build JS snippets that check meta.preconditions at the top of the run-code body.
 // On failure, throw an Error whose message begins with "precondition:" so the
 // caller can distinguish precondition failures from run failures.
+//
+// The URL precondition is gated on `__wrOpenedFresh` — when the wrapper just
+// opened a new tab because no existing one matched, the snippet is expected to
+// navigate via its own page.goto(...). Enforcing the URL precondition against
+// an about:blank in that case would defeat the snippet before it gets to run.
+// `visible` checks still apply unconditionally.
 function buildPreconditionChecks(preconditions) {
   if (!preconditions) return ''
   const checks = []
 
   if (preconditions.url) {
-    checks.push(`{
+    checks.push(`if (!__wrOpenedFresh) {
   const __re = ${regexLiteral(preconditions.url)};
   const __u = page.url();
   if (!__re.test(__u)) throw new Error('precondition: url expected ' + __re + ' but on ' + __u);
@@ -441,8 +447,10 @@ async function invokeSnippet(name, args) {
     ? `const __wrCtx = page.context();
 const __wrTargetRe = ${regexLiteral(meta.preconditions.url)};
 const __wrTarget = __wrCtx.pages().findLast(p => __wrTargetRe.test(p.url()));
+const __wrOpenedFresh = !__wrTarget;
 page = __wrTarget || await __wrCtx.newPage();`
-    : `page = await page.context().newPage();`
+    : `const __wrOpenedFresh = true;
+page = await page.context().newPage();`
 
   // Assemble the run-code argument. The whole `run` function is embedded as a
   // callable rather than its body extracted — this sidesteps brace-matching
@@ -465,8 +473,20 @@ return await __wrRun(page, args);
     maxBuffer: 16 * 1024 * 1024,
   })
 
-  if (r.status !== 0) {
-    const errText = ((r.stderr || '') + (r.stdout || '')).trim()
+  // playwright-cli run-code exits 0 even when the wrapped function throws —
+  // it emits `### Error\n<message>` to stdout instead of returning non-zero.
+  // We need to detect both: a non-zero status (rare; usually means playwright-cli
+  // itself blew up) AND the presence of an `### Error` block in stdout (the
+  // common failure path — the snippet body threw).
+  const stderr = r.stderr || ''
+  const stdout = r.stdout || ''
+  const errMatch = stdout.match(/### Error\n([\s\S]*?)(?:\n### Ran Playwright code|$)/)
+  const runFailed = r.status !== 0 || errMatch !== null
+
+  if (runFailed) {
+    const errText = errMatch
+      ? errMatch[1].trim()
+      : (stderr + stdout).trim()
     const isPrecondition = /precondition:/i.test(errText)
     appendHistory(tierDir, name, {
       event: isPrecondition ? 'precondition-failed' : 'invoke-failed',
