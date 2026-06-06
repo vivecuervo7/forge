@@ -6,16 +6,29 @@
 //   show <name>               Print one snippet's metadata + path
 //   reindex                   Regenerate ~/.claude/.vive-claude/forge/INDEX.md
 //   invoke <name> [json-args] Run the snippet against the 'forge' playwright-cli session
-//                             (precondition check + run + stats bump + history append)
+//                             (precondition check + run + stats bump + history + auto-promote)
 //   record-authoring <name> [json-result]
 //                             Record that the snippet was authored AND first-used during a drive.
 //                             Initialises stats (useCount: 1), appends an 'authored' event to
 //                             history, regenerates INDEX.md. Avoids double-execution on first
 //                             encounter — the agent's drive IS the first use.
 //   delete <name> [--force]   Remove the snippet file, its history.jsonl, and its stats entry;
-//                             regenerate INDEX.md. Refuses on library/ and staged/ without --force
-//                             (those tiers represent promoted snippets — losing one is significant).
-//                             scratch/ and broken/ are removable without --force.
+//                             regenerate INDEX.md. Refuses on library/ and staged/ without --force.
+//   prune [--dry-run]         Apply TTL lifecycle: prune unused scratch (default 7d), demote
+//                             unused staged → scratch (default 60d), report stale library
+//                             entries (default 90d, never auto-deleted). --dry-run lists what
+//                             would happen without applying.
+//
+// Tier promotion:
+//   useCount >= STAGE_AT   (default 2) → promote to staged
+//   useCount >= LIBRARY_AT (default 3) → promote to library
+//   Promotion runs automatically after every successful invoke / record-authoring.
+//   Override via FORGE_STAGE_AT and FORGE_LIBRARY_AT env vars.
+//
+// TTLs:
+//   FORGE_SCRATCH_TTL_DAYS   (default 7)   scratch → delete if unused for N days
+//   FORGE_STAGED_TTL_DAYS    (default 60)  staged → demote to scratch if unused for N days
+//   FORGE_LIBRARY_STALE_DAYS (default 90)  library → report stale (never auto-delete)
 //
 // Invocation shells out to `playwright-cli -s=forge run-code "..."`. The
 // snippet's run(page, args) body is extracted via .toString() after dynamic
@@ -38,6 +51,12 @@ const TIERS = ['library', 'staged', 'scratch', 'broken']
 const STATS_PATH = join(ROOT, 'stats.json')
 const INDEX_PATH = join(ROOT, 'INDEX.md')
 
+const STAGE_AT = Number(process.env.FORGE_STAGE_AT || 2)
+const LIBRARY_AT = Number(process.env.FORGE_LIBRARY_AT || 3)
+const SCRATCH_TTL_MS = Number(process.env.FORGE_SCRATCH_TTL_DAYS || 7) * 86_400_000
+const STAGED_TTL_MS = Number(process.env.FORGE_STAGED_TTL_DAYS || 60) * 86_400_000
+const LIBRARY_STALE_MS = Number(process.env.FORGE_LIBRARY_STALE_DAYS || 90) * 86_400_000
+
 function die(msg, code = 1) {
   console.error('forge-registry:', msg)
   process.exit(code)
@@ -59,6 +78,46 @@ function writeStats(stats) {
 function appendHistory(tierDir, name, event) {
   const path = join(tierDir, `${name}.history.jsonl`)
   appendFileSync(path, JSON.stringify({ ts: nowIso(), ...event }) + '\n', 'utf8')
+}
+
+// Move a snippet (.ts + .history.jsonl) between tier directories. Returns the new path.
+function moveSnippet(name, fromTier, toTier) {
+  const fromDir = join(ROOT, fromTier)
+  const toDir = join(ROOT, toTier)
+  const tsFrom = join(fromDir, `${name}.ts`)
+  const tsTo = join(toDir, `${name}.ts`)
+  const histFrom = join(fromDir, `${name}.history.jsonl`)
+  const histTo = join(toDir, `${name}.history.jsonl`)
+  if (existsSync(tsFrom)) renameSync(tsFrom, tsTo)
+  if (existsSync(histFrom)) renameSync(histFrom, histTo)
+  return tsTo
+}
+
+// Resolve the target tier for a snippet based on its useCount.
+// Returns null if no promotion is warranted from the current tier.
+function targetTierFor(currentTier, useCount) {
+  if (currentTier === 'broken') return null // quarantined; promotion shouldn't move it
+  if (useCount >= LIBRARY_AT && currentTier !== 'library') return 'library'
+  if (useCount >= STAGE_AT && currentTier !== 'library' && currentTier !== 'staged') return 'staged'
+  return null
+}
+
+// Apply auto-promotion if warranted. Mutates the stats entry in place and moves files.
+// Caller is responsible for writeStats() after.
+function maybePromote(name, statsEntry, sessionId) {
+  const next = targetTierFor(statsEntry.tier, statsEntry.useCount)
+  if (!next) return null
+  const from = statsEntry.tier
+  moveSnippet(name, from, next)
+  statsEntry.tier = next
+  appendHistory(join(ROOT, next), name, {
+    event: 'promoted',
+    from,
+    to: next,
+    useCount: statsEntry.useCount,
+    sessionId,
+  })
+  return { from, to: next }
 }
 
 function listSnippets() {
@@ -176,6 +235,84 @@ function ensureSession() {
   }
 }
 
+function pruneStale(dryRun) {
+  const stats = readStats()
+  const now = Date.now()
+  const actions = { pruned: [], demoted: [], promoted: [], stale: [] }
+
+  // Reconcile any snippets whose useCount has overrun their tier (e.g. manual
+  // stats edits, or thresholds tightened since last invoke). Idempotent.
+  for (const [name, entry] of Object.entries(stats)) {
+    const target = targetTierFor(entry.tier, entry.useCount)
+    if (!target) continue
+    const from = entry.tier
+    if (dryRun) {
+      actions.promoted.push({ name, from, to: target, useCount: entry.useCount, reason: 'reconcile' })
+      continue
+    }
+    moveSnippet(name, from, target)
+    appendHistory(join(ROOT, target), name, {
+      event: 'promoted',
+      from,
+      to: target,
+      useCount: entry.useCount,
+      reason: 'reconcile',
+    })
+    entry.tier = target
+    actions.promoted.push({ name, from, to: target, useCount: entry.useCount, reason: 'reconcile' })
+  }
+
+  // Apply TTL rules.
+  for (const [name, entry] of Object.entries({ ...stats })) {
+    if (!stats[name]) continue // may have been deleted by an earlier iteration
+    const lastUsedMs = entry.lastUsed ? Date.parse(entry.lastUsed) : 0
+    const age = now - lastUsedMs
+
+    if (entry.tier === 'scratch' && age > SCRATCH_TTL_MS && entry.useCount < STAGE_AT) {
+      // Scratch + stale + never reused → delete entirely.
+      if (dryRun) {
+        actions.pruned.push({ name, ageDays: Math.round(age / 86_400_000), useCount: entry.useCount })
+        continue
+      }
+      const tierDir = join(ROOT, 'scratch')
+      const tsPath = join(tierDir, `${name}.ts`)
+      const histPath = join(tierDir, `${name}.history.jsonl`)
+      if (existsSync(tsPath)) unlinkSync(tsPath)
+      if (existsSync(histPath)) unlinkSync(histPath)
+      delete stats[name]
+      actions.pruned.push({ name, ageDays: Math.round(age / 86_400_000), useCount: entry.useCount })
+    } else if (entry.tier === 'staged' && age > STAGED_TTL_MS) {
+      // Staged + stale → demote to scratch (gives it a final scratch TTL window).
+      if (dryRun) {
+        actions.demoted.push({ name, ageDays: Math.round(age / 86_400_000), from: 'staged', to: 'scratch' })
+        continue
+      }
+      moveSnippet(name, 'staged', 'scratch')
+      appendHistory(join(ROOT, 'scratch'), name, {
+        event: 'demoted',
+        from: 'staged',
+        to: 'scratch',
+        reason: 'staged-ttl-exceeded',
+        ageDays: Math.round(age / 86_400_000),
+      })
+      entry.tier = 'scratch'
+      actions.demoted.push({ name, ageDays: Math.round(age / 86_400_000), from: 'staged', to: 'scratch' })
+    } else if (entry.tier === 'library' && age > LIBRARY_STALE_MS) {
+      // Library never auto-deletes. Just flag for caller review.
+      actions.stale.push({ name, ageDays: Math.round(age / 86_400_000) })
+    }
+  }
+
+  if (!dryRun) {
+    writeStats(stats)
+    if (actions.pruned.length || actions.demoted.length || actions.promoted.length) {
+      regenerateIndex()
+    }
+  }
+
+  return actions
+}
+
 function deleteSnippet(name, force) {
   const found = findSnippet(name)
   if (!found) die(`snippet not found: ${name}`, 1)
@@ -243,17 +380,27 @@ function recordAuthoring(name, result) {
     lastUsed: nowIso(),
     createdAt: nowIso(),
   }
-  writeStats(stats)
-
   appendHistory(join(ROOT, found.tier), name, {
     event: 'authored',
     result,
     sessionId,
   })
 
-  const { count, path } = regenerateIndex()
+  // Auto-promote in case thresholds are configured aggressively (e.g. STAGE_AT=1).
+  // For default thresholds (STAGE_AT=2), useCount=1 doesn't trigger anything.
+  const promotion = maybePromote(name, stats[name], sessionId)
+  writeStats(stats)
+
+  const { count, path: indexPath } = regenerateIndex()
   process.stdout.write(JSON.stringify({
-    ok: true, name, path: found.path, useCount: 1, indexCount: count, indexPath: path,
+    ok: true,
+    name,
+    path: join(ROOT, stats[name].tier, `${name}.ts`),
+    useCount: 1,
+    tier: stats[name].tier,
+    promoted: promotion,
+    indexCount: count,
+    indexPath,
   }) + '\n')
 }
 
@@ -341,8 +488,6 @@ return await __wrRun(page, args);
   entry.useCount += 1
   entry.lastUsed = nowIso()
   entry.tier = found.tier
-  stats[name] = entry
-  writeStats(stats)
 
   appendHistory(tierDir, name, {
     event: 'invoked',
@@ -350,6 +495,12 @@ return await __wrRun(page, args);
     useCount: entry.useCount,
     sessionId,
   })
+
+  // Auto-promote based on useCount thresholds. Mutates `entry.tier` and moves
+  // files; the subsequent writeStats picks up the new tier value.
+  const promotion = maybePromote(name, entry, sessionId)
+  stats[name] = entry
+  writeStats(stats)
 
   // Parse playwright-cli's stdout to extract just the snippet's return value.
   // Format is:
@@ -363,10 +514,14 @@ return await __wrRun(page, args);
   // tail so the caller can still see something.
   const result = extractResult(r.stdout || '')
 
+  // If we promoted, also regenerate the index so the new tier shows up correctly.
+  if (promotion) regenerateIndex()
+
   process.stdout.write(JSON.stringify({
     ok: true,
-    tier: found.tier,
+    tier: entry.tier,
     useCount: entry.useCount,
+    promoted: promotion,
     result,
   }) + '\n')
 }
@@ -441,8 +596,14 @@ async function main() {
       deleteSnippet(name, force)
       return
     }
+    case 'prune': {
+      const dryRun = rest.includes('--dry-run')
+      const actions = pruneStale(dryRun)
+      process.stdout.write(JSON.stringify({ ok: true, dryRun, ...actions }, null, 2) + '\n')
+      return
+    }
     default:
-      die('usage: forge-registry.mjs <list|show|reindex|invoke|record-authoring|delete> [args...]', 2)
+      die('usage: forge-registry.mjs <list|show|reindex|invoke|record-authoring|delete|prune> [args...]', 2)
   }
 }
 
