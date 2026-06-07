@@ -168,7 +168,15 @@ The agent returns one of:
 
 ## Spec mode
 
-Triggered when `$ARGUMENTS` starts with the verb `spec`. Three argument shapes route the same downstream pipeline:
+Triggered when `$ARGUMENTS` starts with the verb `spec`. Three argument shapes route the same downstream pipeline.
+
+> ⚠️ **Two different things called "session" — don't confuse them**:
+> - **`$FORGE_SESSION`** = the playwright-cli browser session name (always literally `"forge"`). Used with `playwright-cli -s=forge ...`. **NOT used for spec generation.**
+> - **`$CLAUDE_CODE_SESSION_ID`** = Claude Code's session UUID (e.g. `d9a2a4c9-...`). Names the transcript file. **This is what `forge-spec.mjs` wants.**
+>
+> When calling `forge-spec.mjs events` or `forge-spec.mjs write`, the first positional arg must be `"$CLAUDE_CODE_SESSION_ID"`. If you accidentally pass `"$FORGE_SESSION"` you'll get `"no transcript for session forge"` — that's the giveaway you reached for the wrong variable.
+
+Three argument shapes:
 
 - `spec` *(no args)* — **retrospective.** Read the current session's transcript (`$CLAUDE_CODE_SESSION_ID` → `$FORGE_ROOT/sessions/<session-id>.jsonl`), present the events to the user, run the review loop, write a spec.
 - `spec <URL>` — **prospective from URL.** Fetch the URL (WebFetch for public; if it returns 403/auth-required and the URL looks like Jira/Linear/etc., suggest the user paste the contents directly). Use the fetched body as the description. Drive the described flow via existing NL-mode orchestration. Then drop into the review loop.
@@ -178,7 +186,7 @@ Each step the user does in spec mode either invokes an existing snippet or deleg
 
 ### Retrospective flow (`spec` with no args)
 
-1. Load events for the current session:
+1. Load events for the current session. **Use `$CLAUDE_CODE_SESSION_ID`, not `$FORGE_SESSION`** (see warning above). **Don't suppress stderr** — if the file is missing, you want to see the error:
    ```bash
    node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-spec.mjs events "$CLAUDE_CODE_SESSION_ID"
    ```
@@ -211,7 +219,7 @@ Each step the user does in spec mode either invokes an existing snippet or deleg
 
 6. Pick a **label** (kebab-case). If the user hasn't named the spec, propose one based on the recipe (e.g. `hn-translate-email`). Confirm before writing.
 
-7. Write the spec:
+7. Write the spec. **First arg is `$CLAUDE_CODE_SESSION_ID` (the UUID), NOT `$FORGE_SESSION`:**
    ```bash
    node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-spec.mjs write "$CLAUDE_CODE_SESSION_ID" '{"startAt":<n>,"drop":[<n>],"assertions":["<expect(...)>"],"label":"<label>"}'
    ```
@@ -227,7 +235,9 @@ Each step the user does in spec mode either invokes an existing snippet or deleg
    - Use the fetched content as the description.
 2. Plan the steps from the description using the same multi-step decomposition as NL mode. Each step is matched to an existing snippet or marked for fresh authoring.
 3. Drive the steps in order — invoking the registry for existing snippets, delegating to `forge:snippet-author` for new ones. The transcript-hook records each step automatically.
-4. When driving completes, **drop into the retrospective flow** with the just-completed events. The user can confirm, slice, or extend before the spec is written.
+4. **As soon as driving completes (including any recovery), drop into the retrospective flow.** Don't pause and ask "what now?" — automatically proceed to step 1 of the retrospective flow above (load events with `$CLAUDE_CODE_SESSION_ID`, present, propose assertion, write the spec). The whole point of prospective mode is "drive AND spec in one go"; if you stop at "I did the work, what next?", the artefact never materialises.
+
+   The transcript will only contain *successful* invocations. If any step required improvisation/recovery, that step's underlying snippet did NOT cleanly invoke and therefore is NOT in the transcript — the resulting spec will be missing that step. Surface this to the user: *"step 3 didn't cleanly invoke (had to improvise to extract the result), so it won't be in the spec. Want me to delegate a repair before writing?"*
 
 ### Failure modes in spec mode
 
