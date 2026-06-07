@@ -7,14 +7,22 @@
 //     events with display-friendly fields (1-indexed, snippet, args, result, hadResult).
 //     Used by the skill to present the slice to the user.
 //
-//   write <session-id> '<options-json>'
+//   write ['<options-json>']
 //     Build and write a .spec.ts to $FORGE_ROOT/specs/<label>.spec.ts.
-//     options-json = { startAt?: number, drop?: number[], assertions?: string[], label: string }
-//     - startAt defaults to 1 (first event)
-//     - drop is a list of 1-indexed event indices to skip
-//     - assertions is an array of raw expect(...) statement strings (the skill
-//       converts user freeform NL into these)
-//     - label is required and used as the filename + test description
+//     Every option has a sensible default — calling `write '{}'` produces a
+//     usable spec with no further input. Pass overrides only when the caller
+//     wants to slice differently or supply custom assertions.
+//
+//     All options optional:
+//       sessionId        defaults to $CLAUDE_CODE_SESSION_ID
+//       startAt          default 1 (first event)
+//       drop             list of 1-indexed event indices to skip; default []
+//       label            default: derived from snippet names
+//                        (single step → snippet name; multi → first-then-last)
+//       assertions       array of raw expect(...) statement strings.
+//                        If omitted, ONE terminal assertion is auto-proposed
+//                        from the last step's result shape.
+//       skipAssertion    bool; force no assertion (even on auto-propose)
 //
 // Each retained event becomes a sequential block in the test body. The snippet's
 // run() function is embedded as a literal and called with the recorded args.
@@ -104,6 +112,60 @@ function redactArgs(args, stepIndex) {
     }
   }
   return { redacted, envVars }
+}
+
+// Resolve a session id from explicit arg → opts.sessionId → env. Returns null if none.
+function resolveSessionId(explicit, opts) {
+  return explicit || (opts && opts.sessionId) || process.env.CLAUDE_CODE_SESSION_ID || null
+}
+
+// Derive a kebab-case label from the step list. Single step → snippet name.
+// Multi-step → `<first>-then-<last>`. Fallback → forge-spec-<timestamp>.
+function deriveLabel(stepEvents) {
+  if (!stepEvents || stepEvents.length === 0) return `forge-spec-${Date.now()}`
+  if (stepEvents.length === 1) return stepEvents[0].snippet
+  const first = stepEvents[0].snippet
+  const last = stepEvents[stepEvents.length - 1].snippet
+  return `${first}-then-${last}`
+}
+
+// Propose ONE terminal assertion based on the final retained step's result shape.
+// Returns null when the snippet had no meaningful return (side-effect-only).
+// The varName follows buildSpec's `step<N>Result` naming where N is the step's
+// 1-based position in the filtered step list.
+function proposeAssertion(lastStep, varIndex) {
+  if (!lastStep) return null
+  const { result, hadResult } = lastStep
+  if (!hadResult) return null
+  const v = `step${varIndex}Result`
+  if (result === null) return `expect(${v}).toBeNull()`
+  if (typeof result === 'boolean') return `expect(${v}).toBe(${result})`
+  if (typeof result === 'number') {
+    if (result > 0) return `expect(${v}).toBeGreaterThan(0)`
+    if (result < 0) return `expect(${v}).toBeLessThan(0)`
+    return `expect(${v}).toBe(0)`
+  }
+  if (typeof result === 'string') {
+    if (result.length === 0) return `expect(${v}).toBe('')`
+    // Pick the first 4+ char word as a stable substring.
+    const m = result.match(/[A-Za-z]{4,}/)
+    if (m) return `expect(${v}).toContain(${JSON.stringify(m[0])})`
+    return `expect(${v}).toMatch(/.+/)`
+  }
+  if (Array.isArray(result)) return `expect(${v}.length).toBeGreaterThan(0)`
+  if (typeof result === 'object') {
+    // Pick the first string field whose value has a stable substring.
+    for (const [key, value] of Object.entries(result)) {
+      if (typeof value === 'string' && value.length > 0) {
+        const m = value.match(/[A-Za-z]{4,}/)
+        if (m) return `expect(${v}.${key}).toContain(${JSON.stringify(m[0])})`
+      }
+    }
+    // Fallback: assert the first field exists.
+    const firstKey = Object.keys(result)[0]
+    if (firstKey) return `expect(${v}.${firstKey}).toBeDefined()`
+  }
+  return null
 }
 
 function formatArgsObject(args, indent = '    ') {
@@ -201,27 +263,60 @@ async function main() {
   const [, , cmd, ...rest] = process.argv
   switch (cmd) {
     case 'events': {
-      const sessionId = rest[0]
-      if (!sessionId) die('events requires a session-id', 2)
+      const sessionId = rest[0] || process.env.CLAUDE_CODE_SESSION_ID
+      if (!sessionId) die('events: pass a session-id or set CLAUDE_CODE_SESSION_ID', 2)
       const transcript = loadTranscript(sessionId)
       process.stdout.write(JSON.stringify(transcript, null, 2) + '\n')
       return
     }
     case 'write': {
-      const sessionId = rest[0]
-      if (!sessionId) die('write requires a session-id', 2)
+      // `write '<opts>'` — opts is optional; every field has a sensible default.
+      // Session-id is resolved from opts.sessionId → CLAUDE_CODE_SESSION_ID env.
       let opts = {}
-      if (rest[1]) {
-        try { opts = JSON.parse(rest[1]) } catch { die('write options must be valid JSON', 2) }
+      if (rest[0]) {
+        try { opts = JSON.parse(rest[0]) } catch { die('write options must be valid JSON', 2) }
       }
+      const sessionId = opts.sessionId || process.env.CLAUDE_CODE_SESSION_ID
+      if (!sessionId) die('write: CLAUDE_CODE_SESSION_ID not set and no sessionId in opts', 1)
+
       const transcript = loadTranscript(sessionId)
-      const source = await buildSpec(transcript, { ...opts, sessionId })
-      const path = writeSpecFile(opts.label, source)
-      process.stdout.write(JSON.stringify({ ok: true, path, label: opts.label }) + '\n')
+      const startAt = typeof opts.startAt === 'number' ? opts.startAt : 1
+      const dropSet = new Set(opts.drop || [])
+      const retained = transcript.filter(e => e.index >= startAt && !dropSet.has(e.index))
+      const stepEvents = retained.filter(e => e.event === 'invoked' || e.event === 'authored')
+      if (stepEvents.length === 0) die('write: no invocable events in slice (need at least one invoked or authored event)', 1)
+
+      const label = opts.label || deriveLabel(stepEvents)
+
+      let assertions = Array.isArray(opts.assertions) ? opts.assertions.slice() : []
+      let proposedAssertion = null
+      if (!opts.skipAssertion && assertions.length === 0) {
+        const lastStep = stepEvents[stepEvents.length - 1]
+        proposedAssertion = proposeAssertion(lastStep, stepEvents.length)
+        if (proposedAssertion) assertions = [proposedAssertion]
+      }
+
+      const source = await buildSpec(transcript, { startAt, drop: opts.drop || [], assertions, label, sessionId })
+      const path = writeSpecFile(label, source)
+
+      const snippets = stepEvents.map(e => e.snippet)
+      const summary = `Wrote spec '${label}' with ${stepEvents.length} step(s) [${snippets.join(' → ')}]` +
+        (proposedAssertion ? ` and 1 auto-proposed assertion` : ' (no assertion proposed)') +
+        ` → ${path}`
+
+      process.stdout.write(JSON.stringify({
+        ok: true,
+        path,
+        label,
+        stepCount: stepEvents.length,
+        snippets,
+        proposedAssertion,
+        summary,
+      }, null, 2) + '\n')
       return
     }
     default:
-      die('usage: forge-spec.mjs <events|write> <session-id> [json-options]', 2)
+      die('usage: forge-spec.mjs <events|write> [json-options]', 2)
   }
 }
 
