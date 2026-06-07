@@ -2,7 +2,7 @@
 name: forge
 description: "Perform repeatable user actions in a real browser — delete batches of emails, paste gifs into PRs, navigate multi-step forms, scrape pages, anything you'd rather not click through again. Triggers on 'use forge to ...' phrases AND on `/forge ...` slash invocations. Two entry points: `/forge snippet <name>` for explicit cheap invocation of a known snippet; everything else (slash or natural language) routes through discovery, composition, and authoring delegation as needed."
 model: haiku
-effort: low
+effort: medium
 argument-hint: "snippet <name> [json-args] | <description or multi-step request>"
 allowed-tools: Read, Skill, Bash(bash **/forge/*/scripts/*), Bash(node **/forge/*/scripts/*), Bash(playwright-cli:*), Bash(curl -sf -m * http://localhost:9222/json/version*)
 ---
