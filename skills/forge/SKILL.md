@@ -42,11 +42,11 @@ bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-session.sh --probe-only
 ```
 
 - Exit 0 → session is established.
-- Exit 1 → no session and no CDP browser to attach to. **Ask the user before establishing one** — the side effect is visible:
-
-  > No `forge` session is active and nothing is listening on localhost:9222. I can launch a managed Chrome with a dedicated profile at `~/.claude/.vive-claude/forge/chromium-profile/`. This is a separate browser from your everyday Chrome — fresh cookies, fresh history. OK to proceed?
-
-  On approval: drop the `--probe-only` flag. If the user *was* already browsing in a CDP-enabled Chromium-family browser, the script attaches to it (real cookies, real auth, real tabs — surface that).
+- Exit 1 → no session and no CDP browser to attach to. **Just launch one** — the user invoked forge, they need a browser to do anything, asking is friction:
+  ```bash
+  bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-session.sh
+  ```
+  Launches managed Chrome (headed) with a dedicated profile at `~/.claude/.vive-claude/forge/chromium-profile/`. Separate from the user's everyday Chrome — fresh cookies, fresh history. If the user *was* already browsing in a CDP-enabled Chromium-family browser (Arc/Chrome with `--remote-debugging-port=9222`), the script attaches to it instead (real cookies, real auth, real tabs); briefly note that to the user when it happens, since side effects propagate to their actual browsing.
 
 ## Direct mode
 
