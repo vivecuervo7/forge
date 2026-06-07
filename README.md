@@ -18,8 +18,31 @@ Foundation laid; iteration ongoing. Today the plugin ships:
 - A session helper — probes `localhost:9222` for an existing CDP-enabled browser (attach `--cdp`), falls back to launching managed Chrome with a dedicated persistent profile (`open --persistent --profile=...`).
 - A snippet registry — list, show, reindex, invoke, record-authoring, delete, prune. Invocation runs through `playwright-cli -s=forge run-code "..."` with precondition checks prepended, args inlined, and the right tab picked (or opened) so pinned/bookmarked tabs are never hijacked.
 - A `snippet-author` agent — drives the `forge` session via playwright-cli, captures the working path into a `.ts` file in `scratch/`, records the drive as the snippet's first use, and returns a structured summary. DOM exploration noise stays in the agent's context window.
+- **Promotion machinery** — snippets auto-graduate scratch → staged → library on repeat use (configurable thresholds via `FORGE_STAGE_AT` / `FORGE_LIBRARY_AT`).
+- **TTL cleanup** — `forge-registry.mjs prune` removes unused scratch snippets (7d), demotes stale staged ones (60d), and flags stale library entries (90d) for review.
 
-Coming: scratch → staged → library auto-promotion on reuse, TTL cleanup of unused snippets, `snippet-repair` for self-healing under DOM drift, session recorder, and `/spec from-session` for generating frozen Playwright specs.
+Coming: `snippet-repair` agent for self-healing under DOM drift, session recorder, and `/spec from-session` for generating frozen Playwright specs.
+
+## Invocation paths and cost shape
+
+Forge exposes two routes, deliberately differentiated by cost:
+
+| Path | Trigger | Cost shape | When to reach for it |
+|---|---|---|---|
+| **Slash** | `/forge:forge snippet <name>` or `/forge:forge <description>` | Runs entirely on Haiku, every call — the `model: haiku` pin re-engages on every fresh slash invocation. Routine invocations stay cheap across the whole session. | You know what you want. Routine reuse of known snippets, scripted workflows, anything you reach for repeatedly. |
+| **Natural language** | `"use forge to ..."` | Session model (e.g. Opus) decides whether to trigger the skill, then the skill body runs on Haiku. First call carries a session-model surcharge; subsequent calls in the same session fall back to the session model entirely (the pin only fires on fresh skill invocations). | Discovery, multi-turn refinement, requests that may need authoring, anything where you don't know the snippet name yet. |
+
+*Illustrative figures (Opus 4.7 session, single invocation, late-2026 pricing):*
+
+| Invocation | Cost | Notes |
+|---|---|---|
+| `/forge:forge snippet hn-first-story-comments` | ~$0.03 | Direct, named — cheapest. |
+| `/forge:forge get the first item on HN` | ~$0.03 | NL via slash — Haiku does the matching, still cheap. |
+| `Use forge to get the first item on HN` | ~$0.34 | Model-invoked — Opus pays to recognise the trigger phrase. |
+
+Wall-time floor is browser I/O (typically 10-50s for a page navigation + scrape), regardless of which path you take. On slash invocations, the model side is now small enough to be negligible relative to that floor.
+
+The cost asymmetry is by design: cheap execution for the common case, more-expensive discovery affordance available when you need it. The plugin's central value — *don't re-drive what's already been driven* — is delivered most cheaply via the slash path.
 
 ## Install
 
