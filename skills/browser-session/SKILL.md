@@ -1,6 +1,8 @@
 ---
 name: browser-session
 description: "Perform repeatable user actions in a real browser via playwright-cli's named 'forge' session. Use whenever the user asks Claude to do something in their browser — delete a batch of emails, paste a gif into a PR, navigate a multi-step form, scrape something from a page — and that action might be done again later. Always prefer invoking an existing snippet (with arg overrides where they fit) over driving the UI fresh."
+model: haiku
+effort: low
 allowed-tools: Read, Skill, Bash(bash **/forge/*/scripts/*), Bash(node **/forge/*/scripts/*), Bash(playwright-cli:*), Bash(curl -sf -m * http://localhost:9222/json/version*)
 ---
 
