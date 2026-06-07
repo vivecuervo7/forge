@@ -80,6 +80,24 @@ function appendHistory(tierDir, name, event) {
   appendFileSync(path, JSON.stringify({ ts: nowIso(), ...event }) + '\n', 'utf8')
 }
 
+// Append a single event to the current Claude session's transcript so that
+// `/forge spec` has a chronological view of what happened in this session.
+// Silently no-ops when CLAUDE_CODE_SESSION_ID isn't set (running outside
+// Claude Code, in a test harness, etc.). Recovery / improvisation is NOT
+// recorded here — the transcript only carries clean intent-level events.
+function appendTranscript(event) {
+  const sessionId = process.env.CLAUDE_CODE_SESSION_ID
+  if (!sessionId) return
+  const dir = join(ROOT, 'sessions')
+  try { mkdirSync(dir, { recursive: true }) } catch {}
+  const path = join(dir, `${sessionId}.jsonl`)
+  try {
+    appendFileSync(path, JSON.stringify({ ts: nowIso(), ...event }) + '\n', 'utf8')
+  } catch {
+    // Transcript failures should never break invocation.
+  }
+}
+
 // Move a snippet (.ts + .history.jsonl) between tier directories. Returns the new path.
 function moveSnippet(name, fromTier, toTier) {
   const fromDir = join(ROOT, fromTier)
@@ -391,6 +409,13 @@ function recordAuthoring(name, result) {
     result,
     sessionId,
   })
+  appendTranscript({
+    event: 'authored',
+    snippet: name,
+    tier: found.tier,
+    result,
+    hadResult: result !== null && result !== undefined,
+  })
 
   // Auto-promote in case thresholds are configured aggressively (e.g. STAGE_AT=1).
   // For default thresholds (STAGE_AT=2), useCount=1 doesn't trigger anything.
@@ -549,6 +574,17 @@ return await __wrRun(page, args);
 
   // If we promoted, also regenerate the index so the new tier shows up correctly.
   if (promotion) regenerateIndex()
+
+  // Record the successful invocation in this session's transcript, used by
+  // /forge spec to assemble a Playwright spec from a slice of session activity.
+  appendTranscript({
+    event: 'invoked',
+    snippet: name,
+    tier: entry.tier,
+    args: args || {},
+    result: extracted.value,
+    hadResult: extracted.hadResult,
+  })
 
   process.stdout.write(JSON.stringify({
     ok: true,
