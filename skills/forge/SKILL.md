@@ -84,8 +84,28 @@ node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-registry.mjs invoke <name> '<json-args>
 The registry handles preconditions, stats, history, and auto-promotion. Output is one line of JSON:
 
 - `{"ok":true,"tier":"library","useCount":4,"hadResult":true,"result":<value>}` — success. `result` is whatever the snippet returned (parsed as JSON if structured). `hadResult: false` means the snippet ran but returned `undefined` — normal for side-effectful snippets ("done" is the answer). Report what's meaningful to the user.
-- `{"ok":false,"stage":"precondition","error":"..."}` — preconditions failed. Don't retry blindly. Surface the reason and ask the user how to proceed (e.g. navigate first, then retry).
-- `{"ok":false,"stage":"run","error":"..."}` — the snippet itself threw. The snippet may have drifted under DOM changes; report the error and tell the user.
+- `{"ok":false,"stage":"precondition","error":"..."}` — preconditions failed. The page isn't in the expected state. Brief recovery is fine (e.g. navigate to the right URL), but if the user is somewhere genuinely unrelated, surface that and stop.
+- `{"ok":false,"stage":"run","error":"..."}` — the snippet itself threw. Often recoverable from real-world DOM mess (modal dialog, unexpected pre-existing state). See **Recovery and improvisation** below.
+
+### Recovery and improvisation
+
+Browser state is messy in practice — pre-existing dialogs, stale tabs, partially-loaded pages, the user mid-task. Snippets are authored against clean states, so transient failures during invocation are expected. You may improvise to get the user's request done:
+
+- Inspect the live state: `playwright-cli -s=forge tab-list`, `... snapshot`, `... url`
+- Direct actions to clear blockers: `playwright-cli -s=forge dialog-dismiss`, `... click`, `... goto`, `... fill`, etc.
+- Re-invoke the original snippet after addressing the blocker
+
+**Soft cap: stop after ~5 recovery tool calls past the first failure** if you're not visibly making progress. Goal is bounded improvisation — get the user their result, but don't burn tokens thrashing for half an hour.
+
+When recovery succeeds, **surface it in your final report** as a single optional line — don't interrupt mid-flow to ask:
+
+> Done — <result>. (Note: `<snippet-name>` needed a hand — [brief reason]. Want me to delegate a repair so it handles this next time?)
+
+The user may say yes (triggers a fresh authoring trip to fix the snippet — a future `forge:snippet-repair` agent will handle this; for now, delegate to `forge:snippet-author` with the failure context as the goal) or skip. Either way, the snippet library accretes from real usage rather than getting stuck on a broken first impression.
+
+When recovery fails (cap reached, no path forward), report cleanly:
+
+> Couldn't complete — `<snippet-name>` failed with `<error>` and recovery didn't succeed. The snippet likely needs re-authoring. Want me to delegate that?
 
 ### Multi-step composition
 
@@ -147,10 +167,11 @@ The agent returns one of:
 
 ## What you must NOT do
 
-- **Don't drive the browser yourself for authoring.** Delegate to the agent. DOM exploration noise belongs in its context.
-- **Don't repair failing snippets inline.** A `stage: "run"` failure means drift; report it, optionally delete the broken snippet, delegate fresh authoring.
+- **Don't drive the browser yourself for *authoring*.** Authoring (creating a new repeatable snippet) goes through the `forge:snippet-author` agent — DOM exploration noise belongs in its context, not this conversation. *Recovery* from a transient failure during invocation is different and allowed (see Recovery and improvisation above).
+- **Don't edit snippet `.ts` files inline to patch them.** Improvising around a failure to complete the user's task is fine; modifying the snippet itself is the (future) repair agent's job. For now, surface the failure pattern in your report and offer to delegate a repair.
 - **Don't write to `library/` or `staged/` directly.** Those tiers are managed by promotion machinery; the snippet-author agent always writes to `scratch/`.
 - **Don't tear down the forge session.** `playwright-cli -s=forge close` / `detach` is a user-controlled lifecycle action.
+- **Don't let improvisation become the default path.** If a snippet routinely needs you to paper over it, the snippet is broken — note it and offer repair. The goal is repeatable snippets that "just work"; improvisation is a recovery mechanism, not a substitute for fixing brittle snippets.
 
 ## Storage layout
 
