@@ -18,6 +18,16 @@
 //                             unused staged → scratch (default 60d), report stale library
 //                             entries (default 90d, never auto-deleted). --dry-run lists what
 //                             would happen without applying.
+//   drive <playwright-cli args...>
+//                             Run `playwright-cli -s=forge <args>` and record the equivalent
+//                             Playwright code to the session transcript. Used by the driver
+//                             agent to capture inline driving for spec generation. Read-only
+//                             commands (snapshot, tab-list, url) are passed through without
+//                             recording.
+//   collate [session-id]      Heuristic post-driver pass: find consecutive drove event groups
+//                             in the transcript, auto-create snippets in scratch/ for groups
+//                             that look like coherent reusable patterns. Session id defaults
+//                             to $CLAUDE_CODE_SESSION_ID. No model in the loop; pure heuristic.
 //
 // Tier promotion:
 //   useCount >= STAGE_AT   (default 2) → promote to staged
@@ -435,6 +445,250 @@ function recordAuthoring(name, result) {
   }) + '\n')
 }
 
+// Run `playwright-cli -s=forge <args>` and record the equivalent Playwright code
+// to the session transcript, so the spec-generation pipeline can capture inline
+// driving as part of the spec. Read-only commands that emit no `### Ran Playwright
+// code` block (snapshot, tab-list, url) are silently passed through without
+// recording — they don't contribute to a reproducible test.
+async function driveAction(args) {
+  if (!args || args.length === 0) die('drive: pass playwright-cli args', 2)
+  ensureSession()
+  const r = spawnSync('playwright-cli', [`-s=${SESSION}`, ...args], {
+    encoding: 'utf8',
+    maxBuffer: 16 * 1024 * 1024,
+  })
+  const stdout = r.stdout || ''
+  const stderr = r.stderr || ''
+
+  // Extract the executable code emitted by playwright-cli for this action.
+  // The format is:
+  //   ### Ran Playwright code
+  //   ```js
+  //   <one or more await statements>
+  //   ```
+  const codeMatch = stdout.match(/### Ran Playwright code\n```js\n([\s\S]*?)\n```/)
+  const code = codeMatch ? codeMatch[1].trim() : null
+
+  // Some commands (snapshot, run-code, eval) also have a "### Result" block.
+  // run-code is the only one whose result we care about preserving — extraction
+  // logic the user wrote (or the agent wrote) to capture a value. We embed it
+  // for spec replay alongside the code.
+  let result = null
+  const resultMatch = stdout.match(/### Result\n([\s\S]*?)(?:\n### Ran Playwright code|$)/)
+  if (resultMatch) {
+    const raw = resultMatch[1].trim()
+    if (raw) {
+      try { result = JSON.parse(raw) } catch { result = raw }
+    }
+  }
+
+  // If there's no executable code to record, this was a read-only command
+  // (snapshot, tab-list, url, etc.). Pass through silently.
+  if (code) {
+    appendTranscript({
+      event: 'drove',
+      command: args[0],
+      code,
+      result,
+    })
+  }
+
+  // Forward the playwright-cli output to stdout so the caller sees what happened.
+  process.stdout.write(stdout)
+  if (stderr) process.stderr.write(stderr)
+  process.exit(r.status || 0)
+}
+
+// Heuristic post-driver pass: look at the session's drove events and decide
+// which consecutive groups are worth saving as snippets in scratch/.
+// Pure script-side; no model in the loop. Confidence is bounded by simple
+// rules — high-confidence groups become snippets, low-confidence groups are
+// skipped (user can save them manually later if they choose).
+function collateSession(sessionId) {
+  const transcriptPath = join(ROOT, 'sessions', `${sessionId}.jsonl`)
+  if (!existsSync(transcriptPath)) {
+    return { ok: true, sessionId, created: [], skipped: [], reason: 'no transcript' }
+  }
+  const events = []
+  for (const line of readFileSync(transcriptPath, 'utf8').split('\n')) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+    try { events.push(JSON.parse(trimmed)) } catch {}
+  }
+
+  // Group consecutive drove events (interrupted by any other event type).
+  const groups = []
+  let current = null
+  for (let i = 0; i < events.length; i++) {
+    const e = events[i]
+    if (e.event === 'drove') {
+      if (!current) { current = { startIndex: i, events: [] } }
+      current.events.push(e)
+    } else {
+      if (current) { groups.push(current); current = null }
+    }
+  }
+  if (current) groups.push(current)
+
+  // Apply heuristics. A group is a snippet candidate if:
+  //   - it has >= 2 actions (single actions are usually noise)
+  //   - it has at most 20 actions (huge groups are likely exploratory)
+  //   - it includes at least one action that produces meaningful state change
+  //     (goto / click / fill / press / select / check)
+  //   - it doesn't duplicate an existing snippet's body (cheap hash check)
+  const ACTION_VERBS = new Set(['goto', 'click', 'fill', 'press', 'select', 'check', 'uncheck', 'hover', 'type', 'upload'])
+  const existingHashes = new Set()
+  for (const tier of TIERS) {
+    const dir = join(ROOT, tier)
+    if (!existsSync(dir)) continue
+    for (const file of readdirSync(dir)) {
+      if (!file.endsWith('.ts')) continue
+      try {
+        const src = readFileSync(join(dir, file), 'utf8')
+        const m = src.match(/export async function run[\s\S]*?\{([\s\S]*)\}\s*$/m)
+        if (m) existingHashes.add(normaliseCodeForHash(m[1]))
+      } catch {}
+    }
+  }
+
+  const created = []
+  const skipped = []
+
+  for (const group of groups) {
+    const events = group.events
+    if (events.length < 2) {
+      skipped.push({ size: events.length, reason: 'too-short' })
+      continue
+    }
+    if (events.length > 20) {
+      skipped.push({ size: events.length, reason: 'too-large' })
+      continue
+    }
+    const hasActionVerb = events.some(e => ACTION_VERBS.has(e.command))
+    if (!hasActionVerb) {
+      skipped.push({ size: events.length, reason: 'no-action-verbs' })
+      continue
+    }
+    const body = events.map(e => `  ${e.code}`).join('\n')
+    const hash = normaliseCodeForHash(body)
+    if (existingHashes.has(hash)) {
+      skipped.push({ size: events.length, reason: 'duplicate-of-existing' })
+      continue
+    }
+
+    // Compose snippet metadata heuristically. Name from the first navigation's
+    // hostname + a verb hint from the last action.
+    const name = deriveSnippetName(events)
+    const description = deriveSnippetDescription(events)
+    const snippetPath = join(ROOT, 'scratch', `${name}.ts`)
+    if (existsSync(snippetPath)) {
+      // Don't overwrite — append a numeric suffix.
+      let n = 2
+      let candidate
+      do {
+        candidate = join(ROOT, 'scratch', `${name}-${n}.ts`)
+        n++
+      } while (existsSync(candidate) && n < 50)
+      writeSnippetFile(candidate, name + `-${n - 1}`, description, body, events)
+      existingHashes.add(hash)
+      created.push({ name: name + `-${n - 1}`, path: candidate, actionCount: events.length })
+    } else {
+      writeSnippetFile(snippetPath, name, description, body, events)
+      existingHashes.add(hash)
+      created.push({ name, path: snippetPath, actionCount: events.length })
+    }
+  }
+
+  // Reindex if anything changed.
+  if (created.length > 0) regenerateIndex()
+
+  return { ok: true, sessionId, created, skipped }
+}
+
+function normaliseCodeForHash(code) {
+  // Strip whitespace + string literal contents so that two functionally
+  // equivalent snippets with different literal arg values still match.
+  return code
+    .replace(/['"`][^'"`]*['"`]/g, "''")
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function deriveSnippetName(events) {
+  // Find the first goto URL → hostname; combine with the last action's verb.
+  const firstGoto = events.find(e => e.command === 'goto')
+  const lastEvent = events[events.length - 1]
+  let host = 'flow'
+  if (firstGoto) {
+    const urlMatch = firstGoto.code.match(/['"`](https?:\/\/[^'"`]+)['"`]/)
+    if (urlMatch) {
+      try {
+        const u = new URL(urlMatch[1])
+        host = u.hostname.replace(/^www\./, '').replace(/\./g, '-')
+      } catch {}
+    }
+  }
+  const verb = lastEvent.command || 'action'
+  return `${host}-${verb}`.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '')
+}
+
+function deriveSnippetDescription(events) {
+  const firstGoto = events.find(e => e.command === 'goto')
+  const verbs = events.map(e => e.command).filter(Boolean)
+  const action = verbs.length <= 3 ? verbs.join(', ') : `${verbs[0]} ... ${verbs[verbs.length - 1]} (${verbs.length} actions)`
+  if (firstGoto) {
+    const urlMatch = firstGoto.code.match(/['"`](https?:\/\/[^'"`]+)['"`]/)
+    if (urlMatch) {
+      try {
+        const u = new URL(urlMatch[1])
+        return `Drive on ${u.hostname}: ${action}`
+      } catch {}
+    }
+  }
+  return `Drive: ${action}`
+}
+
+function writeSnippetFile(path, name, description, body, events) {
+  // Extract URL precondition from the first goto, if any.
+  const firstGoto = events.find(e => e.command === 'goto')
+  let urlPrecondition = ''
+  if (firstGoto) {
+    const urlMatch = firstGoto.code.match(/['"`](https?:\/\/[^'"`]+)['"`]/)
+    if (urlMatch) {
+      try {
+        const u = new URL(urlMatch[1])
+        urlPrecondition = `\n    url: /${u.hostname.replace(/\./g, '\\.')}/,`
+      } catch {}
+    }
+  }
+  // If the last drove event had a `result` (e.g. run-code extraction), expose it as
+  // the snippet's return.
+  const lastEvent = events[events.length - 1]
+  const hasReturn = lastEvent.result !== null && lastEvent.result !== undefined
+  const returnLine = hasReturn ? '\n  return result' : ''
+  const bodyWithCapture = hasReturn
+    ? body.replace(/^(\s*)(await \(async page =>.*?\)\(page\))\s*$/m, '$1const result = $2')
+    : body
+
+  const src = `// Auto-extracted by forge collation from session drive on ${new Date().toISOString().slice(0, 10)}.
+// Tweak meta or re-author for richer parameterisation.
+export const meta = {
+  description: ${JSON.stringify(description)},
+  preconditions: {${urlPrecondition}
+  },
+  args: {},
+  tags: ['auto-collated'],
+}
+
+export async function run(page, args) {
+${bodyWithCapture}${returnLine}
+}
+`
+  const tmp = path + '.tmp'
+  writeFileSync(tmp, src, 'utf8')
+  renameSync(tmp, path)
+}
+
 async function invokeSnippet(name, args) {
   const found = findSnippet(name)
   if (!found) die(`snippet not found: ${name}`, 1)
@@ -674,8 +928,19 @@ async function main() {
       process.stdout.write(JSON.stringify({ ok: true, dryRun, ...actions }, null, 2) + '\n')
       return
     }
+    case 'drive': {
+      await driveAction(rest)
+      return
+    }
+    case 'collate': {
+      const sessionId = rest[0] || process.env.CLAUDE_CODE_SESSION_ID
+      if (!sessionId) die('collate: pass a session-id or set CLAUDE_CODE_SESSION_ID', 2)
+      const result = collateSession(sessionId)
+      process.stdout.write(JSON.stringify(result, null, 2) + '\n')
+      return
+    }
     default:
-      die('usage: forge-registry.mjs <list|show|reindex|invoke|record-authoring|delete|prune> [args...]', 2)
+      die('usage: forge-registry.mjs <list|show|reindex|invoke|record-authoring|delete|prune|drive|collate> [args...]', 2)
   }
 }
 
