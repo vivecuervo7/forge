@@ -12,11 +12,12 @@ The plugin owns the *browser as a long-lived daemon*: you attach (or launch) onc
 
 Foundation laid; iteration ongoing. Today the plugin ships:
 
-- A `browser-session` skill — Claude knows how to ensure the `forge` session exists, invoke a registered snippet (possibly with arg overrides), and delegate authoring to an agent when no snippet covers the request. Triggered automatically when you say something like "use forge to ...".
-- A `/forge` slash command — explicit cheap invocation path for snippets you already know (by name or natural-language description). Re-engages a Haiku model pin on every call, so repeated invocations stay cheap across the session. Use this when you don't need authoring or discovery — just "run this snippet, fast".
+- A `forge` skill — single unified entry point. Triggered automatically on "use forge to ..." phrases AND invokable as a slash command. Two modes:
+  - `/forge snippet <name> [args]` — explicit cheap invocation of a known snippet. Re-engages a Haiku model pin on every call, so repeated invocations stay cheap across the session.
+  - `/forge <description>` or `"use forge to ..."` — natural-language flow. Reads `INDEX.md`, matches the request to existing snippets (with arg overrides where they fit), composes multi-step requests across snippets, and delegates fresh authoring to an agent when no snippet covers the request.
 - A session helper — probes `localhost:9222` for an existing CDP-enabled browser (attach `--cdp`), falls back to launching managed Chrome with a dedicated persistent profile (`open --persistent --profile=...`).
-- A snippet registry — list, show, reindex, invoke, record-authoring, delete. Invocation runs through `playwright-cli -s=forge run-code "..."` with precondition checks prepended, args inlined, and the right tab picked (or opened) so pinned/bookmarked tabs are never hijacked.
-- A `snippet-author` agent — drives the `forge` session via playwright-cli, captures the working path into a `.ts` file in `scratch/`, and returns a structured summary to the caller. DOM exploration noise stays in the agent's context window.
+- A snippet registry — list, show, reindex, invoke, record-authoring, delete, prune. Invocation runs through `playwright-cli -s=forge run-code "..."` with precondition checks prepended, args inlined, and the right tab picked (or opened) so pinned/bookmarked tabs are never hijacked.
+- A `snippet-author` agent — drives the `forge` session via playwright-cli, captures the working path into a `.ts` file in `scratch/`, records the drive as the snippet's first use, and returns a structured summary. DOM exploration noise stays in the agent's context window.
 
 Coming: scratch → staged → library auto-promotion on reuse, TTL cleanup of unused snippets, `snippet-repair` for self-healing under DOM drift, session recorder, and `/spec from-session` for generating frozen Playwright specs.
 

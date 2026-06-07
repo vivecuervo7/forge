@@ -1,58 +1,167 @@
 ---
 name: forge
-description: "Invoke a forge snippet by name or natural-language description. Use this slash command (/forge) when you want explicit, cheap invocation of a known snippet without the overhead of the browser-session skill's full discovery flow."
-disable-model-invocation: true
-user-invocable: true
+description: "Perform repeatable user actions in a real browser — delete batches of emails, paste gifs into PRs, navigate multi-step forms, scrape pages, anything you'd rather not click through again. Triggers on 'use forge to ...' phrases AND on `/forge ...` slash invocations. Two entry points: `/forge snippet <name>` for explicit cheap invocation of a known snippet; everything else (slash or natural language) routes through discovery, composition, and authoring delegation as needed."
 model: haiku
 effort: low
-argument-hint: "<snippet-name> [json-args] | <natural-language request>"
-allowed-tools: Read, Bash(bash **/forge/*/scripts/*), Bash(node **/forge/*/scripts/*)
+argument-hint: "snippet <name> [json-args] | <description or multi-step request>"
+allowed-tools: Read, Skill, Bash(bash **/forge/*/scripts/*), Bash(node **/forge/*/scripts/*), Bash(playwright-cli:*), Bash(curl -sf -m * http://localhost:9222/json/version*)
 ---
 
-# /forge
+# forge
 
-Invoke a snippet from the forge registry. This is the **explicit / cheap** path — every `/forge` call re-engages the Haiku model pin (unlike the `browser-session` skill's natural-language entry, where the pin only fires on first invocation per session). Use this when you know what you want and don't need conversational discovery.
+A browser assistant for repeatable user actions. The primary use case is replacing routine browser drudgery — anything you'd rather not click through yourself again. Snippets are how forge remembers what worked; specs (later) are an optional export for when CI cares.
 
-For authoring new snippets, repair, or anything that needs multi-turn refinement, use the `browser-session` skill instead (say "use forge to ...").
+Forge is a thin wrapper around the `playwright-cli` skill: that skill owns the action vocabulary, forge owns the session lifecycle, the snippet registry, and the spec-generation pipeline. Authoring new snippets is delegated to the `forge:snippet-author` agent (noise quarantine).
 
-## Steps
+If the user is asking about something that *isn't* in a browser, you're in the wrong skill.
 
-1. Bootstrap silently (idempotent, fast no-op when already initialised):
-   ```bash
-   bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-bootstrap.sh > /dev/null
-   ```
-   Use the emitted `FORGE_ROOT` value throughout (or default to `~/.claude/.vive-claude/forge`).
+## Modes
 
-2. Parse `$ARGUMENTS`. Two modes:
+Look at the user's request:
 
-   **Name mode** — first whitespace-separated token matches a known snippet name. Test by checking whether `$FORGE_ROOT/{library,staged,scratch}/<token>.ts` exists (use `ls` or `[ -f ... ]`). If yes:
-   - `<name>` is that token.
-   - `<args>` is the remainder of `$ARGUMENTS` if non-empty, else `{}`. Pass through verbatim — caller's responsibility to format as JSON.
+1. **Direct mode** — request is the slash form `snippet <name> [json-args]` (i.e. `$ARGUMENTS` starts with the verb `snippet`). Skip discovery; invoke the named snippet directly. Cheap muscle-memory path.
+2. **NL mode** — anything else. Read INDEX.md, match the request to a snippet (possibly with arg overrides). For multi-step requests, compose snippets in order. If no snippet covers something, delegate to the author agent.
 
-   **NL mode** — first token doesn't match a known snippet name. Read `$FORGE_ROOT/INDEX.md`. Match the user's description against snippet descriptions (favouring library > staged > scratch on ties). Pick the best fit. Infer args from the description (e.g. "the 2nd story" → `{"rank": 2}`). If no plausible match, report it (see Failure cases below).
+Both modes share the same bootstrap + session-check preamble.
 
-3. Invoke:
-   ```bash
-   node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-registry.mjs invoke <name> '<args-json>'
-   ```
+## Preamble (both modes)
 
-4. Report the result. The registry's JSON output contains `result` (or `hadResult: false` for side-effectful snippets that return nothing). Surface the meaningful payload to the user — don't paste raw JSON unless it's useful.
+Always run the bootstrap once — idempotent, fast no-op on subsequent calls:
 
-## Failure cases
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-bootstrap.sh
+```
 
-- **No matching snippet**: report concisely, then suggest the `browser-session` flow:
-  ```
-  No snippet matches "<their request>". Want me to author one? Say:
-    Use forge to <description>
-  ```
-  Do NOT invoke `forge:snippet-author` from here — authoring is a separate, more expensive flow that belongs in the natural-language path.
+Emits `FORGE_ROOT=…`, `FORGE_PROFILE=…`, `FORGE_SESSION=forge`, `PLAYWRIGHT_CLI=…` as `KEY=VALUE` lines. Use throughout.
 
-- **Invocation returned `ok: false`**: relay the `stage` and `error`. If `stage: "precondition"`, mention the user may need to navigate to the right page first. If `stage: "run"`, suggest the snippet may have drifted and re-authoring might be needed.
+Before any browser work, ensure the `forge` playwright-cli session is active:
 
-- **`$ARGUMENTS` empty**: report the usage hint and list available snippets via `cat $FORGE_ROOT/INDEX.md`.
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-session.sh --probe-only
+```
 
-## What this skill is NOT
+- Exit 0 → session is established.
+- Exit 1 → no session and no CDP browser to attach to. **Ask the user before establishing one** — the side effect is visible:
 
-- **Not for authoring.** Discovery, multi-turn refinement, and authoring all go through the `browser-session` skill.
-- **Not for repair.** A failing snippet means the user should re-run via `browser-session` or wait for the (future) repair agent.
-- **Not for managing the registry.** Use the registry's subcommands directly: `forge-registry.mjs list|show|reindex|delete|prune`.
+  > No `forge` session is active and nothing is listening on localhost:9222. I can launch a managed Chrome with a dedicated profile at `~/.claude/.vive-claude/forge/chromium-profile/`. This is a separate browser from your everyday Chrome — fresh cookies, fresh history. OK to proceed?
+
+  On approval: drop the `--probe-only` flag. If the user *was* already browsing in a CDP-enabled Chromium-family browser, the script attaches to it (real cookies, real auth, real tabs — surface that).
+
+## Direct mode
+
+Triggered by `/forge snippet <name> [json-args]`. Just invoke:
+
+```bash
+node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-registry.mjs invoke <name> '<json-args>'
+```
+
+If `<json-args>` was omitted, use `{}`. Report the result. No INDEX read, no matching, no composition — this path is deliberately bare metal.
+
+## NL mode
+
+### Find a snippet
+
+```bash
+cat $FORGE_ROOT/INDEX.md
+```
+
+The index is `library` → `staged` → `scratch` → `broken`, with each tier's snippets listed as `` `name` — description ``. Match on description; ignore `broken/` (those need repair before invocation).
+
+**Read `meta.args` and description carefully** — many snippets accept args that cover variations of their default behaviour (e.g. `hn-story-title` with `{rank: 2}` for the 2nd story). If you can fulfil the request with an arg override on an existing snippet, do that.
+
+For richer detail than the index line:
+
+```bash
+node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-registry.mjs show <name>
+```
+
+### Invoke a snippet
+
+```bash
+node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-registry.mjs invoke <name> '<json-args>'
+```
+
+The registry handles preconditions, stats, history, and auto-promotion. Output is one line of JSON:
+
+- `{"ok":true,"tier":"library","useCount":4,"hadResult":true,"result":<value>}` — success. `result` is whatever the snippet returned (parsed as JSON if structured). `hadResult: false` means the snippet ran but returned `undefined` — normal for side-effectful snippets ("done" is the answer). Report what's meaningful to the user.
+- `{"ok":false,"stage":"precondition","error":"..."}` — preconditions failed. Don't retry blindly. Surface the reason and ask the user how to proceed (e.g. navigate first, then retry).
+- `{"ok":false,"stage":"run","error":"..."}` — the snippet itself threw. The snippet may have drifted under DOM changes; report the error and tell the user.
+
+### Multi-step composition
+
+If the user's request spans multiple snippets (e.g. "get the top HN title and compose an email to alice@x.com with that title as the subject"), chain invocations:
+
+1. Decompose into ordered steps.
+2. For each step, identify the snippet (by NL match, or by name if user provided it).
+3. Invoke step 1. Capture its `result`.
+4. Build step 2's args by combining user-supplied values with fields from step 1's result.
+5. Invoke step 2. Continue until done.
+6. If any step has no matching snippet, fall back to delegating that step to the author agent (more expensive — note this if it happens unexpectedly).
+
+Example shape:
+
+```
+Step 1: hn-first-story-comments {} → result.title = "..."
+Step 2: gmail-compose-new {to: "alice@x.com", subject: "<title from step 1>"} → ok
+```
+
+Report a tight summary: what each step did and the final outcome. Don't paste raw JSON unless it helps the user.
+
+### Direct browser inspection (no snippet needed)
+
+For one-off "what's open?" / "what's on this page?" / "where am I?" questions where authoring a snippet would be overkill, use playwright-cli's structured commands directly:
+
+```bash
+playwright-cli -s=forge tab-list      # URLs and titles of every open tab
+playwright-cli -s=forge snapshot      # ARIA snapshot of the current page
+playwright-cli -s=forge url           # current URL + title of the active page
+```
+
+**Avoid `playwright-cli run-code` from the main session** — it requires an `async page => { ... }` arrow wrapper and is fiddly. If you need arbitrary Playwright code, that's the snippet-author agent's job.
+
+### Delegate authoring when no snippet matches
+
+If the index has nothing relevant (and arg overrides won't cover the request), **spawn the `forge:snippet-author` agent**. The agent quarantines DOM exploration in its own context window so this conversation stays narrow.
+
+Before delegating, confirm the forge session is alive. Then:
+
+```
+Agent(subagent_type="forge:snippet-author",
+  prompt="Goal: <natural language goal>
+Suggested name: <optional kebab-case name>
+Args: <optional comma-separated arg names and any user-supplied values>
+Context: <optional — current URL, ticket ref, prerequisite state>")
+```
+
+The agent returns one of:
+
+- `Authored: <name> → scratch/<name>.ts` followed by `Description:`, `Args:`, `Preconditions:`, `Result:`, and optionally `Confirm:`. **Do NOT re-invoke** — the agent's drive was the first execution. Steps:
+  1. Report the `Result:` value to the user.
+  2. If `Confirm:` is present, ask the user the question. If they confirm the outcome, you're done. If they say it's wrong, offer to delete the snippet so it doesn't enter the library on a bad first impression:
+     ```bash
+     node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-registry.mjs delete <name>
+     ```
+- `Duplicate: <existing-name>` — invoke the existing one instead.
+- `no-session: ...` — re-run `forge-session.sh`.
+- `cannot-author: <reason>` — surface the reason; consider whether you misunderstood the goal.
+
+## What you must NOT do
+
+- **Don't drive the browser yourself for authoring.** Delegate to the agent. DOM exploration noise belongs in its context.
+- **Don't repair failing snippets inline.** A `stage: "run"` failure means drift; report it, optionally delete the broken snippet, delegate fresh authoring.
+- **Don't write to `library/` or `staged/` directly.** Those tiers are managed by promotion machinery; the snippet-author agent always writes to `scratch/`.
+- **Don't tear down the forge session.** `playwright-cli -s=forge close` / `detach` is a user-controlled lifecycle action.
+
+## Storage layout
+
+```
+$FORGE_ROOT/                        # ~/.claude/.vive-claude/forge/
+├── INDEX.md                        # auto-generated retrieval surface
+├── stats.json                      # per-snippet metadata
+├── scratch/  staged/  library/     # snippet tiers
+├── broken/                         # quarantined; needs repair
+├── sessions/                       # recorder transcripts (future)
+└── chromium-profile/               # dedicated profile for managed launch
+```
+
+See `references/snippet-anatomy.md` for the snippet file format and `references/attach.md` for the session-mode state machine.
