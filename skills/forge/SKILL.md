@@ -1,10 +1,10 @@
 ---
 name: forge
-description: "Perform repeatable user actions in a real browser — delete batches of emails, paste gifs into PRs, navigate multi-step forms, scrape pages, anything you'd rather not click through again. Triggers on 'use forge to ...' phrases AND on `/forge ...` slash invocations. Two entry points: `/forge snippet <name>` for explicit cheap invocation of a known snippet; everything else (slash or natural language) routes through discovery, composition, and authoring delegation as needed."
+description: "Perform repeatable user actions in a real browser — delete batches of emails, paste gifs into PRs, navigate multi-step forms, scrape pages, anything you'd rather not click through again. Triggers on 'use forge to ...' phrases AND on `/forge ...` slash invocations. Entry points: `/forge snippet <name>` for explicit cheap invocation of a known snippet; `/forge spec [args]` to synthesise a Playwright spec from session activity (or from a URL / description); everything else routes through discovery, composition, and authoring delegation as needed."
 model: haiku
 effort: medium
-argument-hint: "snippet <name> [json-args] | <description or multi-step request>"
-allowed-tools: Read, Skill, Bash(bash **/forge/*/scripts/*), Bash(node **/forge/*/scripts/*), Bash(playwright-cli:*), Bash(curl -sf -m * http://localhost:9222/json/version*)
+argument-hint: "snippet <name> [json-args] | spec [url-or-description] | <description or multi-step request>"
+allowed-tools: Read, Skill, WebFetch, Bash(bash **/forge/*/scripts/*), Bash(node **/forge/*/scripts/*), Bash(playwright-cli:*), Bash(curl -sf -m * http://localhost:9222/json/version*)
 ---
 
 # forge
@@ -20,9 +20,10 @@ If the user is asking about something that *isn't* in a browser, you're in the w
 Look at the user's request:
 
 1. **Direct mode** — request is the slash form `snippet <name> [json-args]` (i.e. `$ARGUMENTS` starts with the verb `snippet`). Skip discovery; invoke the named snippet directly. Cheap muscle-memory path.
-2. **NL mode** — anything else. Read INDEX.md, match the request to a snippet (possibly with arg overrides). For multi-step requests, compose snippets in order. If no snippet covers something, delegate to the author agent.
+2. **Spec mode** — request starts with the verb `spec` (i.e. `$ARGUMENTS` is `spec`, `spec <URL>`, or `spec <description>`). Synthesise a Playwright `.spec.ts` from session activity, a fetched URL, or a freeform description. See **Spec mode** below.
+3. **NL mode** — anything else. Read INDEX.md, match the request to a snippet (possibly with arg overrides). For multi-step requests, compose snippets in order. If no snippet covers something, delegate to the author agent.
 
-Both modes share the same bootstrap + session-check preamble.
+All modes share the same bootstrap + session-check preamble.
 
 ## Preamble (both modes)
 
@@ -164,6 +165,78 @@ The agent returns one of:
 - `Duplicate: <existing-name>` — invoke the existing one instead.
 - `no-session: ...` — re-run `forge-session.sh`.
 - `cannot-author: <reason>` — surface the reason; consider whether you misunderstood the goal.
+
+## Spec mode
+
+Triggered when `$ARGUMENTS` starts with the verb `spec`. Three argument shapes route the same downstream pipeline:
+
+- `spec` *(no args)* — **retrospective.** Read the current session's transcript (`$CLAUDE_CODE_SESSION_ID` → `$FORGE_ROOT/sessions/<session-id>.jsonl`), present the events to the user, run the review loop, write a spec.
+- `spec <URL>` — **prospective from URL.** Fetch the URL (WebFetch for public; if it returns 403/auth-required and the URL looks like Jira/Linear/etc., suggest the user paste the contents directly). Use the fetched body as the description. Drive the described flow via existing NL-mode orchestration. Then drop into the review loop.
+- `spec <freeform text>` — **prospective from description.** Same as URL mode, just skip the fetch step.
+
+Each step the user does in spec mode either invokes an existing snippet or delegates to `forge:snippet-author` for fresh authoring — exactly the same pipeline as NL mode. The transcript-hook in the registry captures every successful invoke and authoring outcome automatically, so by the time you've driven the described flow, the transcript is already populated. No special recording machinery needed.
+
+### Retrospective flow (`spec` with no args)
+
+1. Load events for the current session:
+   ```bash
+   node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-spec.mjs events "$CLAUDE_CODE_SESSION_ID"
+   ```
+   Returns a JSON array of numbered events (`{index, ts, event, snippet, args, result, hadResult, tier}`).
+
+   If the array is empty: ask the user what they want to spec, falling through to **prospective flow** with their reply as the description.
+
+2. Present the events to the user in chat — concise, numbered, readable. Don't dump JSON. Something like:
+
+   > Here's what I have in this session:
+   > 1. `hn-first-story-comments` → returned `{count: 56, title: "Valve P2P..."}`
+   > 2. `translate-to-french` (authored) → returned `"Le réseau..."`
+   > 3. `gmail-compose-new` → opened compose window
+   >
+   > Want to spec this as-is, add more steps, add assertions, or skip parts? (Or tell me to spec something else entirely.)
+
+3. Interpret the user's reply naturally — examples of what they might say:
+   - *"spec it"* → no slicing, propose a terminal assertion (see step 4), then write
+   - *"drop step 1"* → slice with `drop: [1]`
+   - *"start from step 2"* → slice with `startAt: 2`
+   - *"add a step that <X>"* → fall back to NL-mode orchestration for the additional steps (which extend the transcript), then re-load events and re-present
+   - *"assert <something>"* → see step 5
+   - *"spec something else: <description>"* → switch to prospective flow
+
+4. **Propose ONE terminal assertion** based on the last retained event's result (see `references/spec-format.md` for the heuristics by result shape). Skip the proposal if `hadResult: false`. Present as a suggestion the user can accept, reword, or skip:
+
+   > For the final step, want to assert `expect(step3Result).toMatch(/Le réseau/)`? Or write your own?
+
+5. **Convert user-supplied assertion language into Playwright `expect(...)` statements.** The user might say *"assert the title contains 'Valve'"* → emit `expect(step1Result.title).toContain('Valve')`. The skill is responsible for this conversion; the `forge-spec.mjs write` subcommand takes raw `expect(...)` strings.
+
+6. Pick a **label** (kebab-case). If the user hasn't named the spec, propose one based on the recipe (e.g. `hn-translate-email`). Confirm before writing.
+
+7. Write the spec:
+   ```bash
+   node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-spec.mjs write "$CLAUDE_CODE_SESSION_ID" '{"startAt":<n>,"drop":[<n>],"assertions":["<expect(...)>"],"label":"<label>"}'
+   ```
+
+8. Report the output path and remind the user to copy it to their project's test directory:
+
+   > Spec written to `~/.claude/.vive-claude/forge/specs/<label>.spec.ts`. Copy it into your project's tests directory when you're ready.
+
+### Prospective flow (`spec <URL>` or `spec <description>`)
+
+1. If args looks like a URL (matches `https?://`):
+   - WebFetch it. If the fetch returns auth-required content, suggest the user paste the body inline ("looks like that URL needs auth; paste the contents and I'll work from that").
+   - Use the fetched content as the description.
+2. Plan the steps from the description using the same multi-step decomposition as NL mode. Each step is matched to an existing snippet or marked for fresh authoring.
+3. Drive the steps in order — invoking the registry for existing snippets, delegating to `forge:snippet-author` for new ones. The transcript-hook records each step automatically.
+4. When driving completes, **drop into the retrospective flow** with the just-completed events. The user can confirm, slice, or extend before the spec is written.
+
+### Failure modes in spec mode
+
+- **No transcript for current session** + `spec` with no args: ask the user what to spec; fall through to prospective.
+- **WebFetch fails on a URL**: suggest paste, don't fail silently.
+- **Driving fails mid-prospective**: stop, surface the failure (per the regular NL-mode failure handling — recovery is allowed but bounded), and ask whether the user still wants to spec the partial transcript.
+- **A snippet referenced in the transcript is missing from disk** (deleted between recording and spec write): `forge-spec.mjs write` errors out; surface the snippet name to the user.
+
+See `references/spec-format.md` for the `.spec.ts` template, redaction rules, content-hash format, and assertion-proposal heuristics.
 
 ## What you must NOT do
 
