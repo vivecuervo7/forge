@@ -49,13 +49,30 @@ fi
 # Probe CDP — attach if alive (unless --managed forces a fresh launch).
 if [ "$MANAGED" = false ]; then
   if curl -sf -m 1 "http://localhost:$PORT/json/version" >/dev/null 2>&1; then
-    echo "forge-session: CDP browser detected on localhost:$PORT — attaching" >&2
-    if ! playwright-cli -s=forge attach --cdp "http://localhost:$PORT" >&2; then
-      echo "forge-session: attach --cdp failed; the browser may not be Chromium-family" >&2
-      exit 3
+    # Another playwright-cli session may already be attached to this CDP browser
+    # (e.g. /playwright-teach on another project, or another tool). Two sessions
+    # acting on the same browser context fight each other for tab focus and
+    # navigation. If we detect any other attached session, escalate to a managed
+    # launch automatically — forge gets its own browser, the other tool keeps
+    # the one it's using.
+    # Top-level session entries are `- <name>:` with no leading whitespace;
+    # property lines are indented (e.g. `  - status: open`). Anchor on the
+    # zero-indent variant so we only pick up session names, not properties.
+    OTHER_ATTACHED=$(playwright-cli list 2>/dev/null | awk '
+      /^- / { name = $2; sub(/:$/, "", name); next }
+      /\(attached\)/ && name != "forge" && name != "" { print name; exit }
+    ')
+    if [ -n "$OTHER_ATTACHED" ]; then
+      echo "forge-session: another playwright-cli session ('$OTHER_ATTACHED') is already attached on localhost:$PORT — falling through to managed launch so we don't fight over the browser" >&2
+    else
+      echo "forge-session: CDP browser detected on localhost:$PORT — attaching" >&2
+      if ! playwright-cli -s=forge attach --cdp "http://localhost:$PORT" >&2; then
+        echo "forge-session: attach --cdp failed; the browser may not be Chromium-family" >&2
+        exit 3
+      fi
+      emit_json "{\"mode\":\"cdp-attached\",\"session\":\"forge\",\"port\":$PORT}"
+      exit 0
     fi
-    emit_json "{\"mode\":\"cdp-attached\",\"session\":\"forge\",\"port\":$PORT}"
-    exit 0
   fi
 fi
 
