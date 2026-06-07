@@ -71,7 +71,7 @@ The `mode` field is the signal:
 The whole point of a named playwright-cli session is that *multiple* clients can act on the same browser:
 
 - `forge-registry.mjs invoke` shells out to `playwright-cli -s=forge run-code "..."`
-- The `forge:snippet-author` agent drives via `playwright-cli -s=forge <action>`
+- The `forge:driver` agent drives via `forge-registry.mjs drive <action>` (which wraps playwright-cli)
 - The user, if attached to their own Chrome, sees and can click in the same window
 - Future agents and `/spec` workflows use the same session name
 

@@ -12,16 +12,19 @@ The plugin owns the *browser as a long-lived daemon*: you attach (or launch) onc
 
 Foundation laid; iteration ongoing. Today the plugin ships:
 
-- A `forge` skill — single unified entry point. Triggered automatically on "use forge to ..." phrases AND invokable as a slash command. Two modes:
-  - `/forge snippet <name> [args]` — explicit cheap invocation of a known snippet. Re-engages a Haiku model pin on every call, so repeated invocations stay cheap across the session.
-  - `/forge <description>` or `"use forge to ..."` — natural-language flow. Reads `INDEX.md`, matches the request to existing snippets (with arg overrides where they fit), composes multi-step requests across snippets, and delegates fresh authoring to an agent when no snippet covers the request.
-- A session helper — probes `localhost:9222` for an existing CDP-enabled browser (attach `--cdp`), falls back to launching managed Chrome with a dedicated persistent profile (`open --persistent --profile=...`).
-- A snippet registry — list, show, reindex, invoke, record-authoring, delete, prune. Invocation runs through `playwright-cli -s=forge run-code "..."` with precondition checks prepended, args inlined, and the right tab picked (or opened) so pinned/bookmarked tabs are never hijacked.
-- A `snippet-author` agent — drives the `forge` session via playwright-cli, captures the working path into a `.ts` file in `scratch/`, records the drive as the snippet's first use, and returns a structured summary. DOM exploration noise stays in the agent's context window.
-- **Promotion machinery** — snippets auto-graduate scratch → staged → library on repeat use (configurable thresholds via `FORGE_STAGE_AT` / `FORGE_LIBRARY_AT`).
-- **TTL cleanup** — `forge-registry.mjs prune` removes unused scratch snippets (7d), demotes stale staged ones (60d), and flags stale library entries (90d) for review.
+- A `forge` skill — thin router. Triggered automatically on "use forge to ..." phrases AND invokable as a slash command. Three routes:
+  - `/forge snippet <name> [args]` — explicit cheap invocation of a known snippet (bypasses the driver agent entirely; just runs the registry).
+  - `/forge spec [url-or-description]` — synthesises a Playwright `.spec.ts` from session activity (retrospective) or by driving a fresh description (prospective).
+  - Anything else (`/forge <description>` or `"use forge to ..."`) — hands off to the `forge:driver` agent for end-to-end execution.
+- A `forge:driver` agent — owns multi-step browser tasks end-to-end. Reads `INDEX.md`, decomposes the task, invokes existing snippets where they fit, drives inline (via `forge-registry.mjs drive`) for steps without a matching snippet. Returns the task's outcome. Never invents snippets mid-flow.
+- A session helper — probes `localhost:9222` for an existing CDP-enabled browser (attach `--cdp`), falls back to launching managed Chrome (headed) with a dedicated persistent profile.
+- A snippet registry — `list`, `show`, `reindex`, `invoke`, `delete`, `prune`, `drive` (wraps playwright-cli and records actions to the transcript), `collate` (heuristic post-driver pass that auto-creates snippets from drove-event patterns). Invocation runs through `playwright-cli -s=forge run-code "..."` with precondition checks prepended, args inlined, and the right tab picked (or opened) so pinned/bookmarked tabs are never hijacked.
+- **Drive-then-collate snippet creation.** During a driver run, actions that don't match an existing snippet are driven inline via `forge-registry.mjs drive` and recorded to the transcript. After the run completes, `forge-registry.mjs collate` scans consecutive drove-event groups and auto-creates snippets in `scratch/` for groups that look reusable (action count, has navigation/extraction, not a duplicate of existing). No mid-flow author decisions; the library grows from observed patterns.
+- **Promotion machinery** — snippets auto-graduate `scratch → staged → library` on repeat use (configurable via `FORGE_STAGE_AT` / `FORGE_LIBRARY_AT`).
+- **TTL cleanup** — `forge-registry.mjs prune` removes unused scratch snippets (7d), demotes stale staged ones (60d), flags stale library entries (90d) for review.
+- **Session transcripts** — every `invoked`, `authored`, and `drove` event lands in `~/.claude/.vive-claude/forge/sessions/<CLAUDE_CODE_SESSION_ID>.jsonl`. The spec pipeline and the collation pass both consume this transcript; users never need to manage it.
 
-Coming: `snippet-repair` agent for self-healing under DOM drift, session recorder, and `/spec from-session` for generating frozen Playwright specs.
+Coming: a dedicated `snippet-repair` agent for DOM drift; a `forge-spec.mjs run` subcommand + bundled runner workspace so generated specs are runnable without needing a host project setup.
 
 ## Invocation paths and cost shape
 
