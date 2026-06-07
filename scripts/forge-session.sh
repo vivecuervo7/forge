@@ -64,9 +64,11 @@ if [ "$PROBE_ONLY" = true ]; then
   exit 1
 fi
 
-# Launch managed Chrome with a dedicated persistent profile.
-echo "forge-session: launching managed Chrome with profile $PROFILE" >&2
-if ! playwright-cli -s=forge open --browser=chrome --profile="$PROFILE" about:blank >&2; then
+# Launch managed Chrome with a dedicated persistent profile. Headed by default —
+# browser-automation work is much more useful when you can see what's happening,
+# and forge's primary use case is taking-the-reins while the user watches.
+echo "forge-session: launching managed Chrome (headed) with profile $PROFILE" >&2
+if ! playwright-cli -s=forge open --browser=chrome --headed --profile="$PROFILE" about:blank >&2; then
   echo "forge-session: managed launch failed" >&2
   exit 4
 fi
