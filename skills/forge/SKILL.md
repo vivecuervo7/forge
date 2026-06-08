@@ -87,11 +87,13 @@ The driver returns one of:
 bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-has-novel-work.sh
 ```
 
-- **Exit 0** — the driver did novel browser work that may be worth extracting as snippets. Continue to step 3.
-- **Exit 1** — every step in the drive used an existing library snippet. The flow ends here; report:
+The script prints a single token to stdout:
+
+- **`novel`** — the driver did browser work that may be worth extracting as snippets. Continue to step 3.
+- **`reuse-only`** — every step in the drive used an existing library snippet. The flow ends here; report:
   > <driver's result>. (Task completed using existing library snippets.)
 
-### 3. Author (on step 2 exit 0)
+### 3. Author (when step 2 prints `novel`)
 
 ```
 Agent(subagent_type="forge:author",
@@ -130,7 +132,9 @@ bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-has-novel-work.sh
 
 Agents read `CLAUDE_CODE_SESSION_ID` from env and use the canonical data root — do not put session ID or paths in any prompt.
 
-- **Exit 0** (novel work happened) — launch spec-writer and author in parallel:
+Read step 2's stdout token:
+
+- **`novel`** — launch spec-writer and author in parallel:
   ```
   [parallel]
   Agent(subagent_type="forge:spec-writer",
@@ -141,7 +145,7 @@ Agents read `CLAUDE_CODE_SESSION_ID` from env and use the canonical data root �
     prompt="Task: <original user request verbatim>")
   ```
 
-- **Exit 1** (every step used existing snippets) — launch spec-writer alone:
+- **`reuse-only`** — launch spec-writer alone:
   ```
   Agent(subagent_type="forge:spec-writer",
     prompt="Task: <original user request verbatim>
