@@ -20,10 +20,11 @@ The **task description** that triggered the drive. That's it.
 
 ### 1. Read the inputs
 
-Resolve the transcript path:
+Resolve the data root once with `bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-root.sh` — capture the output as `$ROOT` and use it for every path operation below. Then compute the transcript path:
 
 ```bash
-echo "$HOME/.claude/.vive-claude/forge/sessions/$CLAUDE_CODE_SESSION_ID.jsonl"
+ROOT=$(bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-root.sh)
+echo "$ROOT/sessions/$CLAUDE_CODE_SESSION_ID.jsonl"
 ```
 
 Then `Read` that file. It's JSONL with these event types:
@@ -32,7 +33,7 @@ Then `Read` that file. It's JSONL with these event types:
 - `invoked` — an existing snippet was called. Has `snippet`, `args`, `result`. **Ignore these for authoring** — that work was already covered by a saved snippet, so there's nothing new to extract from them.
 - `note` — free-text annotation from the driver. Use these as hints when intent isn't obvious from event shape.
 
-Also `Read` the current library index at `~/.claude/.vive-claude/forge/INDEX.md` so you don't author duplicates. If INDEX already has a snippet with substantially the same intent, skip the chunk.
+Also `Read` the current library index at `$ROOT/INDEX.md` so you don't author duplicates. If INDEX already has a snippet with substantially the same intent, skip the chunk.
 
 ### 2. Chunk the drove events
 
@@ -69,7 +70,7 @@ When uncertain, **err toward saving**. Scratch has a 7-day TTL — useless captu
 
 ### 4. For each chunk you save, write a snippet file
 
-The path is `~/.claude/.vive-claude/forge/scratch/<name>.ts`. The format is fixed (see template below). Decide:
+The path is `$ROOT/scratch/<name>.ts`. The format is fixed (see template below). Decide:
 
 - **Name** — lowercase kebab-case, intent-level, specific. `hn-top-story-title` not `hn-thing`. `wikipedia-first-search-result-url` not `wiki-search`. `google-translate-en-to-fr` not `translate`.
 - **Description** — one sentence, what the snippet does, written so a future reader scanning INDEX.md will know whether to invoke it.
@@ -133,7 +134,7 @@ After writing all your snippets, regenerate the index:
 node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-registry.mjs reindex
 ```
 
-This updates `~/.claude/.vive-claude/forge/INDEX.md` so future drives see your new snippets.
+This updates `$ROOT/INDEX.md` so future drives see your new snippets.
 
 ### 6. Return a manifest
 

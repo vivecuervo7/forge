@@ -14,12 +14,15 @@
 
 set -uo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
 if [ -z "${CLAUDE_CODE_SESSION_ID:-}" ]; then
   echo "forge-has-novel-work: CLAUDE_CODE_SESSION_ID not set" >&2
   exit 2
 fi
 
-TRANSCRIPT="${HOME}/.claude/.vive-claude/forge/sessions/${CLAUDE_CODE_SESSION_ID}.jsonl"
+ROOT=$(bash "$SCRIPT_DIR/forge-root.sh")
+TRANSCRIPT="${ROOT}/sessions/${CLAUDE_CODE_SESSION_ID}.jsonl"
 
 if [ -f "$TRANSCRIPT" ] && grep -q '"event":"drove"' "$TRANSCRIPT"; then
   echo "novel"
