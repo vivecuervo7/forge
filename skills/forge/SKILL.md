@@ -70,6 +70,8 @@ Two agent calls in sequence: driver then author.
 
 ### 1. Drive
 
+**Driver's prompt is ONLY the user's task** — do not mention author, spec-writer, downstream agents, or what happens after the driver returns. Downstream-pipeline awareness has been observed to confuse the driver into trying to invoke other skills/agents from inside itself. Keep the driver's brief focused on the task.
+
 ```
 Agent(subagent_type="forge:driver",
   prompt="<the user's request verbatim, plus any context they mentioned>")
@@ -83,13 +85,11 @@ The driver returns one of:
 
 ### 2. Author
 
-After a successful drive, hand the transcript to the author:
+After a successful drive, hand the task to the author. **Don't include session ID or FORGE_ROOT in the prompt** — the author reads `CLAUDE_CODE_SESSION_ID` from env (inherited through the agent invocation) and runs bootstrap itself to resolve FORGE_ROOT. Past attempts to substitute the session ID into the prompt produced bogus values; trust the env.
 
 ```
 Agent(subagent_type="forge:author",
-  prompt="Task: <original user request>
-Session ID: <CLAUDE_CODE_SESSION_ID>
-FORGE_ROOT: <FORGE_ROOT from bootstrap>")
+  prompt="Task: <original user request verbatim>")
 ```
 
 The author returns a manifest like `Authored: 2 snippets\n  - hn-top-story-title — Read top story title from Hacker News\n  - ...`. Surface this briefly:
@@ -110,24 +110,20 @@ The flow:
 
 ### 1. Drive (if a description was provided)
 
-Same as the Driver route's step 1. Skip if the user invoked `spec` with no args (retrospective on existing transcript).
+Same as the Driver route's step 1 — including the rule that the driver's prompt is ONLY the user's task, with no mention of spec-writer or author. Skip the driver call entirely if the user invoked `spec` with no args (retrospective on existing transcript).
 
 ### 2. Spec-writer and author in parallel
 
-After the driver returns (or immediately, if retrospective), launch both downstream agents concurrently. They're independent consumers of the same transcript.
+After the driver returns (or immediately, if retrospective), launch both downstream agents concurrently. They're independent consumers of the same transcript. **Don't include session ID or FORGE_ROOT in either prompt** — both agents read `CLAUDE_CODE_SESSION_ID` from env and run bootstrap themselves. Variable substitution into prompts is unreliable; env is not.
 
 ```
 [parallel]
 Agent(subagent_type="forge:spec-writer",
-  prompt="Task: <original user request>
-Session ID: <CLAUDE_CODE_SESSION_ID>
-FORGE_ROOT: <FORGE_ROOT>
-Label: <if user supplied one, else omit>")
+  prompt="Task: <original user request verbatim>
+Label: <if user supplied one, else omit this line>")
 
 Agent(subagent_type="forge:author",
-  prompt="Task: <original user request>
-Session ID: <CLAUDE_CODE_SESSION_ID>
-FORGE_ROOT: <FORGE_ROOT>")
+  prompt="Task: <original user request verbatim>")
 ```
 
 ### 3. Report
@@ -138,13 +134,10 @@ Surface the spec-writer's manifest plus a brief note from the author:
 >
 > Library: <author's manifest summary, if anything was authored>.
 
-## What you must NOT do
+## Hard rules
 
-- **Don't drive the browser yourself.** Delegate to `forge:driver`. The skill is an orchestrator — it doesn't decompose tasks, doesn't decide per-step strategy, doesn't drive. If you find yourself reaching for `playwright-cli ...` directly, you've taken the wrong route.
-- **Don't decide what snippets to write or what to put in a spec.** Those are the author's and spec-writer's jobs.
-- **Don't write to `scratch/`, `staged/`, `library/`, `broken/`, or `specs/` directly.** The agents own those.
-- **Don't tear down the forge session.** `playwright-cli -s=forge close` / `detach` is user-controlled.
-- **Don't second-guess any agent.** If the driver returns `cannot-drive`, surface the reason and stop. If the author writes nothing, that's fine — not every drive yields new snippets.
+- **The skill is an orchestrator, not an actor.** Multi-step driving belongs to `forge:driver`; snippet authoring to `forge:author`; spec writing to `forge:spec-writer`. Your only direct action is bootstrap + session preamble + the agent invocations described above.
+- **Surface what the agents return; don't second-guess them.** If the driver returns `cannot-drive`, relay the reason and stop. If the author writes zero snippets, that's a normal outcome of a drive that only invoked existing snippets — don't manufacture a different summary.
 
 ## Storage layout
 
