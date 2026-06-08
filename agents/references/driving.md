@@ -1,47 +1,24 @@
 # Driving the forge session
 
-You drive the browser through the `playwright-cli` skill. **Load it before your first action** — it owns the command vocabulary, and re-stating it here would just go stale. Use the Skill tool with `playwright-cli` as the skill name.
-
-Every action is scoped to the `-s=forge` session, which the caller has already established (either attached to a real Chrome via CDP or launched as a managed browser). You do *not* need to `open`, `attach`, or `close` — the session is already there.
-
-## Critical: route every command through `forge-registry.mjs drive`
-
-Don't use `playwright-cli -s=forge <command>` directly during a driver run. Instead, use:
+All browser actions go through one command:
 
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-registry.mjs drive <playwright-cli command-and-args>
+node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-registry.mjs drive <command-and-args>
 ```
 
-For example, what would have been:
-```bash
-playwright-cli -s=forge goto 'https://news.ycombinator.com/'
-```
-becomes:
-```bash
-node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-registry.mjs drive goto 'https://news.ycombinator.com/'
-```
+The supported commands are the standard Playwright actions: `goto`, `click`, `fill`, `press`, `select`, `check`, `uncheck`, `hover`, `type`, `tab-new`, `tab-list`, `url`, `snapshot`, `run-code`, and a few more. They behave the way you'd expect from Playwright; pass them through `drive` and the wrapper records the resulting Playwright code to the session transcript so the author and spec-writer agents can read what happened after you return.
 
-The `drive` wrapper:
-- Passes args through to `playwright-cli -s=forge` verbatim
-- Captures the Playwright code that playwright-cli emits (the `### Ran Playwright code` block)
-- Appends a `drove` event to the session transcript so the author and spec-writer agents can read what happened after you return
-- Returns the playwright-cli output to you unchanged
-
-For read-only commands like `snapshot`, `tab-list`, `url`, no test code is emitted; the wrapper detects this and skips recording silently. Use `drive` for those too — it's harmless and saves you from having to think about which commands need recording.
-
-The one exception: `playwright-cli list` (no `-s=forge`) for the session-presence check at the top of your run. That's a global daemon-level command, not a session action, and has no test-code equivalent. Use it directly.
+Read-only commands (`snapshot`, `tab-list`, `url`) emit no recordable code; the wrapper passes them through silently. You don't have to decide which commands need recording — use `drive` for all of them.
 
 ## Always open a fresh tab first
 
-**Before any other driving action**, create a new tab so you don't hijack a pinned, bookmarked, or in-progress tab the user has open:
+Before any other action, create a new tab so you don't hijack a pinned, bookmarked, or in-progress tab the user has open:
 
 ```bash
 node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-registry.mjs drive tab-new about:blank
 ```
 
-`tab-new` focuses the newly-created tab, so subsequent commands (`goto`, `click`, `fill`, `snapshot`, `run-code`) operate on it. This is critical when attached to the user's real browser via CDP: playwright-cli's default page is otherwise an arbitrary existing tab.
-
-The new tab is visible to the user — they see it open and can watch you drive. Don't close it when you're done.
+`tab-new` focuses the newly-created tab; subsequent `drive` calls operate on it. The new tab is visible to the user — they see it open and can watch you work.
 
 ## The drive-observe-act loop
 
@@ -108,9 +85,7 @@ This applies in **all modes**, not just spec mode. Capturing-via-run-code costs 
 
 ## Selector style
 
-playwright-cli generates semantic locators (`getByRole`, `getByText`, `getByLabel`) when the page exposes accessible attributes. CSS selectors are a fallback. The code that gets recorded is whatever playwright-cli chose — usually fine.
-
-If you need to override (e.g., the auto-locator picked a fragile selector), construct your own via `run-code`:
+The wrapper records semantic locators (`getByRole`, `getByText`, `getByLabel`) when the page exposes accessible attributes; CSS selectors are the fallback. If the auto-chosen selector looks fragile, write your own action via `run-code`:
 
 ```bash
 node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-registry.mjs drive run-code "async page => {
@@ -118,7 +93,7 @@ node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-registry.mjs drive run-code "async page
 }"
 ```
 
-This way the recorded code uses your explicit locator instead of whatever playwright-cli inferred.
+The recorded code is then your explicit locator.
 
 ## Exploration and recovery
 
@@ -137,9 +112,3 @@ Notes are pure free text; they go in the transcript as hints the author will pic
 - **Task complete** — observed end state matches what the caller asked for. Return.
 - **Recovery budget exhausted** — if you've made ~5 recovery attempts past a failure without progress, return `cannot-drive: <reason>` and let the caller decide.
 - **Truly stuck** — page state, login wall, etc. that you can't navigate around. Same: `cannot-drive`.
-
-## Never
-
-- `playwright-cli -s=forge close` / `detach` / `delete-data` — lifecycle is user-controlled.
-- `playwright-cli -s=forge goto <fresh-url>` for a tab the user had open with work in progress, unless the task explicitly requires it.
-- Embedding credentials in drive args. The transcript records everything literally; use `process.env.<NAME>` references in `run-code` blocks instead.
