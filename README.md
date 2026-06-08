@@ -8,6 +8,47 @@ Specs and connectors are downstream of this. If a flow becomes worth pinning int
 
 The plugin owns the *browser as a long-lived daemon*: you attach (or launch) once, and Claude, you, and any future tooling all act on the same window via the named `forge` playwright-cli session.
 
+## Architecture
+
+Three single-purpose agents fan out from a Haiku-driven skill, with the session transcript as the contract between them. The driver does all the browser work; downstream agents read its log with full hindsight and produce snippets or specs.
+
+```mermaid
+flowchart TB
+    User(["/forge &lt;task&gt;"])
+    Skill["<b>forge skill</b><br/>orchestrator · Haiku"]
+
+    subgraph agents["agents · Sonnet"]
+        Driver["<b>driver</b><br/>drives the browser"]
+        Author["<b>author</b><br/>writes snippets"]
+        SpecWriter["<b>spec-writer</b><br/>writes specs"]
+    end
+
+    subgraph artifacts["artifacts on disk"]
+        Transcript[("session transcript<br/>drove · invoked · note")]
+        Library[("snippet library<br/>scratch → staged → library")]
+        Specs[("specs/&lt;label&gt;.spec.ts")]
+    end
+
+    User --> Skill
+    Skill -- "drive the task" --> Driver
+    Driver -. "reads INDEX,<br/>invokes existing" .-> Library
+    Driver -- "appends events" --> Transcript
+    Skill -. "if novel work" .-> Author
+    Skill -. "if spec mode" .-> SpecWriter
+    Author -- "reads" --> Transcript
+    Author -- "writes new snippets" --> Library
+    SpecWriter -- "reads" --> Transcript
+    SpecWriter -. "inlines snippet bodies" .-> Library
+    SpecWriter -- "writes" --> Specs
+```
+
+A few load-bearing details the diagram glosses:
+
+- **Driver never authors.** It reads `INDEX.md`, invokes existing snippets where they fit, drives novel actions via `forge-registry.mjs drive`, and leaves a flat log. Naming, chunking, and intent-detection are downstream agents' jobs.
+- **The transcript is the only contract.** Three event types — `drove` (raw browser actions), `invoked` (existing-snippet calls with args + result), `note` (optional free-text driver annotations). The author and spec-writer consume it independently.
+- **Author is conditional, spec-writer is mode-gated.** After driver returns, the skill runs `forge-has-novel-work.sh` — if the transcript contains only `invoked` events (library reuse was complete), the author is skipped. Spec-writer runs only when the user invoked `/forge spec ...`.
+- **Library grows by reuse, not authoring rate.** New snippets land in `scratch/`; on second successful use they promote to `staged/`, on third to `library/`. TTL cleanup removes scratch entries that never reuse.
+
 ## Status
 
 Foundation laid; iteration ongoing. Today the plugin ships:
