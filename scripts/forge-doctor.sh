@@ -44,15 +44,42 @@ else
   echo "    Remedy: brew install playwright-cli"
 fi
 
-if command -v playwright-cli >/dev/null 2>&1 && \
-   playwright-cli list 2>/dev/null | grep -qE '\bforge\b'; then
-  echo "$ok 'forge' playwright-cli session is active"
+# Per-Claude-session runs. Active = state.json present AND its session name
+# still listed by playwright-cli. Stale = state.json present but daemon gone.
+if [ -d "$ROOT/runs" ]; then
+  active=0; stale=0
+  current_status="not initialised for this Claude session"
+  while IFS= read -r dir; do
+    [ -z "$dir" ] && continue
+    sid=$(basename "$dir")
+    state="$dir/state.json"
+    [ -f "$state" ] || continue
+    name=$(sed -nE 's/.*"session":[[:space:]]*"([^"]+)".*/\1/p' "$state" | head -1)
+    mode=$(sed -nE 's/.*"mode":[[:space:]]*"([^"]+)".*/\1/p' "$state" | head -1)
+    if [ -n "$name" ] && command -v playwright-cli >/dev/null 2>&1 && \
+       playwright-cli list 2>/dev/null | grep -qE "^- ${name}:"; then
+      active=$((active+1))
+      [ "${CLAUDE_CODE_SESSION_ID:-}" = "$sid" ] && current_status="active as '$name' ($mode)"
+    else
+      stale=$((stale+1))
+      [ "${CLAUDE_CODE_SESSION_ID:-}" = "$sid" ] && current_status="stale state for this Claude session (daemon gone)"
+    fi
+  done < <(find "$ROOT/runs" -mindepth 1 -maxdepth 1 -type d 2>/dev/null)
+  echo "$ok runs/ — $active active, $stale stale"
+  echo "  current Claude session: $current_status"
+  if [ "$stale" -gt 0 ]; then
+    echo "  (clean up stale runs by removing their dir under $ROOT/runs/)"
+  fi
 else
-  echo "  'forge' session not active (will be established on first use via forge-session.sh)"
+  echo "  runs/ absent (no per-session browser launched yet)"
 fi
 
-if curl -sf -m 1 http://localhost:9222/json/version >/dev/null 2>&1; then
-  echo "$ok A CDP-enabled browser is currently listening on localhost:9222 (attach will use it)"
+if [ -n "${FORGE_CDP_PORT:-}" ]; then
+  if curl -sf -m 1 "http://localhost:$FORGE_CDP_PORT/json/version" >/dev/null 2>&1; then
+    echo "$ok FORGE_CDP_PORT=$FORGE_CDP_PORT set; CDP browser is listening (attach mode active)"
+  else
+    echo "$fail FORGE_CDP_PORT=$FORGE_CDP_PORT set, but nothing is listening there"
+  fi
 else
-  echo "  No CDP browser on localhost:9222 (managed Chrome will be launched on demand)"
+  echo "  FORGE_CDP_PORT unset → managed mode by default (each Claude session launches its own Chrome)"
 fi

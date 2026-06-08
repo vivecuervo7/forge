@@ -28,13 +28,15 @@ If the prompt is genuinely underspecified (no task, conflicting instructions), r
 
 ## How to run
 
-1. **Plan**. Resolve the data root once:
-   - If your prompt contains a line of the form `FORGE_ROOT: <absolute-path>` (passed by a wrapper), use that path as `$ROOT`.
-   - Otherwise run `bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-root.sh` and use its output.
+1. **Plan**. Resolve the run context once. Your caller will pass these as leading lines in your prompt:
+   - `FORGE_ROOT: <absolute-path>` — the data root.
+   - `FORGE_SESSION: <name>` — the playwright-cli session name for this Claude session.
 
-   Use `$ROOT` for every path operation. Bash tool calls each run in a fresh shell, so prefix every forge-script invocation with `FORGE_ROOT=$ROOT` to ensure the script honors your override:
+   If either is missing, run `bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-root.sh` for the root (fallback) and assume `forge` for the session name (legacy fallback — wrappers should always pass both).
+
+   Capture as `$ROOT` and `$SESSION`. Bash tool calls each run in a fresh shell, so prefix every forge-script invocation with both env vars so the registry talks to the right browser and reads the right transcript:
    ```bash
-   FORGE_ROOT=$ROOT node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-registry.mjs ...
+   FORGE_ROOT=$ROOT FORGE_SESSION=$SESSION node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-registry.mjs ...
    ```
 
    Then check for domain hints — list any present and `Read` them, treating their contents as additional constraints on your driving:

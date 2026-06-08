@@ -40,20 +40,17 @@ Always run the bootstrap once — idempotent, fast no-op on subsequent calls:
 bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-bootstrap.sh
 ```
 
-Emits `FORGE_ROOT=…`, `FORGE_PROFILE=…`, `FORGE_SESSION=forge`, `PLAYWRIGHT_CLI=…` as `KEY=VALUE` lines. Capture `FORGE_ROOT` — you'll pass it to the agents in their prompts.
+Emits `FORGE_ROOT=…` and `PLAYWRIGHT_CLI=…` as `KEY=VALUE` lines. Capture `FORGE_ROOT` — you'll pass it to the agents in their prompts.
 
-Before any browser work, ensure the `forge` playwright-cli session is active:
+Then ensure this Claude session has a browser. forge launches a managed headed Chrome per Claude session by default — each Claude session gets its own browser + profile under `$FORGE_ROOT/runs/<session-id>/`, so concurrent sessions (e.g. across worktrees) don't collide:
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-session.sh --probe-only
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-session.sh
 ```
 
-- Exit 0 → session is established.
-- Exit 1 → no session and no CDP browser to attach to. **Just launch one** — the user invoked forge, they need a browser:
-  ```bash
-  bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-session.sh
-  ```
-  Launches managed Chrome (headed) with a dedicated profile. Separate from the user's everyday Chrome. If the user *was* already browsing in a CDP-enabled Chromium-family browser (`--remote-debugging-port=9222`), the script attaches to it instead; briefly note that, since side effects propagate to their actual browsing.
+This emits `FORGE_SESSION=…`, `FORGE_PORT=…`, `FORGE_MODE=…`, `FORGE_PROFILE=…` as `KEY=VALUE` lines. Capture `FORGE_SESSION` — you'll pass it to the driver in its prompt alongside `FORGE_ROOT`.
+
+If a session for this Claude session is already live, the script no-ops and re-emits the existing values. If the user has set `FORGE_CDP_PORT=<port>` in their env, the script attaches to the CDP browser on that port instead (opt-in attach mode — useful for "drive my live browser" workflows; note that side effects propagate to their actual browsing).
 
 ## Direct route — `snippet <name> [json-args]`
 
@@ -69,16 +66,17 @@ If `<json-args>` was omitted, use `{}`. Report the result. No INDEX read, no age
 
 ### 1. Drive
 
-**Driver's prompt is ONLY the user's task** (plus a leading `FORGE_ROOT` line). Do not mention any downstream agents or post-drive steps in the prompt — that context confuses the driver into trying to invoke other skills from inside itself.
+**Driver's prompt is ONLY the user's task** (plus leading `FORGE_ROOT` and `FORGE_SESSION` lines). Do not mention any downstream agents or post-drive steps in the prompt — that context confuses the driver into trying to invoke other skills from inside itself.
 
 ```
 Agent(subagent_type="forge:driver",
   prompt="FORGE_ROOT: $FORGE_ROOT
+FORGE_SESSION: $FORGE_SESSION
 
 <the user's request verbatim, plus any context they mentioned>")
 ```
 
-The leading `FORGE_ROOT:` line lets the agent honor the same root the skill resolved during bootstrap — important when a wrapper has set a non-default root.
+The leading lines let the agent honor the same root + per-Claude-session browser the skill resolved during bootstrap — important when a wrapper has set a non-default root, and required for the driver to talk to the right browser when multiple Claude sessions are active.
 
 The driver returns one of:
 

@@ -13,8 +13,8 @@ mkdir -p \
   "$ROOT/library" \
   "$ROOT/broken" \
   "$ROOT/sessions" \
+  "$ROOT/runs" \
   "$ROOT/specs" \
-  "$ROOT/chromium-profile" \
   "$ROOT/runner"
 
 # stats.json — per-snippet metadata
@@ -92,8 +92,8 @@ if [ -d "$ROOT/runner/node_modules" ] && [ ! -e "$ROOT/specs/node_modules" ]; th
   ln -s "$ROOT/runner/node_modules" "$ROOT/specs/node_modules"
 fi
 
-# Emit KEY=VALUE lines for downstream consumers.
+# Emit KEY=VALUE lines for downstream consumers. FORGE_SESSION / FORGE_PORT /
+# FORGE_MODE / FORGE_PROFILE come from forge-session.sh (per-Claude-session) once
+# the browser is established — this script only emits the root + tool location.
 printf 'FORGE_ROOT=%s\n' "$ROOT"
-printf 'FORGE_PROFILE=%s\n' "$ROOT/chromium-profile"
-printf 'FORGE_SESSION=%s\n' 'forge'
 printf 'PLAYWRIGHT_CLI=%s\n' "$(command -v playwright-cli)"
