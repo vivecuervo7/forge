@@ -24,15 +24,22 @@
 //                        from the last step's result shape.
 //       skipAssertion    bool; force no assertion (even on auto-propose)
 //
+//   run [label]
+//     Execute a previously-written spec against the live browser via the
+//     forge-managed Playwright runner workspace at $FORGE_ROOT/runner/.
+//     If <label> is omitted, runs the most-recently-written spec in $FORGE_ROOT/specs/.
+//     Streams playwright test output. Returns the test runner's exit code.
+//
 // Each retained event becomes a sequential block in the test body. The snippet's
 // run() function is embedded as a literal and called with the recorded args.
 // Args are credential-redacted; references to process.env appear at the top.
 
-import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync, renameSync } from 'node:fs'
+import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync, renameSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
 import { createHash } from 'node:crypto'
 import { pathToFileURL } from 'node:url'
+import { spawn } from 'node:child_process'
 
 const ROOT = process.env.FORGE_ROOT || join(homedir(), '.claude/.vive-claude/forge')
 const TIERS = ['library', 'staged', 'scratch', 'broken']
@@ -426,9 +433,64 @@ async function main() {
       }, null, 2) + '\n')
       return
     }
+    case 'run': {
+      const label = rest[0]
+      await runSpec(label)
+      return
+    }
     default:
-      die('usage: forge-spec.mjs <events|write> [json-options]', 2)
+      die('usage: forge-spec.mjs <events|write|run> [args]', 2)
   }
+}
+
+async function runSpec(label) {
+  const specsDir = join(ROOT, 'specs')
+  const runnerDir = join(ROOT, 'runner')
+
+  if (!existsSync(runnerDir) || !existsSync(join(runnerDir, 'node_modules', '@playwright', 'test'))) {
+    die(`runner workspace not bootstrapped — run forge-bootstrap.sh first (expected at ${runnerDir})`, 1)
+  }
+  if (!existsSync(specsDir)) die(`no specs directory at ${specsDir}; nothing to run`, 1)
+
+  // Resolve which spec file to run.
+  let specPath
+  if (label) {
+    // Allow either bare label or filename with .spec.ts suffix.
+    const candidates = [
+      join(specsDir, `${label}.spec.ts`),
+      join(specsDir, label.endsWith('.spec.ts') ? label : `${label}.spec.ts`),
+    ]
+    specPath = candidates.find(p => existsSync(p))
+    if (!specPath) die(`no spec found for label '${label}' in ${specsDir}`, 1)
+  } else {
+    // Pick the most-recently-modified .spec.ts.
+    const files = readdirSync(specsDir).filter(f => f.endsWith('.spec.ts'))
+    if (files.length === 0) die(`no specs in ${specsDir}; write one first with forge-spec.mjs write`, 1)
+    const stats = files.map(f => ({ f, mtime: statSync(join(specsDir, f)).mtimeMs }))
+    stats.sort((a, b) => b.mtime - a.mtime)
+    specPath = join(specsDir, stats[0].f)
+  }
+
+  // Tell the user what we're running.
+  process.stderr.write(`forge-spec: running ${specPath}\n`)
+
+  // Spawn `npx playwright test <specPath>` inside the runner workspace.
+  // The runner's playwright.config.ts has testDir: '../specs', so passing the
+  // bare filename relative to runner/ also works — but a full path is unambiguous.
+  await new Promise((resolve, reject) => {
+    const child = spawn('npx', ['playwright', 'test', specPath], {
+      cwd: runnerDir,
+      stdio: 'inherit',
+      env: process.env,
+    })
+    child.on('close', code => {
+      if (code === 0) resolve()
+      else reject(Object.assign(new Error(`playwright test exited with code ${code}`), { code }))
+    })
+    child.on('error', reject)
+  }).catch(err => {
+    process.exit(err.code || 1)
+  })
 }
 
 main().catch(err => {

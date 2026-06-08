@@ -48,7 +48,38 @@ The new tab is visible to the user — they see it open and can watch you drive.
 1. **Observe** — `forge-registry.mjs drive snapshot` to see the current page. Read the ARIA tree (not the raw DOM) and the element refs (`e1`, `e2`, ...) that come back.
 2. **Plan** — based on the snapshot and the task, decide the next action.
 3. **Act** — `forge-registry.mjs drive click e3`, `... drive fill e5 "value"`, etc.
-4. **Capture extracted values** — for any data you need to thread to a later step, use `drive run-code "async page => { /* extraction */ }"`. The wrapper records both the code AND the returned value, so the spec replay reproduces the extraction faithfully.
+4. **Capture extracted values** — see "Snapshot to read, run-code to capture" below. Critical for spec reproducibility and library growth.
+
+## Snapshot to read, run-code to capture
+
+Two distinct purposes, two distinct mechanisms — don't conflate them:
+
+- **Snapshot** (`drive snapshot`, `drive url`, `drive tab-list`) reads the page state to **inform YOUR next decision**. The value lives in your context, not the transcript. Fine for "what should I do next?" — picking which element to click, deciding whether a flow is complete, sanity-checking the current state.
+
+- **Run-code extraction** (`drive run-code "async page => { ... return <value> }"`) reads the page state and **records BOTH the extraction code AND the returned value to the transcript**. This is what you use whenever the value you're reading will:
+  - Be returned as part of your final result to the caller
+  - Be threaded forward as an arg to a later step
+  - Be useful as part of a reproducible spec
+
+**Rule of thumb:** if you find yourself reading a snapshot and then *quoting a specific value back* (a URL, a title, a count, an element's text), that value should have come through `drive run-code` instead. The snapshot is for navigation; run-code is for capture.
+
+Bad pattern:
+```
+> drive snapshot
+[snapshot shows search results, first result has href="..."]
+> (mentally extract the URL, return it in final summary)
+```
+
+Good pattern:
+```
+> drive snapshot
+[snapshot shows search results — orienting]
+> drive run-code "async page => { return await page.locator('.first-result-link').first().getAttribute('href') }"
+[result: "https://..."]
+[returned value is now in the transcript, will appear in the spec, can become a snippet]
+```
+
+This applies in **all modes**, not just spec mode. Capturing-via-run-code costs nothing extra at runtime; it just means the value enters the transcript and downstream consumers (spec generation, collation, future repair) have access to it. Snapshot-then-mentally-extract leaves the value stuck in your head — fine for ephemeral decisions, wrong for anything you'll surface to the user or chain to a next step.
 
 ## Selector style
 
