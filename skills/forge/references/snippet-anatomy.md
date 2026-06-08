@@ -61,9 +61,9 @@ The `run()` body is extracted at invocation time and run inside `playwright-cli 
 
 ## Where snippets live
 
-- `scratch/` — newly authored or one-off. 7d TTL once cleanup is wired up.
+- `scratch/` — newly authored or one-off. 7d TTL.
 - `staged/` — promoted on second successful use.
 - `library/` — promoted on third successful use; never auto-deleted.
 - `broken/` — quarantined after a failed repair. Don't invoke from here.
 
-Move snippets between tiers only via the (future) promotion machinery or explicit `mv`. Editing the file in place is fine — the registry re-reads on every invocation.
+Promotion happens automatically based on `useCount` in `stats.json`. You can also move snippets between tiers with `mv`; editing the file in place is fine — the registry re-reads on every invocation.

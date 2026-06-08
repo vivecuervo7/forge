@@ -135,7 +135,7 @@ See `references/spec-format.md` for the `.spec.ts` template, redaction rules, co
 ## What you must NOT do
 
 - **Don't drive the browser yourself for multi-step tasks.** Delegate to `forge:driver`. The whole point of this architecture is that the skill is a router — it doesn't decompose tasks, doesn't decide per-step strategy, doesn't drive. If you find yourself reaching for `playwright-cli ...` directly, you've taken the wrong route.
-- **Don't decide whether to author snippets.** The collation step does that automatically based on heuristics over the transcript. You never call `forge-registry.mjs record-authoring` or write to scratch/ directly.
+- **Don't decide whether to author snippets.** The driver agent emits `capture` markers for chunks worth saving as it goes; the collation step transcribes those into snippet files after the driver returns. You never call `forge-registry.mjs capture` or write to scratch/ directly — those are the driver's job.
 - **Don't write to `library/` or `staged/` directly.** Those tiers are managed by promotion machinery.
 - **Don't tear down the forge session.** `playwright-cli -s=forge close` / `detach` is user-controlled.
 - **Don't second-guess the driver agent.** If it returns `cannot-drive`, surface the reason and stop. Don't try to do the task yourself.
@@ -150,6 +150,7 @@ $FORGE_ROOT/                        # ~/.claude/.vive-claude/forge/
 ├── broken/                         # quarantined; needs repair
 ├── sessions/<session-id>.jsonl     # per-Claude-session transcripts (invoked + authored + drove events)
 ├── specs/<label>.spec.ts           # generated specs
+├── runner/                         # bundled Playwright workspace for `forge-spec.mjs run`
 └── chromium-profile/               # dedicated profile for managed launch
 ```
 

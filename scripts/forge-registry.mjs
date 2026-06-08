@@ -24,10 +24,34 @@
 //                             agent to capture inline driving for spec generation. Read-only
 //                             commands (snapshot, tab-list, url) are passed through without
 //                             recording.
-//   collate [session-id]      Heuristic post-driver pass: find consecutive drove event groups
-//                             in the transcript, auto-create snippets in scratch/ for groups
-//                             that look like coherent reusable patterns. Session id defaults
-//                             to $CLAUDE_CODE_SESSION_ID. No model in the loop; pure heuristic.
+//   capture '<json>' [--force]
+//                             Append a `capture` event to the session transcript. Emitted
+//                             by the driver agent at the end of each logical chunk it wants
+//                             saved as a snippet. JSON shape:
+//                               { name: kebab-case-string,
+//                                 description: string,
+//                                 preconditions?: { url?: regex-source-string,
+//                                                   visible?: string | string[] },
+//                                 args?: object }
+//                             The capture event acts as a closing bracket: drove events
+//                             between the previous capture (or session start) and this one
+//                             form the snippet body. No drove events in window → nothing
+//                             saved. No capture call at all → nothing saved.
+//                             Two guardrails refuse the capture (override with --force):
+//                               - buffer contains events from >1 hostname (likely batched
+//                                 captures; should be inline per-chunk)
+//                               - last run-code returned a failure-shaped value (null, [],
+//                                 "Not found", etc.; should discard instead)
+//   discard '<reason>'        Append a `discard` event to the transcript. Closes the
+//                             current capture window like `capture` does but writes no
+//                             snippet — used by the driver to throw away exploratory or
+//                             recovery actions before retrying a chunk cleanly. The reason
+//                             is recorded in the transcript for forensics.
+//   collate [session-id]      Post-driver pass: walk the transcript, write one snippet per
+//                             capture event using the drove events in its window as the
+//                             body. Pure transcription — naming and intent are the driver's
+//                             call, not the script's. Session id defaults to
+//                             $CLAUDE_CODE_SESSION_ID.
 //
 // Tier promotion:
 //   useCount >= STAGE_AT   (default 2) → promote to staged
@@ -499,11 +523,141 @@ async function driveAction(args) {
   process.exit(r.status || 0)
 }
 
-// Heuristic post-driver pass: look at the session's drove events and decide
-// which consecutive groups are worth saving as snippets in scratch/.
-// Pure script-side; no model in the loop. Confidence is bounded by simple
-// rules — high-confidence groups become snippets, low-confidence groups are
-// skipped (user can save them manually later if they choose).
+// Walk the session transcript and return drove events accumulated since the
+// last capture/discard (or session start). Used by recordCapture's guardrails
+// to refuse cross-domain buffers and failure-shaped last results without
+// having to teach the driver to inspect the transcript itself.
+function inspectCaptureBuffer(sessionId) {
+  const transcriptPath = join(ROOT, 'sessions', `${sessionId}.jsonl`)
+  if (!existsSync(transcriptPath)) return []
+  const buffer = []
+  for (const line of readFileSync(transcriptPath, 'utf8').split('\n')) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+    let e
+    try { e = JSON.parse(trimmed) } catch { continue }
+    if (e.event === 'drove') buffer.push(e)
+    else buffer.length = 0  // capture, discard, invoked, authored — flush
+  }
+  return buffer
+}
+
+// Extract distinct hostnames from URL literals in drove events' code. Used to
+// detect cross-domain buffers (multiple goto destinations within one capture
+// window — almost certainly a missed inline-capture).
+function bufferHostnames(droveEvents) {
+  const hosts = new Set()
+  for (const e of droveEvents) {
+    if (typeof e.code !== 'string') continue
+    const matches = e.code.matchAll(/['"`](https?:\/\/[^'"`]+)['"`]/g)
+    for (const m of matches) {
+      try { hosts.add(new URL(m[1]).hostname.replace(/^www\./, '')) } catch {}
+    }
+  }
+  return [...hosts]
+}
+
+// Heuristic check on the last run-code's result: does it look like a failed
+// extraction? Catches the pattern where the driver tried to read a value, got
+// nothing back, and then captured the failed chunk anyway.
+function failureLikeResult(droveEvents) {
+  const runCodes = droveEvents.filter(e => e.command === 'run-code')
+  if (runCodes.length === 0) return null
+  const last = runCodes[runCodes.length - 1]
+  const r = last.result
+  if (r === null || r === undefined) return 'null/undefined'
+  if (Array.isArray(r) && r.length === 0) return '[] (empty array)'
+  if (typeof r === 'string') {
+    const trimmed = r.trim()
+    if (trimmed === '') return '"" (empty string)'
+    if (/^(not found|undefined|null)$/i.test(trimmed)) return JSON.stringify(trimmed.slice(0, 60))
+    if (/^error\b/i.test(trimmed)) return JSON.stringify(trimmed.slice(0, 60))
+  }
+  return null
+}
+
+// Append a `capture` event to the session transcript. The driver agent calls
+// this after each logical chunk it wants saved as a snippet — naming, intent,
+// and preconditions all come from the driver, not from heuristics. The event
+// acts as a closing bracket: drove events between the previous capture (or
+// session start) and this one form the snippet body at collate time.
+//
+// Two guardrails run before the event is appended (skippable with --force):
+//   1. Cross-domain buffer: events span >1 hostname → almost certainly a
+//      missed inline-capture; refuse with a hint to capture per-chunk.
+//   2. Failure-shaped last result: last run-code returned null/[]/"Not found"
+//      → almost certainly a failed extraction; refuse with a hint to discard.
+function recordCapture(metaJson, force) {
+  let meta
+  try { meta = JSON.parse(metaJson) }
+  catch (e) { die(`capture: meta must be valid JSON: ${e.message}`, 2) }
+  if (typeof meta !== 'object' || meta === null) die('capture: meta must be a JSON object', 2)
+  if (typeof meta.name !== 'string' || !meta.name) die('capture: meta.name (string) required', 2)
+  if (!/^[a-z][a-z0-9-]*$/.test(meta.name)) {
+    die(`capture: name "${meta.name}" must be lowercase kebab-case (a-z, 0-9, -, starting with letter)`, 2)
+  }
+  if (typeof meta.description !== 'string' || !meta.description) die('capture: meta.description (string) required', 2)
+
+  // Guardrails — run only when we can see the transcript and only when the
+  // driver hasn't explicitly overridden via --force.
+  const sessionId = process.env.CLAUDE_CODE_SESSION_ID
+  if (!force && sessionId) {
+    const buffer = inspectCaptureBuffer(sessionId)
+    const hosts = bufferHostnames(buffer)
+    if (hosts.length > 1) {
+      die(
+        `capture refused: buffer contains drove events from ${hosts.length} hostnames (${hosts.join(', ')}).\n` +
+        `  This usually means you batched captures at the end instead of calling capture immediately\n` +
+        `  after each chunk. Capture is end-anchored — it sweeps every drove event back to the previous\n` +
+        `  capture/discard. Fix: discard the buffer ('explored multiple sites in one window'), then\n` +
+        `  redo the work with capture inline after each chunk. To override (rare; you really mean a\n` +
+        `  cross-domain snippet), retry with --force.`,
+        3,
+      )
+    }
+    const failure = failureLikeResult(buffer)
+    if (failure !== null) {
+      die(
+        `capture refused: the last buffered run-code returned ${failure}, which looks like a failed\n` +
+        `  extraction. Capturing it would write a snippet that returns the failure value on every\n` +
+        `  future invocation. Fix: call discard '<reason>' instead, then retry the chunk with a working\n` +
+        `  extraction approach. To override (rare; the failure-shaped result is what you actually mean\n` +
+        `  to capture), retry with --force.`,
+        3,
+      )
+    }
+  }
+
+  appendTranscript({
+    event: 'capture',
+    name: meta.name,
+    description: meta.description,
+    preconditions: meta.preconditions || null,
+    args: meta.args || null,
+  })
+  process.stdout.write(JSON.stringify({ ok: true, name: meta.name }) + '\n')
+}
+
+// Append a `discard` event — closes the current capture window without writing
+// a snippet. The driver calls this when a chunk goes sideways (bad search,
+// wrong element clicked, recovery needed) and the accumulated drove events
+// shouldn't pollute whatever the next capture covers.
+function recordDiscard(reason) {
+  if (typeof reason !== 'string' || !reason.trim()) {
+    die('discard requires a reason string (one-line, what went wrong)', 2)
+  }
+  appendTranscript({
+    event: 'discard',
+    reason: reason.trim(),
+  })
+  process.stdout.write(JSON.stringify({ ok: true, reason: reason.trim() }) + '\n')
+}
+
+// Post-driver pass: walk the session transcript, emit one snippet per `capture`
+// event using the drove events between captures as the body. Pure transcription
+// — no chunking heuristics, no name derivation, no precondition inference.
+// The driver decides what to save and how to describe it; the script does file
+// IO and dedup.
 function collateSession(sessionId) {
   const transcriptPath = join(ROOT, 'sessions', `${sessionId}.jsonl`)
   if (!existsSync(transcriptPath)) {
@@ -516,33 +670,40 @@ function collateSession(sessionId) {
     try { events.push(JSON.parse(trimmed)) } catch {}
   }
 
-  // Group consecutive drove events (interrupted by any other event type).
-  const groups = []
-  let current = null
-  for (let i = 0; i < events.length; i++) {
-    const e = events[i]
+  // Build chunks: each capture event closes a window of drove events back to
+  // the previous capture/discard (or session start). A discard event closes
+  // the window without producing a chunk — used to throw away exploratory
+  // actions before a clean retry.
+  const chunks = []
+  const discards = []
+  let buffer = []
+  for (const e of events) {
     if (e.event === 'drove') {
-      if (!current) { current = { startIndex: i, events: [] } }
-      current.events.push(e)
+      buffer.push(e)
+    } else if (e.event === 'capture') {
+      chunks.push({ capture: e, events: buffer })
+      buffer = []
+    } else if (e.event === 'discard') {
+      discards.push({ reason: e.reason, discardedActionCount: buffer.length })
+      buffer = []
     } else {
-      if (current) { groups.push(current); current = null }
+      // 'invoked', 'authored', etc. — flush the buffer; these aren't part of
+      // any chunk (they're either existing snippet invocations or noise).
+      buffer = []
     }
   }
-  if (current) groups.push(current)
+  // Tail drove events without a closing capture/discard are dropped by design
+  // — the driver chose not to save them.
 
-  // Apply heuristics. A group is a snippet candidate if:
-  //   - it has >= 2 actions (single actions are usually noise)
-  //   - it has at most 20 actions (huge groups are likely exploratory)
-  //   - it includes at least one action that produces meaningful state change
-  //     (goto / click / fill / press / select / check)
-  //   - it doesn't duplicate an existing snippet's body (cheap hash check)
-  const ACTION_VERBS = new Set(['goto', 'click', 'fill', 'press', 'select', 'check', 'uncheck', 'hover', 'type', 'upload'])
+  // Pre-load existing snippet bodies + names for dedup and collision handling.
   const existingHashes = new Set()
+  const existingNames = new Set()
   for (const tier of TIERS) {
     const dir = join(ROOT, tier)
     if (!existsSync(dir)) continue
     for (const file of readdirSync(dir)) {
       if (!file.endsWith('.ts')) continue
+      existingNames.add(file.slice(0, -3))
       try {
         const src = readFileSync(join(dir, file), 'utf8')
         const m = src.match(/export async function run[\s\S]*?\{([\s\S]*)\}\s*$/m)
@@ -554,55 +715,44 @@ function collateSession(sessionId) {
   const created = []
   const skipped = []
 
-  for (const group of groups) {
-    const events = group.events
-    if (events.length < 2) {
-      skipped.push({ size: events.length, reason: 'too-short' })
+  for (const { capture, events: chunkEvents } of chunks) {
+    if (chunkEvents.length === 0) {
+      skipped.push({ name: capture.name, reason: 'no-drove-events-in-window' })
       continue
     }
-    if (events.length > 20) {
-      skipped.push({ size: events.length, reason: 'too-large' })
-      continue
-    }
-    const hasActionVerb = events.some(e => ACTION_VERBS.has(e.command))
-    if (!hasActionVerb) {
-      skipped.push({ size: events.length, reason: 'no-action-verbs' })
-      continue
-    }
-    const body = events.map(e => `  ${e.code}`).join('\n')
-    const hash = normaliseCodeForHash(body)
+    // Hash on the *transformed* body (post-__result rewrite, with returnLine) —
+    // that's what writeSnippetFile will emit, and what we'll read back from
+    // existing files. Hashing the raw drove-events body would never dedup
+    // since existing files already have the rewrite applied.
+    const { body: finalBody, returnLine } = transformChunkBody(chunkEvents)
+    const hashTarget = finalBody + returnLine
+    const hash = normaliseCodeForHash(hashTarget)
     if (existingHashes.has(hash)) {
-      skipped.push({ size: events.length, reason: 'duplicate-of-existing' })
+      skipped.push({ name: capture.name, reason: 'duplicate-of-existing-body' })
       continue
     }
-
-    // Compose snippet metadata heuristically. Name from the first navigation's
-    // hostname + a verb hint from the last action.
-    const name = deriveSnippetName(events)
-    const description = deriveSnippetDescription(events)
-    const snippetPath = join(ROOT, 'scratch', `${name}.ts`)
-    if (existsSync(snippetPath)) {
-      // Don't overwrite — append a numeric suffix.
+    // Name collision with a *different* body → numeric suffix.
+    let finalName = capture.name
+    if (existingNames.has(finalName)) {
       let n = 2
-      let candidate
-      do {
-        candidate = join(ROOT, 'scratch', `${name}-${n}.ts`)
-        n++
-      } while (existsSync(candidate) && n < 50)
-      writeSnippetFile(candidate, name + `-${n - 1}`, description, body, events)
-      existingHashes.add(hash)
-      created.push({ name: name + `-${n - 1}`, path: candidate, actionCount: events.length })
-    } else {
-      writeSnippetFile(snippetPath, name, description, body, events)
-      existingHashes.add(hash)
-      created.push({ name, path: snippetPath, actionCount: events.length })
+      while (existingNames.has(`${capture.name}-${n}`) && n < 50) n++
+      finalName = `${capture.name}-${n}`
     }
+    const snippetPath = join(ROOT, 'scratch', `${finalName}.ts`)
+    writeSnippetFile(snippetPath, capture, finalBody, returnLine, chunkEvents)
+    existingHashes.add(hash)
+    existingNames.add(finalName)
+    created.push({
+      name: finalName,
+      path: snippetPath,
+      actionCount: chunkEvents.length,
+      ...(finalName !== capture.name && { renamedFrom: capture.name }),
+    })
   }
 
-  // Reindex if anything changed.
   if (created.length > 0) regenerateIndex()
 
-  return { ok: true, sessionId, created, skipped }
+  return { ok: true, sessionId, created, skipped, discards }
 }
 
 function normaliseCodeForHash(code) {
@@ -614,74 +764,100 @@ function normaliseCodeForHash(code) {
     .trim()
 }
 
-function deriveSnippetName(events) {
-  // Find the first goto URL → hostname; combine with the last action's verb.
-  const firstGoto = events.find(e => e.command === 'goto')
-  const lastEvent = events[events.length - 1]
-  let host = 'flow'
-  if (firstGoto) {
-    const urlMatch = firstGoto.code.match(/['"`](https?:\/\/[^'"`]+)['"`]/)
-    if (urlMatch) {
-      try {
-        const u = new URL(urlMatch[1])
-        host = u.hostname.replace(/^www\./, '').replace(/\./g, '-')
-      } catch {}
+// Render a `preconditions` block from the driver-supplied capture meta. Falls
+// back to the first goto URL when the driver didn't provide one (most chunks
+// will have a clear "this only works on $domain" precondition the driver knows).
+function renderPreconditions(capture, chunkEvents) {
+  const parts = []
+  const supplied = capture.preconditions || {}
+
+  if (supplied.url) {
+    // Driver provides regex source as a plain string ("news\\.ycombinator\\.com").
+    // Render as a regex literal so the snippet loader can use it directly.
+    parts.push(`url: /${supplied.url}/`)
+  } else {
+    const firstGoto = chunkEvents.find(e => e.command === 'goto')
+    if (firstGoto) {
+      const urlMatch = firstGoto.code.match(/['"`](https?:\/\/[^'"`]+)['"`]/)
+      if (urlMatch) {
+        try {
+          const u = new URL(urlMatch[1])
+          parts.push(`url: /${u.hostname.replace(/\./g, '\\.')}/`)
+        } catch {}
+      }
     }
   }
-  const verb = lastEvent.command || 'action'
-  return `${host}-${verb}`.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '')
+
+  if (supplied.visible) {
+    const items = Array.isArray(supplied.visible) ? supplied.visible : [supplied.visible]
+    if (items.length === 1) parts.push(`visible: ${JSON.stringify(items[0])}`)
+    else parts.push(`visible: ${JSON.stringify(items)}`)
+  }
+
+  if (parts.length === 0) return '\n  preconditions: {},'
+  return '\n  preconditions: {\n    ' + parts.join(',\n    ') + ',\n  },'
 }
 
-function deriveSnippetDescription(events) {
-  const firstGoto = events.find(e => e.command === 'goto')
-  const verbs = events.map(e => e.command).filter(Boolean)
-  const action = verbs.length <= 3 ? verbs.join(', ') : `${verbs[0]} ... ${verbs[verbs.length - 1]} (${verbs.length} actions)`
-  if (firstGoto) {
-    const urlMatch = firstGoto.code.match(/['"`](https?:\/\/[^'"`]+)['"`]/)
-    if (urlMatch) {
-      try {
-        const u = new URL(urlMatch[1])
-        return `Drive on ${u.hostname}: ${action}`
-      } catch {}
+// Rewrite a chunk's drove events into the body we'll embed in `run(page, args)`.
+// If the last event was a run-code that returned a value, transform that event's
+// code into `const __result = await ...` and emit a trailing `return __result`.
+// Pure function — called from collateSession (for hash dedup) and writeSnippetFile.
+//
+// Operates per-event rather than via regex on the joined body. A regex spanning
+// multiple `await (async page => ...)(page)` IIFEs can bind `__result` to the
+// wrong IIFE under non-greedy backtracking; transforming the last event's code
+// directly avoids the ambiguity.
+function transformChunkBody(chunkEvents) {
+  const lastEvent = chunkEvents[chunkEvents.length - 1]
+  const hasReturn = lastEvent && lastEvent.command === 'run-code'
+    && lastEvent.result !== null && lastEvent.result !== undefined
+
+  if (!hasReturn) {
+    return {
+      body: chunkEvents.map(e => `  ${e.code}`).join('\n'),
+      returnLine: '',
     }
   }
-  return `Drive: ${action}`
+
+  // Last event's code shape: `await (async page => { ... })(page);` (semicolon
+  // and trailing whitespace optional). Capture the inner `(async page => ...)(page)`
+  // call expression and rebuild as `const __result = await <expr>;`.
+  const m = lastEvent.code.match(/^await (\(async page =>[\s\S]*\)\(page\))\s*;?\s*$/)
+  if (!m) {
+    // Unexpected shape — fall back to no rewrite; emit the events as-is and
+    // skip the return line so the snippet remains valid even though it won't
+    // return a value.
+    return {
+      body: chunkEvents.map(e => `  ${e.code}`).join('\n'),
+      returnLine: '',
+    }
+  }
+
+  const rewrittenLast = `const __result = await ${m[1]};`
+  const lines = chunkEvents.slice(0, -1).map(e => `  ${e.code}`)
+  lines.push(`  ${rewrittenLast}`)
+  return {
+    body: lines.join('\n'),
+    returnLine: '\n  return __result',
+  }
 }
 
-function writeSnippetFile(path, name, description, body, events) {
-  // Extract URL precondition from the first goto, if any.
-  const firstGoto = events.find(e => e.command === 'goto')
-  let urlPrecondition = ''
-  if (firstGoto) {
-    const urlMatch = firstGoto.code.match(/['"`](https?:\/\/[^'"`]+)['"`]/)
-    if (urlMatch) {
-      try {
-        const u = new URL(urlMatch[1])
-        urlPrecondition = `\n    url: /${u.hostname.replace(/\./g, '\\.')}/,`
-      } catch {}
-    }
-  }
-  // If the last drove event had a `result` (e.g. run-code extraction), expose it as
-  // the snippet's return.
-  const lastEvent = events[events.length - 1]
-  const hasReturn = lastEvent.result !== null && lastEvent.result !== undefined
-  const returnLine = hasReturn ? '\n  return result' : ''
-  const bodyWithCapture = hasReturn
-    ? body.replace(/^(\s*)(await \(async page =>.*?\)\(page\))\s*$/m, '$1const result = $2')
-    : body
+function writeSnippetFile(path, capture, finalBody, returnLine, chunkEvents) {
+  const preconditionsBlock = renderPreconditions(capture, chunkEvents)
+  const argsBlock = capture.args && typeof capture.args === 'object' && Object.keys(capture.args).length > 0
+    ? JSON.stringify(capture.args)
+    : '{}'
 
   const src = `// Auto-extracted by forge collation from session drive on ${new Date().toISOString().slice(0, 10)}.
-// Tweak meta or re-author for richer parameterisation.
+// Driver-supplied name and description; preconditions and body may need tweaking.
 export const meta = {
-  description: ${JSON.stringify(description)},
-  preconditions: {${urlPrecondition}
-  },
-  args: {},
+  description: ${JSON.stringify(capture.description)},${preconditionsBlock}
+  args: ${argsBlock},
   tags: ['auto-collated'],
 }
 
 export async function run(page, args) {
-${bodyWithCapture}${returnLine}
+${finalBody}${returnLine}
 }
 `
   const tmp = path + '.tmp'
@@ -932,6 +1108,19 @@ async function main() {
       await driveAction(rest)
       return
     }
+    case 'capture': {
+      const metaJson = rest[0]
+      if (!metaJson) die('capture requires a JSON meta arg', 2)
+      const force = rest.includes('--force')
+      recordCapture(metaJson, force)
+      return
+    }
+    case 'discard': {
+      const reason = rest[0]
+      if (!reason) die('discard requires a reason string', 2)
+      recordDiscard(reason)
+      return
+    }
     case 'collate': {
       const sessionId = rest[0] || process.env.CLAUDE_CODE_SESSION_ID
       if (!sessionId) die('collate: pass a session-id or set CLAUDE_CODE_SESSION_ID', 2)
@@ -940,7 +1129,7 @@ async function main() {
       return
     }
     default:
-      die('usage: forge-registry.mjs <list|show|reindex|invoke|record-authoring|delete|prune|drive|collate> [args...]', 2)
+      die('usage: forge-registry.mjs <list|show|reindex|invoke|record-authoring|delete|prune|drive|capture|discard|collate> [args...]', 2)
   }
 }
 
