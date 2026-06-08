@@ -21,15 +21,17 @@ First use bootstraps a data root under `~/.claude/.vive-claude/forge/`. The boot
 - **macOS** for now (the managed-launch fallback targets `/Applications/Google Chrome.app`; the CDP-attach path works against any Chromium-family browser).
 - **Node.js** — any recent version (tested on 24).
 
-## Attaching to your existing browser
+## Browser model
 
-For "take-the-reins" mode where Claude acts on the browser session you've been using, launch your everyday Chromium-family browser (Chrome, Arc, Brave, Edge) with `--remote-debugging-port=9222`:
+By default forge launches a fresh headed Chrome per Claude session, with a per-session profile under `$FORGE_ROOT/runs/<session-id>/profile/`. Two Claude sessions (e.g. across worktrees) get two independent browsers — no shared tabs, no shared profile, no fight over state. The browser stays open across forge calls in the same Claude session and is reused.
+
+For "take-the-reins" mode where Claude acts on your everyday browser session, launch your Chromium-family browser (Chrome, Arc, Brave, Edge) with `--remote-debugging-port=9222`:
 
 ```bash
 alias chrome='/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222 --user-data-dir=$HOME/.cache/chrome-cdp'
 ```
 
-When `forge-session.sh` runs and detects the CDP port, it'll attach. Skip the CDP setup and it'll launch a managed Chrome with its own persistent profile instead.
+Then opt into attach mode by setting `FORGE_CDP_PORT=9222` in your env before invoking forge. `forge-session.sh` will attach to that browser instead of launching a managed one.
 
 ## Commands
 
@@ -129,10 +131,10 @@ Runtime data lives at `~/.claude/.vive-claude/forge/`:
 ├── library/
 ├── broken/               # quarantined after failed repair
 ├── sessions/             # per-Claude-session transcripts (drove + invoked + note events)
+├── runs/<session-id>/    # per-Claude-session browser state — profile, session metadata
 ├── specs/                # generated `<label>.spec.ts` files
 ├── runner/               # bundled Playwright workspace used by `forge-spec.mjs run`
-├── hints/                # optional domain hints — see below
-└── chromium-profile/     # dedicated profile for managed-launch fallback
+└── hints/                # optional domain hints — see below
 ```
 
 Override the data root with `FORGE_ROOT=/some/other/path` — every script and every agent honors it. This is how other plugins can wrap forge (point at a side directory, invoke `forge:driver` / `forge:author` by name) without colliding with a standalone install.

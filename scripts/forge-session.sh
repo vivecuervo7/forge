@@ -1,92 +1,117 @@
 #!/usr/bin/env bash
-# forge-session.sh — ensure the 'forge' playwright-cli session exists.
+# forge-session.sh — ensure a per-Claude-session playwright-cli session exists.
+#
+# Per-Claude-session state lives at $FORGE_ROOT/runs/$CLAUDE_CODE_SESSION_ID/state.json.
+# Reuses an existing run if its playwright-cli daemon is still alive; otherwise sets
+# up fresh. Each Claude session gets its own playwright-cli session name and its own
+# managed Chrome profile, so concurrent Claude sessions (e.g. across worktrees) don't
+# collide on browser state.
+#
+# Mode is selected by env:
+#   FORGE_CDP_PORT=9222   → attach mode (drive the user's existing CDP browser)
+#   (unset)               → managed mode (default; launch fresh headed Chrome)
 #
 # Usage:
-#   forge-session.sh                    # probe → attach --cdp / open --persistent
-#   forge-session.sh --probe-only       # never launch; exit 1 if no session can be established without it
-#   forge-session.sh --managed          # skip the CDP probe; always open --persistent
-#   forge-session.sh --port=9222        # CDP port to probe
+#   forge-session.sh                    # ensure session is up
+#   forge-session.sh --probe-only       # check only; don't launch
 #
-# Output: a single line of JSON to stdout describing what mode the session is in.
-# Human-facing log lines go to stderr.
+# Output: KEY=VALUE lines (FORGE_SESSION, FORGE_PORT, FORGE_MODE, FORGE_PROFILE).
+# Human log to stderr.
 
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT=$(bash "$SCRIPT_DIR/forge-root.sh")
-PROFILE="$ROOT/chromium-profile"
-PROBE_ONLY=false
-MANAGED=false
-PORT=9222
 
+if [ -z "${CLAUDE_CODE_SESSION_ID:-}" ]; then
+  echo "forge-session: CLAUDE_CODE_SESSION_ID is not set; cannot establish a per-session run" >&2
+  exit 2
+fi
+
+if ! command -v playwright-cli >/dev/null 2>&1; then
+  echo "forge-session: playwright-cli not on PATH (brew install playwright-cli)" >&2
+  exit 5
+fi
+
+PROBE_ONLY=false
 for arg in "$@"; do
   case "$arg" in
     --probe-only) PROBE_ONLY=true ;;
-    --managed) MANAGED=true ;;
-    --port=*) PORT="${arg#--port=}" ;;
     *) echo "forge-session: unknown arg: $arg" >&2; exit 2 ;;
   esac
 done
 
-if ! command -v playwright-cli >/dev/null 2>&1; then
-  echo "forge-session: playwright-cli not on PATH." >&2
-  echo "  Install with: brew install playwright-cli" >&2
-  exit 5
-fi
+SHORT_ID="${CLAUDE_CODE_SESSION_ID:0:12}"
+RUN_DIR="$ROOT/runs/$CLAUDE_CODE_SESSION_ID"
+STATE_FILE="$RUN_DIR/state.json"
+PROFILE_DIR="$RUN_DIR/profile"
 
-emit_json() {
-  printf '%s\n' "$1"
+emit() {
+  printf 'FORGE_SESSION=%s\n' "$1"
+  printf 'FORGE_PORT=%s\n' "$2"
+  printf 'FORGE_MODE=%s\n' "$3"
+  printf 'FORGE_PROFILE=%s\n' "$4"
 }
 
-# Already-running forge session? `playwright-cli list` formats entries as
-# `- forge:` so we match on word boundary, not whitespace.
-if playwright-cli list 2>/dev/null | grep -qE '\bforge\b'; then
-  echo "forge-session: existing 'forge' session found" >&2
-  emit_json '{"mode":"existing","session":"forge"}'
-  exit 0
-fi
-
-# Probe CDP — attach if alive (unless --managed forces a fresh launch).
-if [ "$MANAGED" = false ]; then
-  if curl -sf -m 1 "http://localhost:$PORT/json/version" >/dev/null 2>&1; then
-    # Another playwright-cli session may already be attached to this CDP browser
-    # (e.g. /playwright-teach on another project, or another tool). Two sessions
-    # acting on the same browser context fight each other for tab focus and
-    # navigation. If we detect any other attached session, escalate to a managed
-    # launch automatically — forge gets its own browser, the other tool keeps
-    # the one it's using.
-    # Top-level session entries are `- <name>:` with no leading whitespace;
-    # property lines are indented (e.g. `  - status: open`). Anchor on the
-    # zero-indent variant so we only pick up session names, not properties.
-    OTHER_ATTACHED=$(playwright-cli list 2>/dev/null | awk '
-      /^- / { name = $2; sub(/:$/, "", name); next }
-      /\(attached\)/ && name != "forge" && name != "" { print name; exit }
-    ')
-    if [ -n "$OTHER_ATTACHED" ]; then
-      echo "forge-session: another playwright-cli session ('$OTHER_ATTACHED') is already attached on localhost:$PORT — falling through to managed launch so we don't fight over the browser" >&2
-    else
-      echo "forge-session: CDP browser detected on localhost:$PORT — attaching" >&2
-      if ! playwright-cli -s=forge attach --cdp "http://localhost:$PORT" >&2; then
-        echo "forge-session: attach --cdp failed; the browser may not be Chromium-family" >&2
-        exit 3
-      fi
-      emit_json "{\"mode\":\"cdp-attached\",\"session\":\"forge\",\"port\":$PORT}"
-      exit 0
-    fi
+# Reuse an existing run if its playwright-cli session is still alive.
+if [ -f "$STATE_FILE" ]; then
+  EXISTING_NAME=$(sed -nE 's/.*"session":[[:space:]]*"([^"]+)".*/\1/p' "$STATE_FILE" | head -1)
+  EXISTING_PORT=$(sed -nE 's/.*"port":[[:space:]]*([0-9]+).*/\1/p'    "$STATE_FILE" | head -1)
+  EXISTING_MODE=$(sed -nE 's/.*"mode":[[:space:]]*"([^"]+)".*/\1/p'    "$STATE_FILE" | head -1)
+  if [ -n "$EXISTING_NAME" ] && playwright-cli list 2>/dev/null | grep -qE "^- ${EXISTING_NAME}:"; then
+    echo "forge-session: reusing run '$EXISTING_NAME' (${EXISTING_MODE:-managed})" >&2
+    emit "$EXISTING_NAME" "${EXISTING_PORT:-}" "${EXISTING_MODE:-managed}" "$PROFILE_DIR"
+    exit 0
   fi
+  # State exists but the daemon is gone — stale; clear it.
+  echo "forge-session: clearing stale state for $SHORT_ID (daemon no longer running)" >&2
+  rm -f "$STATE_FILE"
 fi
 
 if [ "$PROBE_ONLY" = true ]; then
-  echo "forge-session: no CDP browser on localhost:$PORT and --probe-only was set" >&2
+  echo "forge-session: no live session for $SHORT_ID; --probe-only set, not launching" >&2
   exit 1
 fi
 
-# Launch managed Chrome with a dedicated persistent profile. Headed by default —
-# browser-automation work is much more useful when you can see what's happening,
-# and forge's primary use case is taking-the-reins while the user watches.
-echo "forge-session: launching managed Chrome (headed) with profile $PROFILE" >&2
-if ! playwright-cli -s=forge open --browser=chrome --headed --profile="$PROFILE" about:blank >&2; then
+mkdir -p "$RUN_DIR" "$PROFILE_DIR"
+
+# ATTACH MODE: caller has set FORGE_CDP_PORT to point at an existing CDP browser.
+if [ -n "${FORGE_CDP_PORT:-}" ]; then
+  if ! curl -sf -m 1 "http://localhost:$FORGE_CDP_PORT/json/version" >/dev/null 2>&1; then
+    echo "forge-session: FORGE_CDP_PORT=$FORGE_CDP_PORT but no CDP browser is listening there" >&2
+    exit 3
+  fi
+  SESSION_NAME="forge-attach-$SHORT_ID"
+  echo "forge-session: attaching to CDP browser on localhost:$FORGE_CDP_PORT as session '$SESSION_NAME'" >&2
+  if ! playwright-cli -s="$SESSION_NAME" attach --cdp "http://localhost:$FORGE_CDP_PORT" >&2; then
+    echo "forge-session: attach --cdp failed; browser may not be Chromium-family" >&2
+    exit 3
+  fi
+  cat > "$STATE_FILE" <<EOF
+{
+  "session": "$SESSION_NAME",
+  "mode": "cdp-attached",
+  "port": $FORGE_CDP_PORT
+}
+EOF
+  emit "$SESSION_NAME" "$FORGE_CDP_PORT" "cdp-attached" "$PROFILE_DIR"
+  exit 0
+fi
+
+# MANAGED MODE: launch headed Chrome with a per-run persistent profile. No CDP
+# port is exposed — playwright-cli drives the browser directly via the launch
+# handle, so two concurrent managed runs don't need (or fight over) ports.
+SESSION_NAME="forge-$SHORT_ID"
+echo "forge-session: launching managed Chrome (headed) for $SHORT_ID, profile $PROFILE_DIR" >&2
+if ! playwright-cli -s="$SESSION_NAME" open --browser=chrome --headed --profile="$PROFILE_DIR" about:blank >&2; then
   echo "forge-session: managed launch failed" >&2
   exit 4
 fi
-emit_json "{\"mode\":\"launched\",\"session\":\"forge\",\"profile\":\"$PROFILE\"}"
+cat > "$STATE_FILE" <<EOF
+{
+  "session": "$SESSION_NAME",
+  "mode": "managed",
+  "profile": "$PROFILE_DIR"
+}
+EOF
+emit "$SESSION_NAME" "" "managed" "$PROFILE_DIR"
