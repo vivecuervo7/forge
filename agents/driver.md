@@ -28,7 +28,14 @@ If the prompt is genuinely underspecified (no task, conflicting instructions), r
 
 ## How to run
 
-1. **Plan**. Resolve the data root once with `bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-root.sh` — capture the output as `$ROOT` and use it for every path operation below.
+1. **Plan**. Resolve the data root once:
+   - If your prompt contains a line of the form `FORGE_ROOT: <absolute-path>` (passed by a wrapper), use that path as `$ROOT`.
+   - Otherwise run `bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-root.sh` and use its output.
+
+   Use `$ROOT` for every path operation. Bash tool calls each run in a fresh shell, so prefix every forge-script invocation with `FORGE_ROOT=$ROOT` to ensure the script honors your override:
+   ```bash
+   FORGE_ROOT=$ROOT node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-registry.mjs ...
+   ```
 
    Then check for domain hints — list any present and `Read` them, treating their contents as additional constraints on your driving:
    ```bash
