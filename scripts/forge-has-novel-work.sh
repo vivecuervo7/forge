@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
-# forge-has-novel-work.sh — does the current session's transcript contain
-# any `drove` events (i.e. did the driver do novel browser work, beyond
-# invoking existing library snippets)?
+# forge-has-novel-work.sh — inspect the current session's transcript and
+# report whether the driver did novel browser work (drove events) or only
+# reused existing library snippets (invoked events).
 #
-# Exit 0: yes, novel work was recorded
-# Exit 1: no novel work (transcript missing, empty, or only contains
-#         `invoked`/`note` events)
-# Exit 2: CLAUDE_CODE_SESSION_ID not set; can't determine
+# Always exits 0 on normal completion. Output to stdout is a single token:
 #
-# The skill uses this to decide whether to invoke the forge:author agent.
+#   novel       — the transcript contains at least one `drove` event
+#   reuse-only  — no `drove` events; every step used an existing snippet
+#                 (or the transcript is missing/empty)
+#
+# Exit 2 (with diagnostic on stderr) only when CLAUDE_CODE_SESSION_ID is
+# unset — that's a genuine environment problem, not a normal outcome.
 
 set -uo pipefail
 
@@ -19,8 +21,8 @@ fi
 
 TRANSCRIPT="${HOME}/.claude/.vive-claude/forge/sessions/${CLAUDE_CODE_SESSION_ID}.jsonl"
 
-if [ ! -f "$TRANSCRIPT" ]; then
-  exit 1
+if [ -f "$TRANSCRIPT" ] && grep -q '"event":"drove"' "$TRANSCRIPT"; then
+  echo "novel"
+else
+  echo "reuse-only"
 fi
-
-grep -q '"event":"drove"' "$TRANSCRIPT"
