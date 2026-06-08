@@ -10,7 +10,7 @@ tools: ["Read", "Write", "Glob", "Bash(bash **/forge/*/scripts/*)"]
 
 You read a forge session transcript and write a Playwright `.spec.ts` file that a future caller can run to reproduce the task. Unlike the author, you don't extract reusable patterns — you write one complete, runnable test that captures *this run*.
 
-The spec lands at `~/.claude/.vive-claude/forge/specs/<label>.spec.ts`. The user can either run it via `forge-spec.mjs run <label>` or copy it into their project's tests directory.
+The spec lands at `$ROOT/specs/<label>.spec.ts` (where `$ROOT` is the forge data root — see Step 1). The user can either run it via `forge-spec.mjs run <label>` or copy it into their project's tests directory.
 
 ## What you receive
 
@@ -21,17 +21,18 @@ The spec lands at `~/.claude/.vive-claude/forge/specs/<label>.spec.ts`. The user
 
 ### 1. Read the transcript
 
-Resolve the transcript path:
+Resolve the data root once with `bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-root.sh` — capture the output as `$ROOT` and use it for every path operation below. Then compute the transcript path:
 
 ```bash
-echo "$HOME/.claude/.vive-claude/forge/sessions/$CLAUDE_CODE_SESSION_ID.jsonl"
+ROOT=$(bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-root.sh)
+echo "$ROOT/sessions/$CLAUDE_CODE_SESSION_ID.jsonl"
 ```
 
 Then `Read` that file.
 
 JSONL events:
 - `drove` — direct browser action. Has `command`, `code`, `result`.
-- `invoked` — existing snippet was called. Has `snippet`, `args`, `result`. Inline these by reading the snippet's `run()` function from `~/.claude/.vive-claude/forge/{scratch,staged,library}/<snippet>.ts`.
+- `invoked` — existing snippet was called. Has `snippet`, `args`, `result`. Inline these by reading the snippet's `run()` function from `$ROOT/{scratch,staged,library}/<snippet>.ts`.
 - `note` — driver's free-text hint. Use as context for understanding intent and filtering exploration.
 
 ### 2. Decide what to include
@@ -117,7 +118,7 @@ Don't over-assert. One terminal assertion per step is plenty; the test is for re
 
 ### 6. Inlining snippets
 
-When you encounter an `invoked` event in the transcript, find the snippet's source file at `~/.claude/.vive-claude/forge/{scratch,staged,library}/<snippet-name>.ts` and inline its `run()` body verbatim. The snippet's `meta.preconditions` and `meta.args` shape do NOT carry into the spec — preconditions are a runtime guard for the invocation wrapper, and the spec runs in a fresh test browser where preconditions don't apply.
+When you encounter an `invoked` event in the transcript, find the snippet's source file at `$ROOT/{scratch,staged,library}/<snippet-name>.ts` and inline its `run()` body verbatim. The snippet's `meta.preconditions` and `meta.args` shape do NOT carry into the spec — preconditions are a runtime guard for the invocation wrapper, and the spec runs in a fresh test browser where preconditions don't apply.
 
 If the snippet declares args, look at the `invoked` event's `args` field and substitute literals into the inlined body. Example:
 
@@ -159,7 +160,7 @@ Emails and usernames usually aren't secrets — keep them literal unless they're
 
 ### 8. Write the file
 
-Path: `~/.claude/.vive-claude/forge/specs/<label>.spec.ts`. Use the Write tool directly. The bundled runner workspace at `~/.claude/.vive-claude/forge/runner/` is already set up; the spec is runnable via `forge-spec.mjs run <label>`.
+Path: `$ROOT/specs/<label>.spec.ts`. Use the Write tool directly. The bundled runner workspace at `$ROOT/runner/` is already set up; the spec is runnable via `forge-spec.mjs run <label>`.
 
 ### 9. Return a manifest
 
