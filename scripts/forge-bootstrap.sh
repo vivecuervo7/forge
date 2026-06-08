@@ -84,6 +84,14 @@ if [ ! -d "$ROOT/runner/node_modules/@playwright/test" ]; then
   }
 fi
 
+# When `npx playwright test` executes a spec at $ROOT/specs/<x>.spec.ts, Node
+# resolves `import '@playwright/test'` by walking up from the spec's directory.
+# specs/ has no node_modules of its own, so the import would fail. Symlink the
+# runner's node_modules into specs/ so resolution finds it.
+if [ -d "$ROOT/runner/node_modules" ] && [ ! -e "$ROOT/specs/node_modules" ]; then
+  ln -s "$ROOT/runner/node_modules" "$ROOT/specs/node_modules"
+fi
+
 # Emit KEY=VALUE lines for downstream consumers.
 printf 'FORGE_ROOT=%s\n' "$ROOT"
 printf 'FORGE_PROFILE=%s\n' "$ROOT/chromium-profile"

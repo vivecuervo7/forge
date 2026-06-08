@@ -434,8 +434,15 @@ async function main() {
       return
     }
     case 'run': {
-      const label = rest[0]
-      await runSpec(label)
+      // First non-flag positional arg is the label; everything else (flags
+      // like --ui, --headed, --debug, etc.) forwards to `playwright test`.
+      let label = null
+      const extraArgs = []
+      for (const arg of rest) {
+        if (arg.startsWith('-') || label !== null) extraArgs.push(arg)
+        else label = arg
+      }
+      await runSpec(label, extraArgs)
       return
     }
     default:
@@ -443,7 +450,7 @@ async function main() {
   }
 }
 
-async function runSpec(label) {
+async function runSpec(label, extraArgs = []) {
   const specsDir = join(ROOT, 'specs')
   const runnerDir = join(ROOT, 'runner')
 
@@ -471,14 +478,15 @@ async function runSpec(label) {
     specPath = join(specsDir, stats[0].f)
   }
 
-  // Tell the user what we're running.
-  process.stderr.write(`forge-spec: running ${specPath}\n`)
+  // Tell the user what we're running and how.
+  process.stderr.write(`forge-spec: running ${specPath}${extraArgs.length ? ' (extra args: ' + extraArgs.join(' ') + ')' : ''}\n`)
 
-  // Spawn `npx playwright test <specPath>` inside the runner workspace.
+  // Spawn `npx playwright test <specPath> [extra args]` inside the runner workspace.
   // The runner's playwright.config.ts has testDir: '../specs', so passing the
   // bare filename relative to runner/ also works — but a full path is unambiguous.
+  const args = ['playwright', 'test', specPath, ...extraArgs]
   await new Promise((resolve, reject) => {
-    const child = spawn('npx', ['playwright', 'test', specPath], {
+    const child = spawn('npx', args, {
       cwd: runnerDir,
       stdio: 'inherit',
       env: process.env,
