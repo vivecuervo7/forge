@@ -2,13 +2,46 @@
 
 A browser assistant for repeatable user actions.
 
-`forge` lets Claude drive your live browser session — fill the form you fill every week, paste a GIF into a PR description, delete all the marketing emails from one sender, navigate a five-step UI you'd rather not click through again. Whatever the action, the first time Claude does it, forge captures the path as a small `.ts` snippet. Next time you ask, it's already in the library; one fast invocation rather than a fresh investigation.
+`forge` lets Claude drive your live browser session — fill the form you fill every week, paste a GIF into a PR description, navigate a five-step UI you'd rather not click through again. The first time Claude does it, forge captures the path as a small `.ts` snippet. Next time you ask, it's already in the library; one fast invocation rather than a fresh investigation.
 
-Specs and connectors are downstream of this. If a flow becomes worth pinning into CI, forge can generate a real Playwright spec from a recorded drive. If you want an API for an app that doesn't have one, a snippet *is* your API — just driven through the UI Claude already knows.
+The plugin owns the *browser as a long-lived daemon*: you attach (or launch) once, and Claude, you, and any future tooling all act on the same window via the named `forge` playwright-cli session. Specs are downstream — if a flow becomes worth pinning into CI, forge can synthesise a real Playwright spec from a recorded drive.
 
-The plugin owns the *browser as a long-lived daemon*: you attach (or launch) once, and Claude, you, and any future tooling all act on the same window via the named `forge` playwright-cli session.
+## Install
 
-## Architecture
+```bash
+claude plugin marketplace add vivecuervo7/claude-plugins
+claude plugin install forge@vive-claude
+```
+
+First use bootstraps a data root under `~/.claude/.vive-claude/forge/`. The bootstrap is idempotent.
+
+## Requirements
+
+- **playwright-cli** — `brew install playwright-cli`. Forge is a wrapper, not a replacement.
+- **macOS** for now (the managed-launch fallback targets `/Applications/Google Chrome.app`; the CDP-attach path works against any Chromium-family browser).
+- **Node.js** — any recent version (tested on 24).
+
+## Attaching to your existing browser
+
+For "take-the-reins" mode where Claude acts on the browser session you've been using, launch your everyday Chromium-family browser (Chrome, Arc, Brave, Edge) with `--remote-debugging-port=9222`:
+
+```bash
+alias chrome='/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222 --user-data-dir=$HOME/.cache/chrome-cdp'
+```
+
+When `forge-session.sh` runs and detects the CDP port, it'll attach. Skip the CDP setup and it'll launch a managed Chrome with its own persistent profile instead.
+
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `/forge <description>` | Drive a task end-to-end. Reuses existing snippets where they fit, authors new ones for novel steps. |
+| `/forge snippet <name> [args]` | Cheap invocation of a known snippet — bypasses the agents, just runs the registry. |
+| `/forge spec [url-or-description]` | Drive the task (or work retrospectively from the session transcript) and synthesise a runnable `.spec.ts`. |
+
+The skill also fires on natural-language phrases like `"use forge to ..."` — see [Invocation paths](#invocation-paths) for the routing tradeoff.
+
+## How it works
 
 Three single-purpose agents fan out from a Haiku-driven skill, with the session transcript as the contract between them. The driver does all the browser work; downstream agents read its log with full hindsight and produce snippets or specs.
 
@@ -25,7 +58,7 @@ flowchart TB
 
     subgraph artifacts["artifacts on disk"]
         Transcript[("session transcript<br/>drove · invoked · note")]
-        Library[("snippet library<br/>scratch → staged → library")]
+        Library[("snippet library")]
         Specs[("specs/&lt;label&gt;.spec.ts")]
     end
 
@@ -42,94 +75,45 @@ flowchart TB
     SpecWriter -- "writes" --> Specs
 ```
 
-A few load-bearing details the diagram glosses:
+- **Driver never authors.** It reads `INDEX.md`, invokes existing snippets where they fit, drives novel actions inline, and leaves a flat log. Naming, chunking, and intent-detection are downstream agents' jobs.
+- **The transcript is the only contract.** Three event types — `drove` (raw browser actions), `invoked` (existing-snippet calls with args + result), `note` (optional driver annotations). The author and spec-writer consume it independently.
+- **Author is conditional, spec-writer is mode-gated.** If the transcript contains only `invoked` events (library reuse was complete), the author is skipped. The spec-writer runs only when invoked via `/forge spec ...`.
+- **Specs run without host project setup.** Generated specs run via `forge-spec.mjs run <label>` against an isolated Playwright workspace at `~/.claude/.vive-claude/forge/runner/`.
 
-- **Driver never authors.** It reads `INDEX.md`, invokes existing snippets where they fit, drives novel actions via `forge-registry.mjs drive`, and leaves a flat log. Naming, chunking, and intent-detection are downstream agents' jobs.
-- **The transcript is the only contract.** Three event types — `drove` (raw browser actions), `invoked` (existing-snippet calls with args + result), `note` (optional free-text driver annotations). The author and spec-writer consume it independently.
-- **Author is conditional, spec-writer is mode-gated.** After driver returns, the skill runs `forge-has-novel-work.sh` — if the transcript contains only `invoked` events (library reuse was complete), the author is skipped. Spec-writer runs only when the user invoked `/forge spec ...`.
-- **Library grows by reuse, not authoring rate.** New snippets land in `scratch/`; on second successful use they promote to `staged/`, on third to `library/`. TTL cleanup removes scratch entries that never reuse.
+### Snippet lifecycle
 
-## Status
+```mermaid
+flowchart LR
+    Authored([authored]) --> Scratch[scratch/]
+    Scratch -- "2nd use" --> Staged[staged/]
+    Staged -- "3rd use" --> Library[library/]
+    Scratch -. "7d unused" .-> Pruned([pruned])
+    Staged -. "60d unused" .-> Scratch
+    Library -. "90d unused" .-> Review([flagged for review])
+```
 
-Foundation laid; iteration ongoing. Today the plugin ships:
+New snippets land in `scratch/`. Repeat use promotes them — `library/` entries are never auto-deleted. Thresholds configurable via `FORGE_STAGE_AT` / `FORGE_LIBRARY_AT`; cleanup runs via `forge-registry.mjs prune`.
 
-- A `forge` skill — thin orchestrator. Triggered automatically on "use forge to ..." phrases AND invokable as a slash command. Three routes:
-  - `/forge snippet <name> [args]` — explicit cheap invocation of a known snippet (bypasses the agents entirely; just runs the registry).
-  - `/forge spec [url-or-description]` — drives the task (or works retrospectively) and synthesises a Playwright `.spec.ts`.
-  - Anything else (`/forge <description>` or `"use forge to ..."`) — hands off to the agents for end-to-end execution.
-- **Three single-purpose agents** that the skill coordinates:
-  - **`forge:driver`** — drives the browser. Reads `INDEX.md`, invokes existing snippets where they fit, drives inline for novel steps. Leaves a clean log of `drove`, `invoked`, and optional `note` events. Doesn't decide what to save or how to spec; just executes.
-  - **`forge:author`** — runs after every drive. Reads the transcript with full hindsight, decides which chunks deserve to be saved as snippets, and writes them to `scratch/`. Library curation lives entirely here.
-  - **`forge:spec-writer`** — runs only in spec mode. Reads the same transcript, writes a runnable `.spec.ts` to `specs/` with assertions on captured values, exploration filtered out, and credentials redacted.
-- A session helper — probes `localhost:9222` for an existing CDP-enabled browser (attach `--cdp`), falls back to launching managed Chrome (headed) with a dedicated persistent profile.
-- A snippet registry — `list`, `show`, `reindex`, `invoke`, `delete`, `prune`, `drive` (wraps playwright-cli and records to the transcript), `note` (free-text driver annotations). Invocation runs through `playwright-cli -s=forge run-code "..."` with precondition checks prepended, args inlined, and the right tab picked (or opened) so pinned/bookmarked tabs are never hijacked.
-- **Promotion machinery** — snippets auto-graduate `scratch → staged → library` on repeat use (configurable via `FORGE_STAGE_AT` / `FORGE_LIBRARY_AT`).
-- **TTL cleanup** — `forge-registry.mjs prune` removes unused scratch snippets (7d), demotes stale staged ones (60d), flags stale library entries (90d) for review.
-- **Session transcripts** — every `drove`, `invoked`, and `note` event lands in `~/.claude/.vive-claude/forge/sessions/<CLAUDE_CODE_SESSION_ID>.jsonl`. The two downstream agents consume this transcript independently; users never need to manage it.
-- **Bundled spec runner** — generated specs run via `forge-spec.mjs run <label>` against an isolated Playwright workspace at `~/.claude/.vive-claude/forge/runner/`, with no host project setup required.
+## Invocation paths
 
-Coming: a dedicated `snippet-repair` agent for DOM drift; snippet extension for cases where an existing snippet is *almost* what's needed.
+Forge exposes two routes, deliberately differentiated:
 
-## Invocation paths and cost shape
-
-Forge exposes two routes, deliberately differentiated by cost:
-
-| Path | Trigger | Cost shape | When to reach for it |
-|---|---|---|---|
-| **Slash** | `/forge:forge snippet <name>` or `/forge:forge <description>` | Runs entirely on Haiku, every call — the `model: haiku` pin re-engages on every fresh slash invocation. Routine invocations stay cheap across the whole session. | You know what you want. Routine reuse of known snippets, scripted workflows, anything you reach for repeatedly. |
-| **Natural language** | `"use forge to ..."` | Session model (e.g. Opus) decides whether to trigger the skill, then the skill body runs on Haiku. First call carries a session-model surcharge; subsequent calls in the same session fall back to the session model entirely (the pin only fires on fresh skill invocations). | Discovery, multi-turn refinement, requests that may need authoring, anything where you don't know the snippet name yet. |
-
-*Illustrative figures (Opus 4.7 session, single invocation, late-2026 pricing):*
-
-| Invocation | Cost | Notes |
+| Path | Trigger | Behaviour |
 |---|---|---|
-| `/forge:forge snippet hn-first-story-comments` | ~$0.03 | Direct, named — cheapest. |
-| `/forge:forge get the first item on HN` | ~$0.03 | NL via slash — Haiku does the matching, still cheap. |
-| `Use forge to get the first item on HN` | ~$0.34 | Model-invoked — Opus pays to recognise the trigger phrase. |
+| **Slash** | `/forge:forge <description>` or `/forge:forge snippet <name>` | Runs entirely on Haiku — the `model: haiku` pin re-engages on every fresh slash invocation. |
+| **Natural language** | `"use forge to ..."` | Session model (e.g. Opus) decides whether to trigger the skill; the skill body still runs on Haiku. |
 
-Wall-time floor is browser I/O (typically 10-50s for a page navigation + scrape), regardless of which path you take. On slash invocations, the model side is now small enough to be negligible relative to that floor.
-
-The cost asymmetry is by design: cheap execution for the common case, more-expensive discovery affordance available when you need it. The plugin's central value — *don't re-drive what's already been driven* — is delivered most cheaply via the slash path.
-
-## Install
-
-```bash
-claude plugin marketplace add vivecuervo7/claude-plugins
-claude plugin install forge@vive-claude
-```
-
-First use bootstraps a data root under `~/.claude/.vive-claude/forge/`. The bootstrap is idempotent.
-
-## Requirements
-
-- **playwright-cli** — `brew install playwright-cli`. Forge is a wrapper, not a replacement.
-- **macOS** for now (the managed-launch fallback targets `/Applications/Google Chrome.app`; the CDP-attach path works against any Chromium-family browser).
-- **Node.js** (any recent version — tested on 24).
-
-## Attaching to your existing browser
-
-For "take-the-reins" mode where Claude acts on the browser session you've been using, launch your everyday Chromium-family browser (Chrome, Arc, Brave, Edge) with `--remote-debugging-port=9222`:
-
-```bash
-# Example shell alias for everyday Chrome:
-alias chrome='/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222 --user-data-dir=$HOME/.cache/chrome-cdp'
-```
-
-When `forge-session.sh` runs and detects the CDP port, it'll attach. You stay in control; Claude takes the wheel when you ask.
-
-If you'd rather Claude drive a separate browser (real cookies stay yours), skip the CDP setup and `forge-session.sh` will launch a managed Chrome with its own persistent profile.
+The slash path is the cheap-and-predictable case for routine reuse. The natural-language path costs more on the first hit but is the discovery affordance — useful when you don't know the snippet name yet. Wall-time floor is browser I/O (typically 10–50s for a page navigation + scrape) regardless of path; on slash invocations, the model side is negligible relative to that floor.
 
 ## Use cases
 
 The library accretes from real repetition. A few representative shapes:
 
-- **Routine drudgery.** "Delete all emails from `noreply@noisy-vendor.com`." Claude drives Gmail, captures the path; next month, one-line invocation.
-- **PR / GitHub flows.** "Paste the GIF at `~/Desktop/demo.gif` into the description of PR #42." A snippet authored once handles every future PR description paste.
-- **Multi-step forms.** Five-tab JIRA submissions, expense reports, deploy approval pages. Snippet remembers which fields go where.
-- **Triage and verification.** "Open the dashboard, check the error count, click into anything > 50, screenshot." Becomes a one-line check.
+- **Routine drudgery.** "Delete all emails from `noreply@noisy-vendor.com`."
+- **PR / GitHub flows.** "Paste the GIF at `~/Desktop/demo.gif` into the description of PR #42."
+- **Multi-step forms.** JIRA submissions, expense reports, deploy approval pages.
+- **Triage and verification.** "Open the dashboard, check the error count, click into anything > 50, screenshot."
 - **API-less integrations.** Apps without public APIs are still driveable via their UI. A snippet *is* the integration.
-
-The "use it again" reuse signal is the cheap-and-good promotion criterion (see the storage section). Things you do once and never again live and die in `scratch/`. Things you find yourself asking for repeatedly graduate to `staged/`, then `library/`.
 
 ## Storage
 
@@ -139,9 +123,9 @@ Runtime data lives at `~/.claude/.vive-claude/forge/`:
 ~/.claude/.vive-claude/forge/
 ├── INDEX.md              # auto-generated retrieval index (name — description per line)
 ├── stats.json            # per-snippet { tier, useCount, lastUsed, createdAt }
-├── scratch/              # 7-day TTL
-├── staged/               # promoted on second use
-├── library/              # promoted on third use; never auto-deleted
+├── scratch/              # see Snippet lifecycle above
+├── staged/
+├── library/
 ├── broken/               # quarantined after failed repair
 ├── sessions/             # per-Claude-session transcripts (drove + invoked + note events)
 ├── specs/                # generated `<label>.spec.ts` files
