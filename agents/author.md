@@ -35,6 +35,14 @@ Then `Read` that file. It's JSONL with these event types:
 
 Also `Read` the current library index at `$ROOT/INDEX.md` so you don't author duplicates. If INDEX already has a snippet with substantially the same intent, skip the chunk.
 
+Then check for domain hints — list any present and `Read` them, treating their contents as additional constraints on the snippets you write:
+
+```bash
+ls "$ROOT/hints/project.md" "$ROOT/hints/author.md" 2>/dev/null
+```
+
+`hints/project.md` is shared across all forge agents (env setup, base URLs, credentials, commands that need wrapping). `hints/author.md` is author-specific (snippet conventions, naming rules, POM composition, must-include wait patterns). When standalone forge is in use, neither file exists and there's nothing to apply.
+
 ### 2. Chunk the drove events
 
 Walk the drove events in order and group them into chunks. A chunk is a coherent unit of work — usually:

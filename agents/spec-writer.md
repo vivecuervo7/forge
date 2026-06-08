@@ -35,6 +35,14 @@ JSONL events:
 - `invoked` — existing snippet was called. Has `snippet`, `args`, `result`. Inline these by reading the snippet's `run()` function from `$ROOT/{scratch,staged,library}/<snippet>.ts`.
 - `note` — driver's free-text hint. Use as context for understanding intent and filtering exploration.
 
+Then check for domain hints — list any present and `Read` them, treating their contents as additional constraints on the spec you write:
+
+```bash
+ls "$ROOT/hints/project.md" "$ROOT/hints/spec-writer.md" 2>/dev/null
+```
+
+`hints/project.md` is shared across all forge agents (env setup, base URLs, credentials, commands that need wrapping). `hints/spec-writer.md` is spec-writer-specific (fixture imports, spec naming conventions, assertion style). When standalone forge is in use, neither file exists and there's nothing to apply.
+
 ### 2. Decide what to include
 
 A spec should reproduce *the successful path*. Exclude:
