@@ -66,11 +66,9 @@ If `<json-args>` was omitted, use `{}`. Report the result. No INDEX read, no age
 
 ## Driver route — anything that isn't `snippet ...` or `spec ...`
 
-Two agent calls in sequence: driver then author.
-
 ### 1. Drive
 
-**Driver's prompt is ONLY the user's task** — do not mention author, spec-writer, downstream agents, or what happens after the driver returns. Downstream-pipeline awareness has been observed to confuse the driver into trying to invoke other skills/agents from inside itself. Keep the driver's brief focused on the task.
+**Driver's prompt is ONLY the user's task.** Do not mention any downstream agents or post-drive steps in the prompt — that context confuses the driver into trying to invoke other skills from inside itself.
 
 ```
 Agent(subagent_type="forge:driver",
@@ -79,24 +77,34 @@ Agent(subagent_type="forge:driver",
 
 The driver returns one of:
 
-- `Drove: <summary>` followed by `Steps:` `Result:` (and optionally `Note:`). Relay the `Result:` value to the user as the answer; surface any `Note:` line concisely.
-- `no-session: ...` → re-run `forge-session.sh` (rare; preamble should have caught this).
-- `cannot-drive: <reason>` → surface to the user. Don't try to do the task yourself; the agent has already exhausted reasonable attempts. Skip the author step in this case.
+- `Drove: <summary>` followed by `Steps:` `Result:` (and optionally `Note:`) — continue to step 2.
+- `no-session: <reason>` — relay to the user and re-run `forge-session.sh`; do not continue.
+- `cannot-drive: <reason>` — relay to the user verbatim; do not continue.
 
-### 2. Author
+### 2. Check whether new library work happened
 
-After a successful drive, hand the task to the author. **Don't include session ID or FORGE_ROOT in the prompt** — the author reads `CLAUDE_CODE_SESSION_ID` from env (inherited through the agent invocation) and runs bootstrap itself to resolve FORGE_ROOT. Past attempts to substitute the session ID into the prompt produced bogus values; trust the env.
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-has-novel-work.sh
+```
+
+- **Exit 0** — the driver did novel browser work that may be worth extracting as snippets. Continue to step 3.
+- **Exit 1** — every step in the drive used an existing library snippet. The flow ends here; report:
+  > <driver's result>. (Task completed using existing library snippets.)
+
+### 3. Author (on step 2 exit 0)
 
 ```
 Agent(subagent_type="forge:author",
   prompt="Task: <original user request verbatim>")
 ```
 
-The author returns a manifest like `Authored: 2 snippets\n  - hn-top-story-title — Read top story title from Hacker News\n  - ...`. Surface this briefly:
+The author reads `CLAUDE_CODE_SESSION_ID` from env and uses the canonical data root path — do not put session ID or paths in the prompt.
 
-> Done — <driver's result>. (Library grew: <author's manifest summary>.)
+The author returns a manifest like `Authored: 2 snippets\n  - <name> — <description>\n  - ...`. Report:
 
-If the author returned `Authored: 0 snippets`, don't mention authoring at all.
+> <driver's result>. (Library grew: <author's manifest summary>.)
+
+If the author returned `Authored: 0 snippets`, omit the library line.
 
 ## Spec route — `spec [url-or-description]`
 
@@ -112,27 +120,41 @@ The flow:
 
 Same as the Driver route's step 1 — including the rule that the driver's prompt is ONLY the user's task, with no mention of spec-writer or author. Skip the driver call entirely if the user invoked `spec` with no args (retrospective on existing transcript).
 
-### 2. Spec-writer and author in parallel
+### 2. Check whether new library work happened
 
-After the driver returns (or immediately, if retrospective), launch both downstream agents concurrently. They're independent consumers of the same transcript. **Don't include session ID or FORGE_ROOT in either prompt** — both agents read `CLAUDE_CODE_SESSION_ID` from env and run bootstrap themselves. Variable substitution into prompts is unreliable; env is not.
-
-```
-[parallel]
-Agent(subagent_type="forge:spec-writer",
-  prompt="Task: <original user request verbatim>
-Label: <if user supplied one, else omit this line>")
-
-Agent(subagent_type="forge:author",
-  prompt="Task: <original user request verbatim>")
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-has-novel-work.sh
 ```
 
-### 3. Report
+### 3. Launch downstream agents
 
-Surface the spec-writer's manifest plus a brief note from the author:
+Agents read `CLAUDE_CODE_SESSION_ID` from env and use the canonical data root — do not put session ID or paths in any prompt.
+
+- **Exit 0** (novel work happened) — launch spec-writer and author in parallel:
+  ```
+  [parallel]
+  Agent(subagent_type="forge:spec-writer",
+    prompt="Task: <original user request verbatim>
+  Label: <if user supplied one, else omit this line>")
+
+  Agent(subagent_type="forge:author",
+    prompt="Task: <original user request verbatim>")
+  ```
+
+- **Exit 1** (every step used existing snippets) — launch spec-writer alone:
+  ```
+  Agent(subagent_type="forge:spec-writer",
+    prompt="Task: <original user request verbatim>
+  Label: <if user supplied one, else omit this line>")
+  ```
+
+### 4. Report
+
+Surface the spec-writer's manifest plus the author's, if both ran:
 
 > Spec written: `<label>` at `~/.claude/.vive-claude/forge/specs/<label>.spec.ts`. Run it: `node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-spec.mjs run <label>`. To keep it: copy into your project's tests directory.
 >
-> Library: <author's manifest summary, if anything was authored>.
+> Library: <author's manifest summary, if the author ran and authored anything>.
 
 ## Hard rules
 
