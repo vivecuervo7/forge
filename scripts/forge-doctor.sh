@@ -25,6 +25,18 @@ for tier in scratch staged library broken; do
   fi
 done
 
+if [ -d "$ROOT/hints" ]; then
+  count=$(find "$ROOT/hints" -maxdepth 1 -name '*.md' -type f 2>/dev/null | wc -l | tr -d ' ')
+  if [ "$count" -gt 0 ]; then
+    names=$(find "$ROOT/hints" -maxdepth 1 -name '*.md' -type f 2>/dev/null | sort | xargs -I{} basename {} .md | tr '\n' ' ')
+    echo "$ok hints/ — $count file(s) active: $names"
+  else
+    echo "  hints/ present but empty (standalone forge behaviour)"
+  fi
+else
+  echo "  hints/ absent (standalone forge behaviour — no domain hints applied)"
+fi
+
 if command -v playwright-cli >/dev/null 2>&1; then
   echo "$ok playwright-cli on PATH: $(command -v playwright-cli)"
 else

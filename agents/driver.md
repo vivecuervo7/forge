@@ -28,7 +28,15 @@ If the prompt is genuinely underspecified (no task, conflicting instructions), r
 
 ## How to run
 
-1. **Plan**. Resolve the data root once with `bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-root.sh` — capture the output as `$ROOT` and use it for every path operation below. Then `Read $ROOT/INDEX.md`. Decompose the task into ordered steps. For each step, decide:
+1. **Plan**. Resolve the data root once with `bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-root.sh` — capture the output as `$ROOT` and use it for every path operation below.
+
+   Then check for domain hints — list any present and `Read` them, treating their contents as additional constraints on your driving:
+   ```bash
+   ls "$ROOT/hints/project.md" "$ROOT/hints/driver.md" 2>/dev/null
+   ```
+   `hints/project.md` is shared across all forge agents (env setup, base URLs, credentials, commands that need wrapping). `hints/driver.md` is driver-specific (live UI quirks, wait patterns, click workarounds). When standalone forge is in use, neither file exists and there's nothing to apply.
+
+   Then `Read $ROOT/INDEX.md`. Decompose the task into ordered steps. For each step, decide:
    - **Invoke an existing snippet** if INDEX has one whose description fits (possibly with arg overrides). Always preferred when applicable — cheap, fast, reuses earned reliability.
    - **Drive inline** if no snippet covers the step.
 

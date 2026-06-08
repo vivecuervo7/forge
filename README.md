@@ -131,10 +131,26 @@ Runtime data lives at `~/.claude/.vive-claude/forge/`:
 ├── sessions/             # per-Claude-session transcripts (drove + invoked + note events)
 ├── specs/                # generated `<label>.spec.ts` files
 ├── runner/               # bundled Playwright workspace used by `forge-spec.mjs run`
+├── hints/                # optional domain hints — see below
 └── chromium-profile/     # dedicated profile for managed-launch fallback
 ```
 
+Override the data root with `FORGE_ROOT=/some/other/path` — every script and every agent honors it. This is how other plugins can wrap forge (point at a side directory, invoke `forge:driver` / `forge:author` by name) without colliding with a standalone install.
+
 Nothing here belongs in a git repo. Snippets may contain user-specific selectors, URLs, or paths captured during authoring — keep them off-disk-of-record.
+
+## Domain hints
+
+Drop markdown files into `$FORGE_ROOT/hints/` to inject domain knowledge into the agents. Each agent reads `hints/project.md` (shared) plus its own role-specific file at the start of every run:
+
+| File | Read by | Use for |
+|---|---|---|
+| `hints/project.md` | all three agents | environment setup, base URLs, credential env vars, command wrapping (e.g. `direnv exec ...`) |
+| `hints/driver.md` | driver | live UI quirks, click workarounds, wait patterns |
+| `hints/author.md` | author | snippet conventions, naming rules, must-include wait patterns, POM composition |
+| `hints/spec-writer.md` | spec-writer | fixture imports, spec naming conventions, assertion style |
+
+All four are optional — standalone forge with no `hints/` directory is unaffected. Keep each file short and reviewable; this is a prompt-injection surface for every agent run.
 
 ## License
 
