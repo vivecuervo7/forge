@@ -67,3 +67,7 @@ The `run()` body is extracted at invocation time and run inside `playwright-cli 
 - `broken/` — quarantined after a failed repair. Don't invoke from here.
 
 Promotion happens automatically based on `useCount` in `stats.json`. You can also move snippets between tiers with `mv`; editing the file in place is fine — the registry re-reads on every invocation.
+
+## Who writes snippets
+
+The `forge:author` agent. It runs automatically after every drive that goes through the driver agent, reads the session transcript, and decides which chunks of work are worth saving. You don't author snippets by hand in normal use — though you can: just write a `.ts` matching the shape above into `scratch/` and run `forge-registry.mjs reindex`.

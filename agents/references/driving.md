@@ -24,7 +24,7 @@ node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-registry.mjs drive goto 'https://news.y
 The `drive` wrapper:
 - Passes args through to `playwright-cli -s=forge` verbatim
 - Captures the Playwright code that playwright-cli emits (the `### Ran Playwright code` block)
-- Appends a `drove` event to the session transcript so spec generation and collation can see what happened
+- Appends a `drove` event to the session transcript so the author and spec-writer agents can read what happened after you return
 - Returns the playwright-cli output to you unchanged
 
 For read-only commands like `snapshot`, `tab-list`, `url`, no test code is emitted; the wrapper detects this and skips recording silently. Use `drive` for those too — it's harmless and saves you from having to think about which commands need recording.
@@ -120,18 +120,17 @@ node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-registry.mjs drive run-code "async page
 
 This way the recorded code uses your explicit locator instead of whatever playwright-cli inferred.
 
-## Don't let exploration pollute your captures
+## Exploration and recovery
 
-Every `drive` call records an event to the transcript. Drove events accumulate in a buffer that the next `capture` call sweeps up into a snippet body. If you went down a wrong path — clicked the wrong element, searched with a bad query, navigated somewhere unhelpful — those actions are in the buffer until something closes the window.
+Every `drive` call records to the transcript. Recoveries, dead-ends, wrong clicks — all of it ends up in the log. That's fine: the author agent reads the full transcript with hindsight and recognises exploration vs successful path on its own. You don't need to "close a window" or otherwise mark events for exclusion.
 
-Two ways to close the window:
+When intent is genuinely ambiguous from actions alone, drop a `note`:
 
-- **`capture`** — write the buffered events as a snippet. Use when the events represent the successful path you want to preserve.
-- **`discard '<reason>'`** — throw the buffered events away with no snippet written. Use when the buffer represents exploration or recovery and you're about to retry cleanly. The reason is recorded in the transcript for forensics; the events themselves are excluded from any future snippet.
+```bash
+node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-registry.mjs note 'wikipedia rejected colon-title, retrying with bare brand name'
+```
 
-Spec generation is unaffected by either choice — all drove events (including discarded ones) appear in the inline spec. So a spec faithfully replays what you actually did, even if the snippet library only keeps the clean parts. That's intentional: specs are about reproducibility of *this run*; snippets are about reuse in *future runs*.
-
-**When to discard rather than just drive past it:** if your next capture would unintentionally sweep up the bad-path actions, discard first. A good test: imagine a future caller invoking the snippet you're about to capture — do they want to re-run any of the actions currently in the buffer? If no, discard.
+Notes are pure free text; they go in the transcript as hints the author will pick up. Use them sparingly — only when the shape of events wouldn't tell the story on its own. Don't narrate.
 
 ## When to stop
 
