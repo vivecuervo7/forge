@@ -3,7 +3,7 @@ name: forge
 description: "Perform repeatable user actions in a real browser — delete batches of emails, paste gifs into PRs, navigate multi-step forms, scrape pages, anything you'd rather not click through again. Triggers on 'use forge to ...' phrases AND on `/forge ...` slash invocations. Three routes: `/forge snippet <name>` for explicit cheap invocation; `/forge spec [args]` to synthesise a Playwright spec; everything else hands off to the driver agent. The skill is a thin orchestrator — driving happens in the driver agent, snippet authoring in the author agent, spec writing in the spec-writer agent."
 model: haiku
 effort: medium
-argument-hint: "snippet <name> [json-args] | spec [url-or-description] | <description or multi-step request>"
+argument-hint: "snippet <name> [json-args] | spec [url-or-description] | doctor | <description or multi-step request>"
 allowed-tools: Read, Skill, WebFetch, Bash(bash **/forge/*/scripts/*), Bash(node **/forge/*/scripts/*), Bash(playwright-cli:*), Bash(curl -sf -m * http://localhost:9222/json/version*)
 ---
 
@@ -23,13 +23,14 @@ If the user is asking about something that *isn't* in a browser, you're in the w
 
 ## Routes
 
-Three routes, decided by parsing `$ARGUMENTS`:
+Four routes, decided by parsing `$ARGUMENTS`:
 
 1. **`snippet <name> [json-args]`** — Direct invoke. Skip everything; just run the named snippet. Cheap muscle-memory path. See **Direct route** below.
 2. **`spec [url-or-description]`** — Spec route. Drive (if there's a description), then write spec + author snippets in parallel. See **Spec route** below.
-3. **Anything else** — Driver route. Drive, then author snippets. See **Driver route** below.
+3. **`doctor`** — Diagnostic route. Run `bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-doctor.sh` and relay its checklist output verbatim. Read-only — confirms data root, snippet tiers, playwright-cli install, session state, and CDP browser presence. Skip the bootstrap + session preamble; the doctor is what tells the user whether those are wired up. Add no commentary unless a check fails, in which case quote the remedy line beside the failure.
+4. **Anything else** — Driver route. Drive, then author snippets. See **Driver route** below.
 
-All routes share the same bootstrap + session preamble.
+The first two routes and the driver route share the same bootstrap + session preamble. The doctor route skips it.
 
 ## Preamble (all routes)
 

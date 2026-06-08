@@ -37,7 +37,8 @@ When `forge-session.sh` runs and detects the CDP port, it'll attach. Skip the CD
 |---------|-------------|
 | `/forge <description>` | Drive a task end-to-end. Reuses existing snippets where they fit, authors new ones for novel steps. |
 | `/forge snippet <name> [args]` | Cheap invocation of a known snippet — bypasses the agents, just runs the registry. |
-| `/forge spec [url-or-description]` | Drive the task (or work retrospectively from the session transcript) and synthesise a runnable `.spec.ts`. |
+| `/forge spec [url-or-description]` | *Optional export.* Drive the task (or work retrospectively from the session transcript) and synthesise a runnable `.spec.ts` — useful when a flow becomes worth pinning into CI. |
+| `/forge doctor` | Read-only diagnostic checklist — confirms data root, snippet tiers, playwright-cli install, session state, and CDP browser presence. |
 
 The skill also fires on natural-language phrases like `"use forge to ..."` — see [Invocation paths](#invocation-paths) for the routing tradeoff.
 
