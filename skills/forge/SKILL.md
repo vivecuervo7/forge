@@ -69,12 +69,16 @@ If `<json-args>` was omitted, use `{}`. Report the result. No INDEX read, no age
 
 ### 1. Drive
 
-**Driver's prompt is ONLY the user's task.** Do not mention any downstream agents or post-drive steps in the prompt — that context confuses the driver into trying to invoke other skills from inside itself.
+**Driver's prompt is ONLY the user's task** (plus a leading `FORGE_ROOT` line). Do not mention any downstream agents or post-drive steps in the prompt — that context confuses the driver into trying to invoke other skills from inside itself.
 
 ```
 Agent(subagent_type="forge:driver",
-  prompt="<the user's request verbatim, plus any context they mentioned>")
+  prompt="FORGE_ROOT: $FORGE_ROOT
+
+<the user's request verbatim, plus any context they mentioned>")
 ```
+
+The leading `FORGE_ROOT:` line lets the agent honor the same root the skill resolved during bootstrap — important when a wrapper has set a non-default root.
 
 The driver returns one of:
 
@@ -85,7 +89,7 @@ The driver returns one of:
 ### 2. Check whether new library work happened
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-has-novel-work.sh
+FORGE_ROOT=$FORGE_ROOT bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-has-novel-work.sh
 ```
 
 The script prints a single token to stdout:
@@ -98,10 +102,11 @@ The script prints a single token to stdout:
 
 ```
 Agent(subagent_type="forge:author",
-  prompt="Task: <original user request verbatim>")
+  prompt="FORGE_ROOT: $FORGE_ROOT
+Task: <original user request verbatim>")
 ```
 
-The author reads `CLAUDE_CODE_SESSION_ID` from env and uses the canonical data root path — do not put session ID or paths in the prompt.
+The author reads `CLAUDE_CODE_SESSION_ID` from env and uses the `FORGE_ROOT` you pass — do not put session ID in the prompt.
 
 The author returns a manifest like `Authored: 2 snippets\n  - <name> — <description>\n  - ...`. Report:
 
@@ -126,12 +131,12 @@ Same as the Driver route's step 1 — including the rule that the driver's promp
 ### 2. Check whether new library work happened
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-has-novel-work.sh
+FORGE_ROOT=$FORGE_ROOT bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-has-novel-work.sh
 ```
 
 ### 3. Launch downstream agents
 
-Agents read `CLAUDE_CODE_SESSION_ID` from env and use the canonical data root — do not put session ID or paths in any prompt.
+Agents read `CLAUDE_CODE_SESSION_ID` from env and use the `FORGE_ROOT` you pass — do not put session ID in any prompt.
 
 Read step 2's stdout token:
 
@@ -139,17 +144,20 @@ Read step 2's stdout token:
   ```
   [parallel]
   Agent(subagent_type="forge:spec-writer",
-    prompt="Task: <original user request verbatim>
+    prompt="FORGE_ROOT: $FORGE_ROOT
+  Task: <original user request verbatim>
   Label: <if user supplied one, else omit this line>")
 
   Agent(subagent_type="forge:author",
-    prompt="Task: <original user request verbatim>")
+    prompt="FORGE_ROOT: $FORGE_ROOT
+  Task: <original user request verbatim>")
   ```
 
 - **`reuse-only`** — launch spec-writer alone:
   ```
   Agent(subagent_type="forge:spec-writer",
-    prompt="Task: <original user request verbatim>
+    prompt="FORGE_ROOT: $FORGE_ROOT
+  Task: <original user request verbatim>
   Label: <if user supplied one, else omit this line>")
   ```
 

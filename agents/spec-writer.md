@@ -21,10 +21,15 @@ The spec lands at `$ROOT/specs/<label>.spec.ts` (where `$ROOT` is the forge data
 
 ### 1. Read the transcript
 
-Resolve the data root once with `bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-root.sh` — capture the output as `$ROOT` and use it for every path operation below. Then compute the transcript path:
+Resolve the data root once:
+- If your prompt contains a line of the form `FORGE_ROOT: <absolute-path>` (passed by a wrapper), use that path as `$ROOT`.
+- Otherwise run `bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-root.sh` and use its output.
+
+Use `$ROOT` for every path operation. Bash tool calls each run in a fresh shell, so prefix every forge-script invocation with `FORGE_ROOT=$ROOT`.
+
+Compute the transcript path:
 
 ```bash
-ROOT=$(bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-root.sh)
 echo "$ROOT/sessions/$CLAUDE_CODE_SESSION_ID.jsonl"
 ```
 
