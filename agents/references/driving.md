@@ -50,6 +50,31 @@ The new tab is visible to the user — they see it open and can watch you drive.
 3. **Act** — `forge-registry.mjs drive click e3`, `... drive fill e5 "value"`, etc.
 4. **Capture extracted values** — see "Snapshot to read, run-code to capture" below. Critical for spec reproducibility and library growth.
 
+## Produce before you read
+
+A capture step can only return a meaningful value if the page actually *contains* that value at the moment you read it. For static pages whose content IS the value — HN front page, a Wikipedia search results page, a settings panel showing the current config — `goto` then `run-code` is the whole flow.
+
+But when the value is something the page must *compute* or *generate* on your behalf — a translation, a search result for a query you provided, a calculated number — you must perform the producing actions **before** the `run-code` that reads the result. Reading before producing returns whatever stale state happened to be on the page (last session's translation, cached search, whatever) and you'll capture that as if it were your own work.
+
+```
+Bad pattern (translate.google.com):
+> drive goto 'https://translate.google.com'
+> drive run-code "async page => { return page.locator('textarea').nth(1).inputValue() }"
+[returns the previous user's translation, or empty string]
+
+Good pattern:
+> drive goto 'https://translate.google.com/?sl=en&tl=fr&text=<encoded-text>&op=translate'
+  # OR
+> drive goto 'https://translate.google.com'
+> drive fill <source-textarea-ref> '<text-to-translate>'
+> drive run-code "async page => { /* wait for translation, then return it */ }"
+[returns the actual translation you produced]
+```
+
+**Rule:** if the action produces a new value, the producing actions must precede the reading run-code in the same chunk. Reading-without-producing is only acceptable for already-static page state.
+
+If you can't tell whether the page state is "what was already there" vs "what your actions produced" — explicitly produce it. Cheap insurance; the cost of a stale-state capture is a non-reproducible snippet that future invocations will silently return garbage from.
+
 ## Snapshot to read, run-code to capture
 
 Two distinct purposes, two distinct mechanisms — don't conflate them:
@@ -95,11 +120,18 @@ node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-registry.mjs drive run-code "async page
 
 This way the recorded code uses your explicit locator instead of whatever playwright-cli inferred.
 
-## Don't include exploration in the spec
+## Don't let exploration pollute your captures
 
-If you tried clicking `e7` and it was the wrong element, or you navigated somewhere and had to backtrack — those actions WILL be in the transcript because `drive` records everything that emits playwright code. The post-hoc collation step has heuristics for filtering setup-y / exploratory actions, but it can't read your mind.
+Every `drive` call records an event to the transcript. Drove events accumulate in a buffer that the next `capture` call sweeps up into a snippet body. If you went down a wrong path — clicked the wrong element, searched with a bad query, navigated somewhere unhelpful — those actions are in the buffer until something closes the window.
 
-If you find yourself going down a wrong path, just don't worry about it — drive forward, get the task done, let collation decide what's worth keeping.
+Two ways to close the window:
+
+- **`capture`** — write the buffered events as a snippet. Use when the events represent the successful path you want to preserve.
+- **`discard '<reason>'`** — throw the buffered events away with no snippet written. Use when the buffer represents exploration or recovery and you're about to retry cleanly. The reason is recorded in the transcript for forensics; the events themselves are excluded from any future snippet.
+
+Spec generation is unaffected by either choice — all drove events (including discarded ones) appear in the inline spec. So a spec faithfully replays what you actually did, even if the snippet library only keeps the clean parts. That's intentional: specs are about reproducibility of *this run*; snippets are about reuse in *future runs*.
+
+**When to discard rather than just drive past it:** if your next capture would unintentionally sweep up the bad-path actions, discard first. A good test: imagine a future caller invoking the snippet you're about to capture — do they want to re-run any of the actions currently in the buffer? If no, discard.
 
 ## When to stop
 

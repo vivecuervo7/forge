@@ -95,11 +95,13 @@ Runtime data lives at `~/.claude/.vive-claude/forge/`:
 ~/.claude/.vive-claude/forge/
 ├── INDEX.md              # auto-generated retrieval index (name — description per line)
 ├── stats.json            # per-snippet { tier, useCount, lastUsed, createdAt }
-├── scratch/              # 7-day TTL (cleanup wired up in a later step)
+├── scratch/              # 7-day TTL
 ├── staged/               # promoted on second use
 ├── library/              # promoted on third use; never auto-deleted
 ├── broken/               # quarantined after failed repair
-├── sessions/             # recorder transcripts (future)
+├── sessions/             # per-Claude-session transcripts (invoked + authored + drove events)
+├── specs/                # generated `<label>.spec.ts` files
+├── runner/               # bundled Playwright workspace used by `forge-spec.mjs run`
 └── chromium-profile/     # dedicated profile for managed-launch fallback
 ```
 
