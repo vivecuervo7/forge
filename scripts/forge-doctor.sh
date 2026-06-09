@@ -65,19 +65,10 @@ if [ -d "$ROOT/runs" ]; then
       [ "${CLAUDE_CODE_SESSION_ID:-}" = "$sid" ] && current_status="stale state for this Claude session (daemon gone)"
     fi
   done < <(find "$ROOT/runs" -mindepth 1 -maxdepth 1 -type d 2>/dev/null)
-  # Orphans = daemon still alive but the parent Claude session is dead
-  # (detected via the Claude transcript jsonl's mtime). Separate concept from
-  # 'stale' (metadata only, no daemon) — orphans hold real RAM and need to be
-  # `playwright-cli close`d, not just rm-rf'd.
-  orphans=$(bash "$SCRIPT_DIR/forge-find-orphans.sh" 2>/dev/null | wc -l | tr -d ' ')
-  echo "$ok runs/ — $active active, $stale stale, $orphans orphan"
+  echo "$ok runs/ — $active active, $stale stale"
   echo "  current Claude session: $current_status"
   if [ "$stale" -gt 0 ]; then
     echo "  (stale runs auto-prune on next forge-session.sh invocation, or rm them under $ROOT/runs/)"
-  fi
-  if [ "$orphans" -gt 0 ]; then
-    echo "  orphans (daemon alive, Claude session dead) — close with: playwright-cli -s=<name> close"
-    bash "$SCRIPT_DIR/forge-find-orphans.sh" 2>/dev/null | awk -F'\t' '{ printf "    - %s — %s\n", $2, $3 }'
   fi
 else
   echo "  runs/ absent (no per-session browser launched yet)"
