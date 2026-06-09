@@ -131,7 +131,8 @@ if [ -n "${FORGE_CDP_PORT:-}" ]; then
 {
   "session": "$SESSION_NAME",
   "mode": "cdp-attached",
-  "port": $FORGE_CDP_PORT
+  "port": $FORGE_CDP_PORT,
+  "parent_claude_pid": $PPID
 }
 EOF
   emit "$SESSION_NAME" "$FORGE_CDP_PORT" "cdp-attached" "$PROFILE_DIR"
@@ -151,7 +152,8 @@ cat > "$STATE_FILE" <<EOF
 {
   "session": "$SESSION_NAME",
   "mode": "managed",
-  "profile": "$PROFILE_DIR"
+  "profile": "$PROFILE_DIR",
+  "parent_claude_pid": $PPID
 }
 EOF
 emit "$SESSION_NAME" "" "managed" "$PROFILE_DIR"

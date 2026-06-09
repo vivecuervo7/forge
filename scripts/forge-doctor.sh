@@ -77,7 +77,7 @@ if [ -d "$ROOT/runs" ]; then
   fi
   if [ "$orphans" -gt 0 ]; then
     echo "  orphans (daemon alive, Claude session dead) — close with: playwright-cli -s=<name> close"
-    bash "$SCRIPT_DIR/forge-find-orphans.sh" 2>/dev/null | awk -F'\t' '{ printf "    - %s — last activity %s ago\n", $2, $3 }'
+    bash "$SCRIPT_DIR/forge-find-orphans.sh" 2>/dev/null | awk -F'\t' '{ printf "    - %s — %s\n", $2, $3 }'
   fi
 else
   echo "  runs/ absent (no per-session browser launched yet)"

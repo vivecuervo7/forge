@@ -60,16 +60,28 @@ After session setup, scan for forge sessions whose parent Claude session is no l
 bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-find-orphans.sh
 ```
 
-The script prints one `<session-id>\t<playwright-name>\t<age>` line per orphan, or nothing when all is clean. If the output is non-empty, surface a brief summary to the user before proceeding with their actual task. Example:
+The script prints one `<session-id>\t<playwright-name>\t<reason>` line per orphan, or nothing when all is clean. The reason is one of:
 
-> Heads up — found N orphan forge session(s) still running in the background (Claude sessions that ended but the browser daemon kept running):
->   - `forge-24c87f26` — last Claude activity 3h ago
->   - `forge-f1b912f3` — last Claude activity 2h ago
-> Each is roughly a Chrome process + daemon (~200MB RAM). Want me to close them now, or proceed with your task?
+- `parent-pid-gone` — the Claude process that spawned the daemon is no longer running. **Definitive orphan**.
+- `parent-pid-reused` — the recorded PID is alive but no longer a Claude process. **Definitive orphan**.
+- `jsonl-stale <age>` — legacy fallback: state.json predates 0.7.1 (no parent_claude_pid recorded), and the Claude transcript jsonl hasn't been touched in 60min+. **Likely orphan; the originating Claude may still be alive but idle**.
+- `no-transcript` — legacy fallback: no Claude jsonl found at all. **Likely orphan**.
 
-If the user says yes, close each: `playwright-cli -s=<name> close`. If they say proceed, continue without acting — the next forge invocation will surface them again.
+**If output is empty**: stay silent, proceed with the task.
 
-Don't pad with this if no orphans were found. Stay silent in the common case.
+**If output is non-empty**: surface to the user via `AskUserQuestion` with `multiSelect: true`. Each orphan becomes one option labelled `forge-<short-id> (<reason>)`. Frame the question as something like:
+
+> Found N orphan forge session(s) — Claude sessions that ended but their browser daemon kept running (~200MB RAM + a Chrome process each). Closing them frees the resources; transcripts in `sessions/` are preserved either way. Which would you like to close?
+
+The user selects zero or more orphans to close. For each selected:
+
+```bash
+playwright-cli -s=<playwright-name> close
+```
+
+Then continue with the actual task. Orphans the user didn't pick stay alive; the next forge invocation will surface them again.
+
+Don't ask if the only orphans are "definitive" types AND the count is small (≤2) AND the user has just invoked forge after a likely-clean exit pattern — but err toward asking; this is a low-frequency event and missing a confirmation is cheap.
 
 ## Direct route — `snippet <name> [json-args]`
 

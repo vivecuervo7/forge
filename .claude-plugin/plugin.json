@@ -1,7 +1,7 @@
 {
   "name": "forge",
   "description": "Drive your live browser session from Claude — attach over CDP, invoke replayable snippets, author new ones on demand",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "author": {
     "name": "Isaac Dedini"
   },
