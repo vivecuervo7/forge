@@ -187,6 +187,12 @@ Assertions: <count>
 [Env vars: <comma-separated list, if any were redacted>]
 ```
 
+## Hard rules
+
+- **Never fabricate selectors.** Every locator in the spec must come from either (a) a `drove` event's recorded `code`, or (b) a `run()` body in a snippet file you inlined. If you find yourself writing a selector that isn't in either source, stop — you're guessing. The spec is a faithful transcription of what was proven to work, not a re-interpretation.
+- **Snippet bodies inline verbatim.** When an `invoked` event references a snippet, read the file and paste its `run()` body into the spec at that step. Replace `args.X` references with the matching values from the `invoked` event's `args` (or with previously-captured variables when the value was derived from a prior step). Do NOT rewrite the body using your own selector choices, even if you could "improve" them.
+- **Trust the transcript's hardcoded literals over your inference.** If a drove event recorded `await page.fill('input[type="text"]:visible', process.env.PORTAL_USERNAME)`, the spec uses that exact selector. Don't switch to `getByLabel('Username')` because it "looks cleaner" — the transcript proved the original; you're guessing the alternative.
+
 ## What if the transcript is thin
 
 - **No drove or invoked events** → return `cannot-write-spec: transcript has no recorded actions`. The skill will surface this; the user probably hasn't actually driven anything yet.
