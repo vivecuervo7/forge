@@ -91,6 +91,12 @@ The path is `$ROOT/scratch/<name>.ts`. The format is fixed (see template below).
 - **Args** — declare the parameter shape with type hints, even though you won't wire them through the body literally. The driver baked literals into the events; future invocations will need to re-author the body to thread `args.foo` through. Declaring args here is the TODO marker. Use `{}` if the chunk has no obvious parameter.
 - **envKeys** — if ANY drove event in the chunk recorded an `envKeys` field (driver used `--env` injection for credentials/secrets), gather the union of all those env var names into a `meta.envKeys` array. The invoker reads this and shims `process.env.X` for those keys when the snippet runs. Omit the field entirely when no chunk used env injection.
 - **Body** — the code from the chunk's drove events, joined with newlines. If the chunk's last event was a `run-code` that returned a value, transform that event's IIFE so the snippet returns the value (see template).
+- **Alternatives from evidence** — when a drove event has an `evidence` field (the driver had to deliberate among multiple locators), preserve the rejected candidates as a comment immediately before that action:
+  ```ts
+  // alternatives: page.locator('[role=combobox][id*=brand]'), page.locator('[id*=brand]')
+  await page.getByRole('combobox', { name: 'Brand' }).click()
+  ```
+  Skip drove events with no `evidence` field — those were decisive choices that don't need a fallback record. The comments don't affect runtime; they're forensic context for whichever Claude session ends up repairing the snippet when its primary locator stops working. Future automated healing reads these too.
 
 #### Snippet file template
 

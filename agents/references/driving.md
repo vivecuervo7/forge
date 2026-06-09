@@ -83,17 +83,48 @@ Good pattern:
 
 This applies in **all modes**, not just spec mode. Capturing-via-run-code costs nothing extra at runtime; it just means the value enters the transcript and downstream consumers (spec generation, collation, future repair) have access to it. Snapshot-then-mentally-extract leaves the value stuck in your head — fine for ephemeral decisions, wrong for anything you'll surface to the user or chain to a next step.
 
-## Selector style
+## Picking locators — enumerate then decide
 
-The wrapper records semantic locators (`getByRole`, `getByText`, `getByLabel`) when the page exposes accessible attributes; CSS selectors are the fallback. If the auto-chosen selector looks fragile, write your own action via `run-code`:
+You pick the locator for every action that targets a specific element. The wrapper no longer guesses one for you. The pattern:
 
-```bash
-node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-registry.mjs drive run-code "async page => {
-  await page.getByRole('button', { name: 'Submit' }).click()
-}"
-```
+1. **Generate candidates.** After a `snapshot` orients you, write 2-4 candidate locator expressions for the target element at different specificity levels — semantic first, anchored CSS as fallback, broad CSS last:
+   ```
+   page.getByRole('button', { name: 'Submit' })          // semantic — best when accessible name is reliable
+   page.getByLabel('Email address')                        // semantic — for form fields
+   page.locator('[role="combobox"][id*="brandId"]')       // anchored CSS — when role + attribute is unique
+   page.locator('[id*="brandId"]')                         // broad CSS — last resort; expect ambiguity warnings
+   ```
 
-The recorded code is then your explicit locator.
+2. **Validate the set in one call:**
+   ```bash
+   node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-registry.mjs describe --candidates \
+     '["page.getByRole(\"button\", { name: \"Submit\" })", "page.locator(\"[id*=submitBtn]\")"]'
+   ```
+   The response is JSON:
+   ```json
+   {
+     "candidates": [
+       { "locator": "...", "matches": 1, "details": [{ "tag": "button", "role": null, "text": "Submit" }] },
+       { "locator": "...", "matches": 2, "details": [{...}, {...}] }
+     ],
+     "identity": [[0], [1]],
+     "decisive": false,
+     "snapshot": { "chosen": "<button id=...>Submit</button>", "parent": "<form ...>", "siblings": [...] }
+   }
+   ```
+   `identity` groups candidates whose first-match resolved to the same DOM node — confirmed by temporarily tagging each match with `data-forge-mark` and reading back which tags landed where. Two candidates in the same group are proven equivalent for action purposes. `decisive` is true iff all uniquely-matching candidates fall into ONE identity group; otherwise the agent has to choose between distinct targets.
+
+3. **Pick the best.** Compare match counts and element details. Prefer single-match over multi-match. Prefer semantic locators (`getByRole`+name, `getByLabel`) over CSS attribute matches when both uniquely match. Reject any candidate whose matching element has the wrong tag/role for your intent (a `label` when you wanted the `combobox`, a wrapper `div` when you wanted the interactive element). When `identity` shows multiple candidates in the same group, they're equivalent — pick whichever is most readable.
+
+4. **Act via `drive run-code` with the chosen locator inline.** When the `describe` response was non-decisive, pass the JSON back via `--evidence` so the deliberation is recorded in the transcript for downstream agents:
+   ```bash
+   node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-registry.mjs drive run-code \
+     "async page => { await page.getByRole('button', { name: 'Submit' }).click() }" \
+     --evidence '<describe-output-json>'
+   ```
+   When decisive, omit `--evidence` — the transcript stays light because the choice was unambiguous.
+
+This pattern catches a class of failures that used to slip through to spec replay — ambiguous selectors that worked on first run because `.first()` happened to pick the right element, then broke on replay because page structure shifted or the matched set ordered differently. Deliberating up front, with the live DOM available, removes the guesswork.
 
 ## Exploration and recovery
 
