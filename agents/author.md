@@ -132,7 +132,11 @@ and add `return __result` at the end of the body. Only do this for the **last** 
 
 #### URL preconditions
 
-Extract from the first `goto` in the chunk. Convert hostname to a regex source by escaping dots: `news.ycombinator.com` → `/news\.ycombinator\.com/`. If the URL has query parameters that are essential (e.g., translate.google.com requires `?sl=en&tl=fr&...`), the precondition usually still matches just the hostname — the body of the snippet preserves the full URL with params.
+Preconditions exist to gate snippets that ASSUME a starting state someone else established. They are NOT free — every precondition the caller doesn't already satisfy forces an extra `drove` event (the navigation to reach the required state) on each invocation. That extra drove event then triggers the author downstream — burning agent tokens to discover there's nothing new worth saving. So write preconditions only when they're load-bearing.
+
+**Skip the `url` precondition entirely when the snippet's first body action is `page.goto(<URL>)`.** A self-navigating snippet establishes its own starting state; constraining the caller to already be on that URL is tautological and costly. Use an empty `preconditions: {}` (or omit the field) — the snippet works from anywhere.
+
+**Write a `url` precondition** only when the snippet skips an initial navigation because it ASSUMES the caller is already on the right page (e.g., a "submit the open form" snippet that doesn't include the navigation to reach the form). In that case, extract from the first drove event's expected URL: convert hostname to a regex source by escaping dots: `news.ycombinator.com` → `/news\.ycombinator\.com/`. If the URL has query parameters that are essential (e.g., translate.google.com requires `?sl=en&tl=fr&...`), the precondition usually still matches just the hostname — the body of the snippet preserves the full URL with params.
 
 #### Name collisions
 
