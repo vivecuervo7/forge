@@ -1,21 +1,25 @@
 #!/usr/bin/env bash
 # forge-find-orphans.sh — list forge run dirs whose parent Claude session is
-# no longer active. Uses Claude's per-session transcript jsonl mtime
-# (~/.claude/projects/<project>/<session-id>.jsonl) as the liveness signal:
-# any session whose transcript hasn't been touched in $STALE_MINUTES is
-# treated as dead.
+# no longer alive.
+#
+# Primary liveness signal: state.json's parent_claude_pid. If that PID is gone
+# (or got reused — verified via `ps -o comm=`), the Claude session is dead.
+# This works correctly across idle / suspended / active Claude states, since
+# all of those keep the process alive.
+#
+# Legacy fallback: for state.json files written before 0.7.x (no
+# parent_claude_pid recorded), fall back to Claude's per-session transcript
+# jsonl mtime — anything stale by $FORGE_ORPHAN_STALE_MINUTES (default 60) is
+# treated as an orphan.
 #
 # Output (one line per orphan):
-#   <session-id>\t<playwright-session-name>\t<age-human>
+#   <session-id>\t<playwright-session-name>\t<reason>
 #
-# Where age-human is "12m", "3h", "2d" etc. since the Claude transcript was
-# last touched (or "no-transcript" if no jsonl was found for this session id).
+# Where reason is a short string: "parent-pid-gone", "parent-pid-reused",
+# "jsonl-stale 53m", "no-transcript".
 #
-# Excludes the current Claude session ($CLAUDE_CODE_SESSION_ID) so the active
-# caller is never listed as an orphan.
-#
-# Exit 0 always (even with no orphans found). Caller distinguishes via empty
-# stdout.
+# Excludes the current Claude session ($CLAUDE_CODE_SESSION_ID).
+# Exit 0 always; caller distinguishes via empty stdout.
 
 set -uo pipefail
 
@@ -54,23 +58,37 @@ for dir in "$ROOT/runs"/*/; do
   name=$(sed -nE 's/.*"session":[[:space:]]*"([^"]+)".*/\1/p' "$state" | head -1)
   [ -z "$name" ] && continue
 
-  # Only consider runs whose daemon is still live — anything else gets handled
-  # by the metadata prune in forge-session.sh.
+  # Only consider runs whose daemon is still live.
   if ! printf '%s\n' "$LIVE_SESSIONS" | grep -qxF "$name"; then continue; fi
 
-  # Liveness signal: the Claude session's own transcript jsonl.
+  # PRIMARY check: parent_claude_pid liveness.
+  parent_pid=$(sed -nE 's/.*"parent_claude_pid":[[:space:]]*([0-9]+).*/\1/p' "$state" | head -1)
+  if [ -n "$parent_pid" ]; then
+    if ! kill -0 "$parent_pid" 2>/dev/null; then
+      printf '%s\t%s\t%s\n' "$sid" "$name" "parent-pid-gone"
+      continue
+    fi
+    # PID still alive — verify it's still 'claude' (defends against PID reuse).
+    parent_comm=$(ps -o comm= -p "$parent_pid" 2>/dev/null | tr -d ' ')
+    if [[ "$parent_comm" != *claude* ]]; then
+      printf '%s\t%s\t%s\n' "$sid" "$name" "parent-pid-reused"
+      continue
+    fi
+    # Parent is alive and is claude — not an orphan, even if idle / suspended.
+    continue
+  fi
+
+  # FALLBACK (legacy runs without parent_claude_pid): jsonl mtime heuristic.
   jsonl=$(find "$HOME/.claude/projects" -maxdepth 3 -name "${sid}.jsonl" -type f 2>/dev/null | head -1)
   if [ -z "$jsonl" ]; then
-    age_str="no-transcript"
-    is_orphan=true
+    printf '%s\t%s\t%s\n' "$sid" "$name" "no-transcript"
   else
     mtime=$(stat -f %m "$jsonl" 2>/dev/null) || continue
     age=$((NOW - mtime))
-    age_str=$(humanize_age "$age")
-    [ "$age" -ge "$STALE_SECS" ] && is_orphan=true || is_orphan=false
+    if [ "$age" -ge "$STALE_SECS" ]; then
+      printf '%s\t%s\t%s\n' "$sid" "$name" "jsonl-stale $(humanize_age "$age")"
+    fi
   fi
-
-  [ "$is_orphan" = true ] && printf '%s\t%s\t%s\n' "$sid" "$name" "$age_str"
 done
 
 exit 0
