@@ -138,12 +138,25 @@ EOF
   exit 0
 fi
 
-# MANAGED MODE: launch headed Chrome with a per-run persistent profile. No CDP
-# port is exposed — playwright-cli drives the browser directly via the launch
-# handle, so two concurrent managed runs don't need (or fight over) ports.
+# MANAGED MODE: launch Chrome with a per-run persistent profile. No CDP port is
+# exposed — playwright-cli drives the browser directly via the launch handle.
+# Default is headed (browser-automation work is more useful when you can see it),
+# but FORGE_HEADLESS=1 flips to headless mode. Headless is the right choice for:
+#   - Wrappers doing autonomous drives where artifacts (snippets, specs) matter
+#     more than visual feedback
+#   - Workflows where you want to avoid the focus-theft problem (a stray
+#     keystroke during a headed drive can land in the browser and silently
+#     contaminate the transcript with state changes that look like driver
+#     actions, but aren't recorded as such)
 SESSION_NAME="forge-$SHORT_ID"
-echo "forge-session: launching managed Chrome (headed) for $SHORT_ID, profile $PROFILE_DIR" >&2
-if ! playwright-cli -s="$SESSION_NAME" open --browser=chrome --headed --profile="$PROFILE_DIR" about:blank >&2; then
+HEADED_FLAG="--headed"
+DISPLAY_MODE="headed"
+if [ -n "${FORGE_HEADLESS:-}" ]; then
+  HEADED_FLAG=""
+  DISPLAY_MODE="headless"
+fi
+echo "forge-session: launching managed Chrome ($DISPLAY_MODE) for $SHORT_ID, profile $PROFILE_DIR" >&2
+if ! playwright-cli -s="$SESSION_NAME" open --browser=chrome $HEADED_FLAG --profile="$PROFILE_DIR" about:blank >&2; then
   echo "forge-session: managed launch failed" >&2
   exit 4
 fi
@@ -151,6 +164,7 @@ cat > "$STATE_FILE" <<EOF
 {
   "session": "$SESSION_NAME",
   "mode": "managed",
+  "display": "$DISPLAY_MODE",
   "profile": "$PROFILE_DIR"
 }
 EOF
