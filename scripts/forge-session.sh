@@ -51,6 +51,41 @@ RUN_DIR="$ROOT/runs/$CLAUDE_CODE_SESSION_ID"
 STATE_FILE="$RUN_DIR/state.json"
 PROFILE_DIR="$RUN_DIR/profile"
 
+# Garbage-collect stale run dirs from prior Claude sessions. A run is prunable
+# when its state.json names a playwright-cli session that is no longer listed
+# AND the state.json is older than FORGE_PRUNE_RUNS_AGE_SECS (default 30min).
+# The age threshold is a safety buffer against transient `playwright-cli list`
+# blips; the listing check is what actually decides liveness.
+STALE_AGE_SECS=${FORGE_PRUNE_RUNS_AGE_SECS:-1800}
+if [ -d "$ROOT/runs" ]; then
+  LIVE_SESSIONS=$(playwright-cli list 2>/dev/null | awk '/^- / { name=$2; sub(/:$/, "", name); print name }')
+  NOW=$(date +%s)
+  PRUNED=0
+  while IFS= read -r dir; do
+    [ -z "$dir" ] && continue
+    [ "$dir" = "$RUN_DIR" ] && continue  # never touch our own
+    state="$dir/state.json"
+    if [ -f "$state" ]; then
+      # Run completed launch and recorded state. Prunable only if its named
+      # session is no longer listed AND the state file is older than the buffer.
+      name=$(sed -nE 's/.*"session":[[:space:]]*"([^"]+)".*/\1/p' "$state" | head -1)
+      [ -z "$name" ] && continue
+      if printf '%s\n' "$LIVE_SESSIONS" | grep -qxF "$name"; then continue; fi
+      mtime=$(stat -f %m "$state" 2>/dev/null) || continue
+    else
+      # No state.json — orphan dir from a failed launch (e.g. a crashed
+      # forge-session.sh from a previous version). Always prunable once old
+      # enough; use the dir's own mtime since there's no state file to read.
+      mtime=$(stat -f %m "$dir" 2>/dev/null) || continue
+    fi
+    age=$((NOW - mtime))
+    [ "$age" -lt "$STALE_AGE_SECS" ] && continue
+    rm -rf "$dir"
+    PRUNED=$((PRUNED + 1))
+  done < <(find "$ROOT/runs" -mindepth 1 -maxdepth 1 -type d 2>/dev/null)
+  [ "$PRUNED" -gt 0 ] && echo "forge-session: pruned $PRUNED stale run dir(s)" >&2
+fi
+
 emit() {
   printf 'FORGE_SESSION=%s\n' "$1"
   printf 'FORGE_PORT=%s\n' "$2"
