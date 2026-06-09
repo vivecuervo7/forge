@@ -530,6 +530,25 @@ async function invokeSnippet(name, args) {
   const preChecks = buildPreconditionChecks(meta.preconditions)
   const argsJson = JSON.stringify(args || {})
 
+  // Env injection for snippets whose body uses `process.env.X`.
+  // playwright-cli's run-code sandbox doesn't expose Node's real `process`,
+  // so without this shim the snippet's process.env references resolve to
+  // undefined (the same issue that drive --env solves for ad-hoc run-code).
+  // Snippets opt in by declaring `envKeys: [...]` in meta; the runner resolves
+  // those values at the Node layer (where direnv-loaded env is visible) and
+  // injects a process shim into the wrapper code.
+  let processShim = ''
+  if (Array.isArray(meta.envKeys) && meta.envKeys.length > 0) {
+    const envObj = {}
+    for (const key of meta.envKeys) {
+      if (process.env[key] === undefined) {
+        die(`snippet "${name}" declares envKeys: [${meta.envKeys.map(k => `"${k}"`).join(', ')}] but "${key}" is not set in this process — wrap the invocation with \`direnv exec ...\` if the var lives in a direnv file`, 2)
+      }
+      envObj[key] = process.env[key]
+    }
+    processShim = `const process = { env: ${JSON.stringify(envObj)} };\n`
+  }
+
   // Page selection: when attached to a user's real browser via CDP, playwright-cli's
   // default `page` is an arbitrary tab — possibly a pinned/bookmarked one the user
   // does NOT want hijacked. We pick a target in this order:
@@ -555,7 +574,7 @@ page = await page.context().newPage();`
   // ambiguity around destructured parameters with defaults (e.g. `run(page,
   // { rank = 1 } = {})`).
   const code = `async page => {
-${pageSelect}
+${processShim}${pageSelect}
 await page.bringToFront().catch(() => {});
 ${preChecks}
 const args = ${argsJson};

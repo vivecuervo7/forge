@@ -89,6 +89,7 @@ The path is `$ROOT/scratch/<name>.ts`. The format is fixed (see template below).
 - **Description** — one sentence, what the snippet does, written so a future reader scanning INDEX.md will know whether to invoke it.
 - **Preconditions** — almost always a `url` regex matching the snippet's domain. Use `visible` only when there's a specific text marker that genuinely gates the snippet (rare).
 - **Args** — declare the parameter shape with type hints, even though you won't wire them through the body literally. The driver baked literals into the events; future invocations will need to re-author the body to thread `args.foo` through. Declaring args here is the TODO marker. Use `{}` if the chunk has no obvious parameter.
+- **envKeys** — if ANY drove event in the chunk recorded an `envKeys` field (driver used `--env` injection for credentials/secrets), gather the union of all those env var names into a `meta.envKeys` array. The invoker reads this and shims `process.env.X` for those keys when the snippet runs. Omit the field entirely when no chunk used env injection.
 - **Body** — the code from the chunk's drove events, joined with newlines. If the chunk's last event was a `run-code` that returned a value, transform that event's IIFE so the snippet returns the value (see template).
 
 #### Snippet file template
@@ -101,6 +102,7 @@ export const meta = {
     url: /news\.ycombinator\.com/,
   },
   args: {},
+  // envKeys: ['PORTAL_USERNAME', 'PORTAL_PASSWORD'],  // only when the body references process.env.X
   tags: ['auto-authored'],
 }
 
