@@ -52,36 +52,7 @@ This emits `FORGE_SESSION=…`, `FORGE_PORT=…`, `FORGE_MODE=…`, `FORGE_PROFI
 
 If a session for this Claude session is already live, the script no-ops and re-emits the existing values. If the user has set `FORGE_CDP_PORT=<port>` in their env, the script attaches to the CDP browser on that port instead (opt-in attach mode — useful for "drive my live browser" workflows; note that side effects propagate to their actual browsing).
 
-### Orphan check (skip on the doctor route)
-
-After session setup, scan for forge sessions whose parent Claude session is no longer active:
-
-```bash
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-find-orphans.sh
-```
-
-The script prints one `<session-id>\t<playwright-name>\t<reason>` line per orphan, or nothing when all is clean. The reason is one of:
-
-- `parent-pid-gone` — the Claude process that spawned the daemon is no longer running. **Definitive orphan**.
-- `parent-pid-reused` — the recorded PID is alive but no longer a Claude process. **Definitive orphan**.
-- `jsonl-stale <age>` — legacy fallback: state.json predates 0.7.1 (no parent_claude_pid recorded), and the Claude transcript jsonl hasn't been touched in 60min+. **Likely orphan; the originating Claude may still be alive but idle**.
-- `no-transcript` — legacy fallback: no Claude jsonl found at all. **Likely orphan**.
-
-**If output is empty**: stay silent, proceed with the task.
-
-**If output is non-empty**: surface to the user via `AskUserQuestion` with `multiSelect: true`. Each orphan becomes one option labelled `forge-<short-id> (<reason>)`. Frame the question as something like:
-
-> Found N orphan forge session(s) — Claude sessions that ended but their browser daemon kept running (~200MB RAM + a Chrome process each). Closing them frees the resources; transcripts in `sessions/` are preserved either way. Which would you like to close?
-
-The user selects zero or more orphans to close. For each selected:
-
-```bash
-playwright-cli -s=<playwright-name> close
-```
-
-Then continue with the actual task. Orphans the user didn't pick stay alive; the next forge invocation will surface them again.
-
-Don't ask if the only orphans are "definitive" types AND the count is small (≤2) AND the user has just invoked forge after a likely-clean exit pattern — but err toward asking; this is a low-frequency event and missing a confirmation is cheap.
+`forge-session.sh` also prunes stale run dirs as a side effect: any `runs/<sid>/` older than 30 minutes whose playwright-cli session is no longer listed gets deleted (profile data and all). Active runs are never touched. This bounds disk usage automatically — quit a forge Chrome via the macOS app bar (Cmd+Q) and the next forge invocation reaps its profile.
 
 ## Direct route — `snippet <name> [json-args]`
 

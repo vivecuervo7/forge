@@ -73,7 +73,7 @@ if [ -d "$ROOT/runs" ]; then
       if printf '%s\n' "$LIVE_SESSIONS" | grep -qxF "$name"; then continue; fi
       mtime=$(stat -f %m "$state" 2>/dev/null) || continue
     else
-      # No state.json — orphan dir from a failed launch (e.g. a crashed
+      # No state.json — leftover dir from a failed launch (e.g. a crashed
       # forge-session.sh from a previous version). Always prunable once old
       # enough; use the dir's own mtime since there's no state file to read.
       mtime=$(stat -f %m "$dir" 2>/dev/null) || continue
@@ -131,8 +131,7 @@ if [ -n "${FORGE_CDP_PORT:-}" ]; then
 {
   "session": "$SESSION_NAME",
   "mode": "cdp-attached",
-  "port": $FORGE_CDP_PORT,
-  "parent_claude_pid": $PPID
+  "port": $FORGE_CDP_PORT
 }
 EOF
   emit "$SESSION_NAME" "$FORGE_CDP_PORT" "cdp-attached" "$PROFILE_DIR"
@@ -152,8 +151,7 @@ cat > "$STATE_FILE" <<EOF
 {
   "session": "$SESSION_NAME",
   "mode": "managed",
-  "profile": "$PROFILE_DIR",
-  "parent_claude_pid": $PPID
+  "profile": "$PROFILE_DIR"
 }
 EOF
 emit "$SESSION_NAME" "" "managed" "$PROFILE_DIR"
