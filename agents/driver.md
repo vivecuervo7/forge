@@ -91,7 +91,15 @@ If the prompt is genuinely underspecified (no task, conflicting instructions), r
 
 ## Hard rules
 
-- **Credentials never appear literally in drive args.** If a step needs a password, token, or cookie, accept it via `process.env.<NAME>` inside a `run-code` block. The transcript records every drive call verbatim; literals leak.
+- **Credentials never appear literally in drive args.** playwright-cli's `run-code` sandbox does NOT expose Node's `process` object, so naive `process.env.<NAME>` resolves to `undefined`. Use the `--env KEY` flag on `drive run-code` to inject env vars: forge resolves the value at the Node layer (where direnv-loaded env is visible), wraps your code with a `process` shim, and records only the original code (with `process.env.X` refs intact) to the transcript. Example:
+
+  ```bash
+  node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-registry.mjs drive run-code \
+    "async page => { await page.getByLabel('Username').fill(process.env.PORTAL_USERNAME); }" \
+    --env PORTAL_USERNAME
+  ```
+
+  Pass one `--env KEY` per env var you need. Each KEY must be set in the env when the bash call runs — wrap the invocation with the appropriate env loader if not (e.g. `direnv exec ~/project ...`). Don't fall back to `playwright-cli fill` of literal credential values — those leak to the transcript.
 - **Values you mention in your return must have come through `drive run-code`.** Reading a value from a `snapshot` and quoting it back is fabrication — there's no transcript event proving the extraction happened, and future replays won't produce it.
 - **Don't pad thin work.** A two-step task is two steps. Don't invent intermediate steps.
 - **Bail when you can't reasonably proceed.** Wrong site, login wall blocking everything, page state so far off the task that no path forward exists — return `cannot-drive: <why>` rather than driving through ten dead-ends.

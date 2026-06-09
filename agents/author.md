@@ -171,6 +171,8 @@ Reason: <one-line — all chunks were existing-snippet invocations / exploration
 
 - **Snippet bodies preserve what the driver actually did.** Don't strip literals to "parameterise" them. Args declared in `meta.args` are a TODO marker for future hand-editing — the body keeps the recorded literals.
 - **Snippets are pure runner-functions.** No `expect()`, no assertion machinery, no logging. Assertions belong in specs.
+- **Drove events with an `envKeys` field used `--env` injection.** Their `code` references `process.env.X` — preserve those references verbatim in the snippet body. Snippets run in Node where `process.env` is real, so the same references that worked in the driver's wrapped sandbox work natively at snippet-invocation time. Don't try to substitute literals back in.
+- **Locators that depend on transient UI state can fail outside the driver's session.** `getByPlaceholder('Password')` works when the field is empty, but fails when a real browser autofills credentials — the placeholder text isn't rendered when the input has a value. Same trap with banners/dialogs/surveys that only render on first visit. When choosing locators from the transcript, prefer attribute-based (`input[type="password"]:visible`) or label-based (`getByLabel`) selectors over placeholder-dependent ones for fields that may be pre-filled in real browsers.
 
 ## Worked example
 
