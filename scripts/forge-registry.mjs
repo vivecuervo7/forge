@@ -412,8 +412,48 @@ function recordNote(text) {
 // recording — they don't contribute to a reproducible test.
 async function driveAction(args) {
   if (!args || args.length === 0) die('drive: pass playwright-cli args', 2)
+
+  // Parse `--env KEY` flags out of the args list. These inject the named env
+  // vars (resolved from this process's env, where direnv has loaded them at
+  // the shell layer) into the run-code sandbox as `process.env.<KEY>` so the
+  // user's code can reference them naturally. The literal values never reach
+  // the transcript — only the original code is recorded.
+  const envKeys = []
+  const cleanArgs = []
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--env' && i + 1 < args.length) {
+      envKeys.push(args[++i])
+    } else {
+      cleanArgs.push(args[i])
+    }
+  }
+
+  let originalCode = null
+  if (envKeys.length > 0) {
+    if (cleanArgs[0] !== 'run-code') {
+      die('drive --env is only valid with run-code', 2)
+    }
+    if (cleanArgs.length < 2) {
+      die('drive run-code --env requires the code as the next positional arg', 2)
+    }
+    const envObj = {}
+    for (const key of envKeys) {
+      if (process.env[key] === undefined) {
+        die(`drive --env ${key}: env var not set in this process — wrap your invocation with \`direnv exec ...\` if it lives in a direnv file`, 2)
+      }
+      envObj[key] = process.env[key]
+    }
+    // Wrap the user's code so `process.env.X` resolves to the injected literal
+    // inside playwright-cli's run-code sandbox (which doesn't expose Node's
+    // real `process`). The shadowed `process` only carries `env`; everything
+    // else on real `process` is still unavailable in run-code — that's fine,
+    // run-code doesn't have access to it anyway.
+    originalCode = cleanArgs[1]
+    cleanArgs[1] = `async page => { const process = { env: ${JSON.stringify(envObj)} }; return await (${originalCode})(page); }`
+  }
+
   ensureSession()
-  const r = spawnSync('playwright-cli', [`-s=${SESSION}`, ...args], {
+  const r = spawnSync('playwright-cli', [`-s=${SESSION}`, ...cleanArgs], {
     encoding: 'utf8',
     maxBuffer: 16 * 1024 * 1024,
   })
@@ -427,7 +467,14 @@ async function driveAction(args) {
   //   <one or more await statements>
   //   ```
   const codeMatch = stdout.match(/### Ran Playwright code\n```js\n([\s\S]*?)\n```/)
-  const code = codeMatch ? codeMatch[1].trim() : null
+  let code = codeMatch ? codeMatch[1].trim() : null
+  // When env injection was active, playwright-cli echoes the WRAPPED code
+  // (with resolved literals). Replace with the user's original code so the
+  // transcript stays free of secret values and uses `process.env.X` refs that
+  // work natively when later inlined into a Node-side snippet or spec.
+  if (originalCode !== null) {
+    code = originalCode
+  }
 
   // Some commands (snapshot, run-code, eval) also have a "### Result" block.
   // run-code is the only one whose result we care about preserving — extraction
@@ -447,9 +494,10 @@ async function driveAction(args) {
   if (code) {
     appendTranscript({
       event: 'drove',
-      command: args[0],
+      command: cleanArgs[0],
       code,
       result,
+      ...(envKeys.length > 0 ? { envKeys } : {}),
     })
   }
 
