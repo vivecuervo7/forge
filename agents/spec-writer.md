@@ -112,6 +112,12 @@ Notes on the structure:
 - **Comment each step** with a one-line description of what it does. Future readers (the user, code review) shouldn't have to read the code to understand the flow.
 - **Hoist captured values** into `const <name>` at the test scope so later steps can reference them. Use semantic names (`hnTitle`, `wikiUrl`, `translation`), not `step1Result`.
 - **Thread values forward** where applicable. If step 2 conceptually depends on step 1's output, the spec should *show that*. Even when the driver hardcoded the literal in step 2's goto URL, the spec should use template literals: `${hnTitle}` instead of `"Teenage Engineering: Introducing APC-2"`.
+- **Preserve locator alternatives from evidence** — when a drove event has an `evidence` field (the driver had to deliberate among multiple candidates), emit the rejected candidates as a comment immediately before that action:
+  ```ts
+  // alternatives: page.locator('[role=combobox][id*=brand]'), page.locator('[id*=brand]')
+  await page.getByRole('combobox', { name: 'Brand' }).click()
+  ```
+  Skip drove events with no `evidence` field — those were decisive choices. The comments are forensic context for repairing the spec later when its primary locator stops working; runtime behaviour is unaffected.
 
 ### 5. Add assertions
 

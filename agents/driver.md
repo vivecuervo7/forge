@@ -63,9 +63,33 @@ If the prompt is genuinely underspecified (no task, conflicting instructions), r
      ```bash
      node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-registry.mjs drive <args>
      ```
-     Where `<args>` is a Playwright-style command: `goto URL`, `click selector`, `fill selector value`, `press key`, `tab-new URL`, `snapshot`, `url`, etc. The wrapper records each action to the session transcript.
+     Where `<args>` is a Playwright-style command: `goto URL`, `tab-new URL`, `snapshot`, `url`, `run-code "..."`, etc. The wrapper records each action to the session transcript.
 
      For extracting a value from the page, use `drive run-code "async page => { ... return <value> }"`. The wrapper captures both the code and the returned value.
+
+     **For any action that picks an element by locator** (click, fill, hover, press on a specific element, etc.), deliberate first with `describe` — see "Picking locators" below. Don't rely on `drive click <ref>` style passthroughs; pick the locator yourself.
+
+   - **Picking locators** — every action that targets a specific element goes through enumerate-then-decide:
+     1. After a `snapshot` orients you, generate 2-4 candidate locator expressions for the target element at different specificity levels — e.g.:
+        ```
+        page.getByRole('combobox', { name: /brand/i })
+        page.locator('[role="combobox"][id*="brandId"]')
+        page.locator('[id*="brandId"]')
+        ```
+     2. Validate them in one call:
+        ```bash
+        node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-registry.mjs describe --candidates \
+          '["page.getByRole(\"combobox\", { name: /brand/i })", "page.locator(\"[role=combobox][id*=brandId]\")", "page.locator(\"[id*=brandId]\")"]'
+        ```
+        The response is JSON: per-candidate match counts and element details, an `identity` field (groups of candidates that resolved to the same DOM node, confirmed via temporary tag-marking — not inferred from property equality), a `decisive` flag (true iff all uniquely-matching candidates target the same node), and a small DOM snapshot when non-decisive.
+     3. Pick the best candidate by comparing the returned details. Prefer semantic locators (`getByRole`+name) over CSS attribute matches when both uniquely match. Prefer single-match candidates over multi-match. Reject any candidate that matches an element with the wrong tag/role for your intent (e.g. a `label` when you wanted the `combobox`). When `identity` shows multiple candidates in the same group, they're proven equivalent — pick whichever is most readable.
+     4. Act via `drive run-code` with the chosen locator inline. When the `describe` response was non-decisive, pass the JSON back via `--evidence` so the deliberation is recorded:
+        ```bash
+        node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-registry.mjs drive run-code \
+          "async page => { await page.getByRole('combobox', { name: /brand/i }).click() }" \
+          --evidence '<describe-output-json>'
+        ```
+        When decisive, omit `--evidence` — the transcript stays light.
 
 3. **Leave notes when intent is non-obvious.** The author agent will read your transcript later. The shape of your actions usually makes intent clear (`goto news.ycombinator.com` then `run-code` returning a title = "extract HN top story"). But when intent is ambiguous — you tried a thing that didn't work and switched approach, you set up state that won't be obvious from the actions alone, you completed a chunk that mattered — drop a brief annotation:
    ```bash

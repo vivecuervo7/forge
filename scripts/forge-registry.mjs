@@ -28,6 +28,18 @@
 //                             Used by the driver agent for every browser action it takes.
 //                             Read-only commands (snapshot, tab-list, url) are passed through
 //                             without recording.
+//                             Flags: --env KEY (inject env var into run-code sandbox),
+//                             --evidence <json> (attach locator deliberation evidence from a
+//                             prior `describe` call to the drove event).
+//   describe --candidates '[<locator-expr>, ...]'
+//   describe '<locator-expr>'
+//                             Validate one or more candidate locator expressions against the
+//                             live page. Returns JSON to stdout with per-candidate match counts,
+//                             element details, a `decisive` flag (true iff exactly one candidate
+//                             uniquely matches), and a small DOM snapshot when non-decisive.
+//                             Used by the driver agent before every locator-based action: pick
+//                             the best candidate from the returned set; pass the JSON back via
+//                             `drive --evidence` when the choice was non-decisive.
 //   note '<text>'             Append a `note` event to the session transcript with free-text
 //                             content. Used by the driver agent to leave annotations the
 //                             author agent can read as hints when deciding what to capture.
@@ -413,16 +425,26 @@ function recordNote(text) {
 async function driveAction(args) {
   if (!args || args.length === 0) die('drive: pass playwright-cli args', 2)
 
-  // Parse `--env KEY` flags out of the args list. These inject the named env
-  // vars (resolved from this process's env, where direnv has loaded them at
-  // the shell layer) into the run-code sandbox as `process.env.<KEY>` so the
-  // user's code can reference them naturally. The literal values never reach
-  // the transcript — only the original code is recorded.
+  // Parse `--env KEY` and `--evidence <json>` flags out of the args list.
+  //
+  // `--env KEY` injects named env vars (resolved from this process's env, where
+  // direnv has loaded them at the shell layer) into the run-code sandbox as
+  // `process.env.<KEY>` so the user's code can reference them naturally. The
+  // literal values never reach the transcript — only the original code is recorded.
+  //
+  // `--evidence <json>` attaches the agent's locator deliberation evidence (the
+  // output of a prior `describe` call) to the `drove` event in the transcript.
+  // Used when the agent had to choose among multiple plausible candidates, so
+  // downstream agents and humans can see why this locator was picked. Skip when
+  // the choice was decisive — the transcript stays light.
   const envKeys = []
+  let evidence = null
   const cleanArgs = []
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--env' && i + 1 < args.length) {
       envKeys.push(args[++i])
+    } else if (args[i] === '--evidence' && i + 1 < args.length) {
+      try { evidence = JSON.parse(args[++i]) } catch { die('drive --evidence: invalid JSON', 2) }
     } else {
       cleanArgs.push(args[i])
     }
@@ -498,6 +520,7 @@ async function driveAction(args) {
       code,
       result,
       ...(envKeys.length > 0 ? { envKeys } : {}),
+      ...(evidence !== null ? { evidence } : {}),
     })
   }
 
@@ -505,6 +528,216 @@ async function driveAction(args) {
   process.stdout.write(stdout)
   if (stderr) process.stderr.write(stderr)
   process.exit(r.status || 0)
+}
+
+
+// Validate a set of candidate locator expressions against the live page and return
+// structured data the driver agent can use to pick the best one. Each candidate is
+// a JS expression that yields a Playwright Locator when evaluated with `page` in
+// scope (e.g. `page.getByRole('combobox', { name: 'Brand' })` or
+// `page.locator('[id*="brandId"]')`).
+//
+// Each candidate with at least one match has its first match tagged with a
+// temporary `data-forge-mark` attribute (cleaned up on the way out). The
+// candidates that resolved to the SAME DOM node are then grouped, so we can tell
+// "two locators that look identical by property" from "two locators that actually
+// point at the same node" — and update `decisive` accordingly.
+//
+// Returns JSON to stdout:
+//   {
+//     candidates: [{ locator, matches, details? | error? }, ...],
+//     identity: [[<candidate-index>, ...], ...],   // groups of candidates targeting the same DOM node
+//     decisive: boolean,                            // true iff all unique-matchers target ONE node
+//     snapshot: { chosen, parent, siblings } | null // captured when non-decisive
+//   }
+//
+// The agent reads this and:
+//   - When decisive: picks the unique-matching candidate (any of them, since they agree), acts via `drive run-code`.
+//   - When non-decisive: picks the best candidate, acts via `drive run-code "..." --evidence <this-json>`.
+async function describeAction(args) {
+  if (!args || args.length === 0) {
+    die('describe: pass --candidates <json-array> or a single locator expression', 2)
+  }
+
+  let candidates = []
+  if (args[0] === '--candidates') {
+    if (args.length < 2) die('describe --candidates requires a JSON array', 2)
+    try { candidates = JSON.parse(args[1]) } catch { die('describe --candidates: invalid JSON', 2) }
+    if (!Array.isArray(candidates) || candidates.length === 0) die('describe --candidates: array must be non-empty', 2)
+    if (!candidates.every(c => typeof c === 'string' && c.trim())) die('describe --candidates: every entry must be a non-empty string', 2)
+  } else {
+    candidates = [args[0]]
+  }
+
+  ensureSession()
+
+  // Each candidate is a JS expression that yields a Locator. We template them as a
+  // function array inside the run-code source so the sandbox doesn't need `eval`
+  // — the candidate expressions are evaluated by the JS parser at function-define
+  // time, the same way they would be in any other forge-driven run-code body.
+  const code = `async page => {
+    const evaluators = [${candidates.map(c => `(page) => (${c})`).join(', ')}];
+    const candidateStrs = ${JSON.stringify(candidates)};
+    const results = [];
+    for (let i = 0; i < evaluators.length; i++) {
+      const entry = { locator: candidateStrs[i] };
+      try {
+        const loc = evaluators[i](page);
+        const count = await loc.count();
+        entry.matches = count;
+        const details = [];
+        for (let j = 0; j < Math.min(count, 3); j++) {
+          const el = loc.nth(j);
+          const info = await el.evaluate(e => ({
+            tag: e.tagName ? e.tagName.toLowerCase() : null,
+            role: e.getAttribute && e.getAttribute('role'),
+            ariaLabel: e.getAttribute && e.getAttribute('aria-label'),
+            text: (e.textContent || '').trim().slice(0, 80) || null,
+            id: e.id || null,
+            type: e.getAttribute && e.getAttribute('type'),
+          })).catch(() => ({}));
+          details.push(info);
+        }
+        entry.details = details;
+      } catch (err) {
+        entry.error = String(err && err.message || err);
+      }
+      results.push(entry);
+    }
+
+    // Tag each matching candidate's first match with a forge marker. When multiple
+    // candidates' first-matches land on the same DOM element, their indices
+    // accumulate in the same attribute — so reading the tagged set back gives us
+    // the identity groups directly.
+    const markAttr = 'data-forge-mark';
+    let identityGroups = [];
+    try {
+      for (let i = 0; i < evaluators.length; i++) {
+        const r = results[i];
+        if (!r.matches || r.matches < 1) continue;
+        try {
+          await evaluators[i](page).first().evaluate((el, arg) => {
+            const existing = el.getAttribute(arg.attr);
+            const list = existing ? existing.split(',') : [];
+            list.push(String(arg.idx));
+            el.setAttribute(arg.attr, list.join(','));
+          }, { attr: markAttr, idx: i });
+        } catch {
+          // Detached or stale element — won't appear in identityGroups; the
+          // decisive check below will reflect that this candidate's identity
+          // couldn't be confirmed.
+        }
+      }
+      identityGroups = await page.evaluate((attr) => {
+        const groups = [];
+        document.querySelectorAll('[' + attr + ']').forEach(el => {
+          const v = el.getAttribute(attr);
+          if (!v) return;
+          const indices = v.split(',').map(s => Number(s)).filter(n => Number.isInteger(n));
+          if (indices.length) groups.push(indices);
+        });
+        return groups;
+      }, markAttr);
+    } finally {
+      // Cleanup unconditionally — never leave forge-mark attributes lying around.
+      try {
+        await page.evaluate((attr) => {
+          document.querySelectorAll('[' + attr + ']').forEach(el => el.removeAttribute(attr));
+        }, markAttr);
+      } catch {}
+    }
+
+    // Decisive iff all uniquely-matching candidates target ONE DOM node — a
+    // strictly stronger check than "exactly one candidate uniquely matches".
+    // Two candidates that both uniquely match the same element are still
+    // decisive (the agent picks either; they're equivalent).
+    const uniqueIndices = new Set(
+      results.map((r, i) => r.matches === 1 ? i : -1).filter(i => i >= 0)
+    );
+    let decisive = false;
+    if (uniqueIndices.size >= 1) {
+      const groupsWithUniques = identityGroups.filter(g => g.some(i => uniqueIndices.has(i)));
+      if (groupsWithUniques.length === 1) {
+        const groupSet = new Set(groupsWithUniques[0]);
+        decisive = [...uniqueIndices].every(i => groupSet.has(i));
+      }
+    }
+
+    // When non-decisive, capture a small DOM snapshot anchored on the first
+    // uniquely-matching candidate (or, failing that, the first candidate with any
+    // matches). The snapshot is the chosen element's outerHTML, its parent
+    // descriptor, and a list of sibling descriptors — capped to keep the transcript light.
+    let snapshot = null;
+    if (!decisive) {
+      const uniqueMatches = results.filter(r => r.matches === 1);
+      const anchor = uniqueMatches[0] || results.find(r => r.matches > 0);
+      if (anchor) {
+        const anchorIdx = results.indexOf(anchor);
+        try {
+          const loc = evaluators[anchorIdx](page).first();
+          snapshot = await loc.evaluate((el) => {
+            const truncate = (s, max) => (s && s.length > max) ? (s.slice(0, max) + '…') : s;
+            const describeNode = (n) => {
+              if (!n) return null;
+              if (n.nodeType === 1) {
+                const attrs = [];
+                if (n.id) attrs.push('id=' + JSON.stringify(n.id));
+                const role = n.getAttribute && n.getAttribute('role');
+                if (role) attrs.push('role=' + JSON.stringify(role));
+                const aria = n.getAttribute && n.getAttribute('aria-label');
+                if (aria) attrs.push('aria-label=' + JSON.stringify(aria));
+                const cls = n.className;
+                if (cls && typeof cls === 'string' && cls.length && cls.length < 80) attrs.push('class=' + JSON.stringify(cls));
+                return '<' + n.tagName.toLowerCase() + (attrs.length ? ' ' + attrs.join(' ') : '') + '>';
+              }
+              if (n.nodeType === 3) {
+                const t = (n.textContent || '').trim();
+                if (!t) return null;
+                return '#text(' + JSON.stringify(truncate(t, 60)) + ')';
+              }
+              return null;
+            };
+            const parent = el.parentElement;
+            const siblings = parent
+              ? Array.from(parent.childNodes).map(describeNode).filter(Boolean).slice(0, 20)
+              : [];
+            return {
+              chosen: truncate(el.outerHTML, 1024),
+              parent: parent ? describeNode(parent) : null,
+              siblings,
+            };
+          });
+        } catch {}
+      }
+    }
+
+    return { candidates: results, identity: identityGroups, decisive, snapshot };
+  }`
+
+  const r = spawnSync('playwright-cli', [`-s=${SESSION}`, 'run-code', code], {
+    encoding: 'utf8',
+    maxBuffer: 16 * 1024 * 1024,
+  })
+  const stdout = r.stdout || ''
+  const stderr = r.stderr || ''
+
+  if (r.status !== 0) {
+    process.stderr.write(stderr || stdout)
+    process.exit(r.status || 1)
+  }
+
+  const resultMatch = stdout.match(/### Result\n([\s\S]*?)(?:\n### Ran Playwright code|$)/)
+  if (!resultMatch) {
+    process.stderr.write(stderr || 'describe: no ### Result block in playwright-cli output\n')
+    process.exit(1)
+  }
+
+  try {
+    const parsed = JSON.parse(resultMatch[1].trim())
+    process.stdout.write(JSON.stringify(parsed, null, 2) + '\n')
+  } catch (err) {
+    die('describe: result is not valid JSON: ' + err.message, 1)
+  }
 }
 
 
@@ -760,6 +993,10 @@ async function main() {
       await driveAction(rest)
       return
     }
+    case 'describe': {
+      await describeAction(rest)
+      return
+    }
     case 'note': {
       const text = rest[0]
       if (!text) die('note requires a text string', 2)
@@ -767,7 +1004,7 @@ async function main() {
       return
     }
     default:
-      die('usage: forge-registry.mjs <list|show|reindex|invoke|delete|prune|drive|note> [args...]', 2)
+      die('usage: forge-registry.mjs <list|show|reindex|invoke|delete|prune|drive|describe|note> [args...]', 2)
   }
 }
 
