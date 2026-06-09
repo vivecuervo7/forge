@@ -52,6 +52,25 @@ This emits `FORGE_SESSION=…`, `FORGE_PORT=…`, `FORGE_MODE=…`, `FORGE_PROFI
 
 If a session for this Claude session is already live, the script no-ops and re-emits the existing values. If the user has set `FORGE_CDP_PORT=<port>` in their env, the script attaches to the CDP browser on that port instead (opt-in attach mode — useful for "drive my live browser" workflows; note that side effects propagate to their actual browsing).
 
+### Orphan check (skip on the doctor route)
+
+After session setup, scan for forge sessions whose parent Claude session is no longer active:
+
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-find-orphans.sh
+```
+
+The script prints one `<session-id>\t<playwright-name>\t<age>` line per orphan, or nothing when all is clean. If the output is non-empty, surface a brief summary to the user before proceeding with their actual task. Example:
+
+> Heads up — found N orphan forge session(s) still running in the background (Claude sessions that ended but the browser daemon kept running):
+>   - `forge-24c87f26` — last Claude activity 3h ago
+>   - `forge-f1b912f3` — last Claude activity 2h ago
+> Each is roughly a Chrome process + daemon (~200MB RAM). Want me to close them now, or proceed with your task?
+
+If the user says yes, close each: `playwright-cli -s=<name> close`. If they say proceed, continue without acting — the next forge invocation will surface them again.
+
+Don't pad with this if no orphans were found. Stay silent in the common case.
+
 ## Direct route — `snippet <name> [json-args]`
 
 Just invoke:
