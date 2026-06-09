@@ -2,9 +2,11 @@
 
 A browser assistant for repeatable user actions.
 
-`forge` lets Claude drive your live browser session — fill the form you fill every week, paste a GIF into a PR description, navigate a five-step UI you'd rather not click through again. The first time Claude does it, forge captures the path as a small `.ts` snippet. Next time you ask, it's already in the library; one fast invocation rather than a fresh investigation.
+`forge` lets Claude drive a browser to do repeatable user actions — fill the form you fill every week, paste a GIF into a PR description, navigate a five-step UI you'd rather not click through again. The first time Claude does it, forge captures the path as a small `.ts` snippet. Next time you ask, it's already in the library; cheap invocation rather than fresh investigation.
 
-The plugin owns the *browser as a long-lived daemon*: you attach (or launch) once, and Claude, you, and any future tooling all act on the same window via the named `forge` playwright-cli session. Specs are downstream — if a flow becomes worth pinning into CI, forge can synthesise a real Playwright spec from a recorded drive.
+Each Claude session gets its own managed Chrome by default, with an isolated profile under `$FORGE_ROOT/runs/<session-id>/`. Two concurrent Claude sessions (e.g. across worktrees) run independent browsers — no shared tabs, no clobbering. If you'd rather Claude drive your everyday browser session, opt in to attach mode via `FORGE_CDP_PORT` (see [Browser model](#browser-model)).
+
+Specs are downstream and optional — if a flow becomes worth pinning into CI, `/forge spec` synthesises a runnable `.spec.ts` from the recorded drive.
 
 ## Install
 
@@ -153,6 +155,44 @@ Drop markdown files into `$FORGE_ROOT/hints/` to inject domain knowledge into th
 | `hints/spec-writer.md` | spec-writer | fixture imports, spec naming conventions, assertion style |
 
 All four are optional — standalone forge with no `hints/` directory is unaffected. Keep each file short and reviewable; this is a prompt-injection surface for every agent run.
+
+## Credentials & secrets
+
+playwright-cli's `run-code` sandbox does NOT expose Node's `process.env`. Naive `process.env.PASSWORD` inside a drive block resolves to `undefined`, and direct `playwright-cli fill` of literal credentials leaks them into the transcript verbatim. Forge solves both via env injection:
+
+**Driver side**: pass `--env KEY` per env var on every `drive run-code` invocation that needs them.
+
+```bash
+node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-registry.mjs drive run-code \
+  "async page => { await page.getByLabel('Username').fill(process.env.PORTAL_USERNAME); }" \
+  --env PORTAL_USERNAME
+```
+
+Forge resolves the value at the Node layer (where direnv-loaded env is visible), wraps the user's code with a `process` shim into the sandbox, and records only the original code (with `process.env.X` refs intact) to the transcript. Literals never reach disk.
+
+**Snippet side**: snippets that read credentials declare them in `meta.envKeys`. The author agent populates this automatically from drove events that used `--env`.
+
+```ts
+export const meta = {
+  description: "...",
+  envKeys: ['PORTAL_USERNAME', 'PORTAL_PASSWORD'],
+  args: {},
+}
+```
+
+When the snippet is later invoked, forge resolves the env vars and shims `process.env` into the sandbox, same shape as the drive `--env` flow. Cheap reuse, no plumbing per call.
+
+Both mechanisms require the env vars to be set when the bash invocation runs. Wrap with your env-loading mechanism if needed (e.g. `direnv exec ~/project ...`).
+
+## Wrapping forge for project-specific use
+
+Forge is domain-agnostic; project-specific knowledge belongs in a wrapper plugin. To wrap:
+
+1. **Point `FORGE_ROOT` at a side directory** owned by your project (e.g. `~/myproject/.forge/`). All forge scripts and agents honor it; your project's snippet library, transcripts, and managed Chrome profile stay isolated from a standalone forge install.
+2. **Seed `$FORGE_ROOT/hints/`** with project-specific facts the agents need — base URLs, auth env var names, repo layout, known UI quirks.
+3. **Invoke `forge:driver` and `forge:author` by name** from your wrapper skill, passing `FORGE_ROOT` and `FORGE_SESSION` in their prompts. Your wrapper handles the orchestration and any project-specific spec composition.
+
+Both forge agents read `$ROOT/hints/project.md` plus their role-specific hint file on every run. Snippets authored by the wrapped instance live in the wrapper's `FORGE_ROOT`, not in standalone forge's. The two libraries never collide.
 
 ## License
 
