@@ -41,7 +41,12 @@ for arg in "$@"; do
   esac
 done
 
-SHORT_ID="${CLAUDE_CODE_SESSION_ID:0:12}"
+# Short-id for the playwright-cli session name. Kept to 8 chars because macOS
+# caps Unix domain socket paths at 104 bytes (sun_path[104]) and playwright-cli's
+# socket path is /var/folders/<2>/<30>/T/pw-<8>/cli/<16hex>-<session-name>.sock —
+# leaving roughly 14 chars for the full session name including the 'forge-' prefix.
+# 8 hex chars of a UUID give 32 bits of entropy; concurrent collision is effectively impossible.
+SHORT_ID="${CLAUDE_CODE_SESSION_ID:0:8}"
 RUN_DIR="$ROOT/runs/$CLAUDE_CODE_SESSION_ID"
 STATE_FILE="$RUN_DIR/state.json"
 PROFILE_DIR="$RUN_DIR/profile"
