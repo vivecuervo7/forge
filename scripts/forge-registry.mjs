@@ -73,6 +73,22 @@ import { homedir } from 'node:os'
 import { spawnSync } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
 
+// FORGE_ROOT resolution. Default is `~/.claude/.vive-claude/forge` for users
+// running forge standalone. But if CLAUDE_CODE_SESSION_ID is set, this process
+// is running under the Claude Code orchestrator, which always passes an explicit
+// FORGE_ROOT to its subagents. A missing FORGE_ROOT in that context means a
+// subagent dropped the env-var prefix on its registry call — silently falling
+// back to the default root in that case writes the transcript to a location
+// the orchestrator will never look at. Refuse loudly instead.
+if (!process.env.FORGE_ROOT && process.env.CLAUDE_CODE_SESSION_ID) {
+  console.error(
+    'forge-registry: CLAUDE_CODE_SESSION_ID is set but FORGE_ROOT is not. ' +
+    'A subagent likely failed to prefix this call with `FORGE_ROOT=$ROOT`. ' +
+    'Refusing to fall back to the default root — the orchestrator would never ' +
+    'find anything written here.'
+  )
+  process.exit(5)
+}
 const ROOT = process.env.FORGE_ROOT || join(homedir(), '.claude/.vive-claude/forge')
 const SESSION = process.env.FORGE_SESSION || 'forge'
 const TIERS = ['library', 'staged', 'scratch', 'broken']

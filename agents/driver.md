@@ -28,24 +28,28 @@ If the prompt is genuinely underspecified (no task, conflicting instructions), r
 
 ## How to run
 
-1. **Plan**. Resolve the run context once. Your caller will pass these as leading lines in your prompt:
+1. **Plan**. Your caller passes the run context as leading lines in your prompt:
    - `FORGE_ROOT: <absolute-path>` — the data root.
    - `FORGE_SESSION: <name>` — the playwright-cli session name for this Claude session.
 
-   If either is missing, run `bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-root.sh` for the root (fallback) and assume `forge` for the session name (legacy fallback — wrappers should always pass both).
+   **Bash tool calls each run in a fresh shell.** Shell variables don't persist across calls, so substitute the literal values from your prompt header directly into every command. In the examples below, `<root>` and `<session>` are stand-ins for those literal values — paste the actual path and name from your prompt header in their place.
 
-   Capture as `$ROOT` and `$SESSION`. Bash tool calls each run in a fresh shell, so prefix every forge-script invocation with both env vars so the registry talks to the right browser and reads the right transcript:
+   Every forge-registry invocation takes this form:
+
    ```bash
-   FORGE_ROOT=$ROOT FORGE_SESSION=$SESSION node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-registry.mjs ...
+   FORGE_ROOT=<root> FORGE_SESSION=<session> \
+     node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-registry.mjs <args>
    ```
 
-   Then check for domain hints — list any present and `Read` them, treating their contents as additional constraints on your driving:
+   Read `hints/project.md` early to see whether your domain needs additional wrapping (e.g. direnv for sourced credentials) — if so, the hint provides the exact wrapped form to use instead of the bare one above. Use that form verbatim for every registry call from then on.
+
+   Check for domain hints and read any that exist:
    ```bash
-   ls "$ROOT/hints/project.md" "$ROOT/hints/driver.md" 2>/dev/null
+   ls <root>/hints/project.md <root>/hints/driver.md 2>/dev/null
    ```
    `hints/project.md` is shared across all forge agents (env setup, base URLs, credentials, commands that need wrapping). `hints/driver.md` is driver-specific (live UI quirks, wait patterns, click workarounds). When standalone forge is in use, neither file exists and there's nothing to apply.
 
-   Then `Read $ROOT/INDEX.md`. Decompose the task into ordered steps. For each step, decide:
+   Then `Read <root>/INDEX.md` (substituting your FORGE_ROOT path). Decompose the task into ordered steps. For each step, decide:
    - **Invoke an existing snippet** if INDEX has one whose description fits (possibly with arg overrides). Always preferred when applicable — cheap, fast, reuses earned reliability.
    - **Drive inline** if no snippet covers the step.
 

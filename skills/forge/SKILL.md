@@ -97,6 +97,8 @@ The script prints a single token to stdout:
 - **`novel`** — the driver did browser work that may be worth extracting as snippets. Continue to step 3.
 - **`reuse-only`** — every step in the drive used an existing library snippet. The flow ends here; report:
   > <driver's result>. (Task completed using existing library snippets.)
+- **`no-transcript`** — the transcript file is missing or empty. The driver ran but didn't record any events (registry crash, FORGE_ROOT drift, or driver never actually called the registry). **Do not run the author or spec-writer**; they have nothing to read and would only fabricate. Surface a hard error to the user instead:
+  > forge: driver returned without recording any transcript events at `$FORGE_ROOT/sessions/$CLAUDE_CODE_SESSION_ID.jsonl`. Re-run the task; if it reoccurs, inspect the driver's tool calls — its `forge-registry.mjs` invocations may be failing silently.
 
 ### 3. Author (when step 2 prints `novel`)
 
@@ -106,7 +108,7 @@ Agent(subagent_type="forge:author",
 Task: <original user request verbatim>")
 ```
 
-The author reads `CLAUDE_CODE_SESSION_ID` from env and uses the `FORGE_ROOT` you pass — do not put session ID in the prompt.
+The author reads `CLAUDE_CODE_SESSION_ID` from env and uses the `FORGE_ROOT` you pass — do not put session ID in the prompt. It will refuse with `cannot-author: …` if the transcript is missing or empty.
 
 The author returns a manifest like `Authored: 2 snippets\n  - <name> — <description>\n  - ...`. Report:
 
@@ -136,7 +138,7 @@ FORGE_ROOT=$FORGE_ROOT bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-has-novel-work.s
 
 ### 3. Launch downstream agents
 
-Agents read `CLAUDE_CODE_SESSION_ID` from env and use the `FORGE_ROOT` you pass — do not put session ID in any prompt.
+Agents read `CLAUDE_CODE_SESSION_ID` from env and use the `FORGE_ROOT` you pass — do not put session ID in any prompt. Both will refuse with `cannot-write-spec: …` / `cannot-author: …` if the transcript is missing.
 
 Read step 2's stdout token:
 
@@ -160,6 +162,8 @@ Read step 2's stdout token:
   Task: <original user request verbatim>
   Label: <if user supplied one, else omit this line>")
   ```
+
+- **`no-transcript`** — refuse the spec request and report the same hard error described in the Driver route step 2. Do NOT launch spec-writer; it has nothing to read.
 
 ### 4. Report
 
