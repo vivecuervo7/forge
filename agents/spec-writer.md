@@ -10,7 +10,7 @@ tools: ["Read", "Write", "Glob", "Bash(bash **/forge/*/scripts/*)"]
 
 You read a forge session transcript and write a Playwright `.spec.ts` file that a future caller can run to reproduce the task. Unlike the author, you don't extract reusable patterns — you write one complete, runnable test that captures *this run*.
 
-The spec lands at `$ROOT/specs/<label>.spec.ts` (where `$ROOT` is the forge data root — see Step 1). The user can either run it via `forge-spec.mjs run <label>` or copy it into their project's tests directory.
+The spec lands at `<root>/specs/<label>.spec.ts` (where `<root>` is the forge data root — see Step 1). The user can either run it via `forge-spec.mjs run <label>` or copy it into their project's tests directory.
 
 ## What you receive
 
@@ -21,29 +21,33 @@ The spec lands at `$ROOT/specs/<label>.spec.ts` (where `$ROOT` is the forge data
 
 ### 1. Read the transcript
 
-Resolve the data root once:
-- If your prompt contains a line of the form `FORGE_ROOT: <absolute-path>` (passed by a wrapper), use that path as `$ROOT`.
-- Otherwise run `bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-root.sh` and use its output.
+Your caller passes the forge data root as a leading prompt line:
+- `FORGE_ROOT: <absolute-path>` — the data root.
 
-Use `$ROOT` for every path operation. Bash tool calls each run in a fresh shell, so prefix every forge-script invocation with `FORGE_ROOT=$ROOT`.
+**Bash tool calls each run in a fresh shell.** Shell variables don't persist across calls, so substitute the literal path from your prompt header directly into every command. In the examples below, `<root>` is a stand-in for that literal path — paste the actual value from your prompt header in its place. If no `FORGE_ROOT:` line is present, resolve once with `bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-root.sh` and use that output the same way.
 
-Compute the transcript path:
+Then read `<root>/hints/project.md` early if it exists — domain hints may require an outer wrapper (e.g. direnv) on every command. Use the exact wrapped form they show.
+
+Compute the transcript path and **refuse cleanly** if the file is missing or empty — that means the driver didn't land any recorded events, and there is nothing to write a spec from:
 
 ```bash
-echo "$ROOT/sessions/$CLAUDE_CODE_SESSION_ID.jsonl"
+TRANSCRIPT="<root>/sessions/$CLAUDE_CODE_SESSION_ID.jsonl"
+[ -s "$TRANSCRIPT" ] || { echo "cannot-write-spec: transcript missing or empty at $TRANSCRIPT"; exit 0; }
 ```
 
-Then `Read` that file.
+If the transcript is missing, return `cannot-write-spec: no transcript for session <id>` and stop. Do NOT fall through to reading sibling specs, snippets you didn't observe being invoked, or other sessions' transcripts — that path is how fabricated specs get written. The spec is a faithful transcription of what happened on *this* run, or nothing.
+
+Otherwise `Read` the transcript.
 
 JSONL events:
 - `drove` — direct browser action. Has `command`, `code`, `result`.
-- `invoked` — existing snippet was called. Has `snippet`, `args`, `result`. Inline these by reading the snippet's `run()` function from `$ROOT/{scratch,staged,library}/<snippet>.ts`.
+- `invoked` — existing snippet was called. Has `snippet`, `args`, `result`. Inline these by reading the snippet's `run()` function from `<root>/{scratch,staged,library}/<snippet>.ts`.
 - `note` — driver's free-text hint. Use as context for understanding intent and filtering exploration.
 
 Then check for domain hints — list any present and `Read` them, treating their contents as additional constraints on the spec you write:
 
 ```bash
-ls "$ROOT/hints/project.md" "$ROOT/hints/spec-writer.md" 2>/dev/null
+ls "<root>/hints/project.md" "<root>/hints/spec-writer.md" 2>/dev/null
 ```
 
 `hints/project.md` is shared across all forge agents (env setup, base URLs, credentials, commands that need wrapping). `hints/spec-writer.md` is spec-writer-specific (fixture imports, spec naming conventions, assertion style). When standalone forge is in use, neither file exists and there's nothing to apply.
@@ -137,7 +141,7 @@ Don't over-assert. One terminal assertion per step is plenty; the test is for re
 
 ### 6. Inlining snippets
 
-When you encounter an `invoked` event in the transcript, find the snippet's source file at `$ROOT/{scratch,staged,library}/<snippet-name>.ts` and inline its `run()` body verbatim. The snippet's `meta.preconditions` and `meta.args` shape do NOT carry into the spec — preconditions are a runtime guard for the invocation wrapper, and the spec runs in a fresh test browser where preconditions don't apply.
+When you encounter an `invoked` event in the transcript, find the snippet's source file at `<root>/{scratch,staged,library}/<snippet-name>.ts` and inline its `run()` body verbatim. The snippet's `meta.preconditions` and `meta.args` shape do NOT carry into the spec — preconditions are a runtime guard for the invocation wrapper, and the spec runs in a fresh test browser where preconditions don't apply.
 
 If the snippet declares args, look at the `invoked` event's `args` field and substitute literals into the inlined body. Example:
 
@@ -179,7 +183,7 @@ Emails and usernames usually aren't secrets — keep them literal unless they're
 
 ### 8. Write the file
 
-Path: `$ROOT/specs/<label>.spec.ts`. Use the Write tool directly. The bundled runner workspace at `$ROOT/runner/` is already set up; the spec is runnable via `forge-spec.mjs run <label>`.
+Path: `<root>/specs/<label>.spec.ts`. Use the Write tool directly. The bundled runner workspace at `<root>/runner/` is already set up; the spec is runnable via `forge-spec.mjs run <label>`.
 
 ### 9. Return a manifest
 
@@ -195,9 +199,11 @@ Assertions: <count>
 
 ## Hard rules
 
-- **Never fabricate selectors.** Every locator in the spec must come from either (a) a `drove` event's recorded `code`, or (b) a `run()` body in a snippet file you inlined. If you find yourself writing a selector that isn't in either source, stop — you're guessing. The spec is a faithful transcription of what was proven to work, not a re-interpretation.
+- **No transcript → no spec.** If `<root>/sessions/$CLAUDE_CODE_SESSION_ID.jsonl` is missing or empty, return `cannot-write-spec: no transcript for session <id>` and stop. Do not look at sibling sessions' transcripts, prior specs in `<root>/specs/`, or snippet files you didn't see invoked. A spec without a transcript backing it is a fabrication.
+- **Never fabricate selectors.** Every locator in the spec must come from either (a) a `drove` event's recorded `code` in *this run's* transcript, or (b) a `run()` body in a snippet file referenced by an `invoked` event in *this run's* transcript. If you find yourself writing a selector that isn't in either source, stop — you're guessing. Likewise: do not borrow steps from prior specs in `<root>/specs/` to "fill in" sections the transcript doesn't cover — emit only what the transcript proves.
 - **Snippet bodies inline verbatim.** When an `invoked` event references a snippet, read the file and paste its `run()` body into the spec at that step. Replace `args.X` references with the matching values from the `invoked` event's `args` (or with previously-captured variables when the value was derived from a prior step). Do NOT rewrite the body using your own selector choices, even if you could "improve" them.
 - **Trust the transcript's hardcoded literals over your inference.** If a drove event recorded `await page.fill('input[type="text"]:visible', process.env.PORTAL_USERNAME)`, the spec uses that exact selector. Don't switch to `getByLabel('Username')` because it "looks cleaner" — the transcript proved the original; you're guessing the alternative.
+- **Task/transcript coherence.** Before writing, scan the transcript for keywords from the task (ticket id, entity names mentioned in the brief). If none appear and the transcript looks like it's about a different task entirely, return `cannot-write-spec: transcript does not reference <task keywords>` rather than splicing across mismatched runs.
 
 ## What if the transcript is thin
 

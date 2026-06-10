@@ -20,30 +20,34 @@ The **task description** that triggered the drive. That's it.
 
 ### 1. Read the inputs
 
-Resolve the data root once:
-- If your prompt contains a line of the form `FORGE_ROOT: <absolute-path>` (passed by a wrapper), use that path as `$ROOT`.
-- Otherwise run `bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-root.sh` and use its output.
+Your caller passes the forge data root as a leading prompt line:
+- `FORGE_ROOT: <absolute-path>` — the data root.
 
-Use `$ROOT` for every path operation. Bash tool calls each run in a fresh shell, so prefix every forge-script invocation with `FORGE_ROOT=$ROOT` to ensure the script honors your override.
+**Bash tool calls each run in a fresh shell.** Shell variables don't persist across calls, so substitute the literal path from your prompt header directly into every command. In the examples below, `<root>` is a stand-in for that literal path — paste the actual value from your prompt header in its place. If no `FORGE_ROOT:` line is present, resolve once with `bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-root.sh` and use that output the same way.
 
-Compute the transcript path:
+Then read `<root>/hints/project.md` early if it exists — domain hints may require an outer wrapper (e.g. direnv) on every command. Use the exact wrapped form they show.
+
+Compute the transcript path and **refuse cleanly** if the file is missing or empty — that means the driver didn't land any recorded events, and there is nothing to author from:
 
 ```bash
-echo "$ROOT/sessions/$CLAUDE_CODE_SESSION_ID.jsonl"
+TRANSCRIPT="<root>/sessions/$CLAUDE_CODE_SESSION_ID.jsonl"
+[ -s "$TRANSCRIPT" ] || { echo "cannot-author: transcript missing or empty at $TRANSCRIPT"; exit 0; }
 ```
 
-Then `Read` that file. It's JSONL with these event types:
+If the transcript is missing, return `cannot-author: no transcript for session <id>` and stop. Do NOT fall through to reading sibling sessions, prior specs, or library files — there is no faithful authoring to do without a transcript for *this* run.
+
+Otherwise `Read` the transcript. It's JSONL with these event types:
 
 - `drove` — direct browser action. Has `command`, `code`, `result`.
 - `invoked` — an existing snippet was called. Has `snippet`, `args`, `result`. **Ignore these for authoring** — that work was already covered by a saved snippet, so there's nothing new to extract from them.
 - `note` — free-text annotation from the driver. Use these as hints when intent isn't obvious from event shape.
 
-Also `Read` the current library index at `$ROOT/INDEX.md` so you don't author duplicates. If INDEX already has a snippet with substantially the same intent, skip the chunk.
+Also `Read` the current library index at `<root>/INDEX.md` so you don't author duplicates. If INDEX already has a snippet with substantially the same intent, skip the chunk.
 
 Then check for domain hints — list any present and `Read` them, treating their contents as additional constraints on the snippets you write:
 
 ```bash
-ls "$ROOT/hints/project.md" "$ROOT/hints/author.md" 2>/dev/null
+ls "<root>/hints/project.md" "<root>/hints/author.md" 2>/dev/null
 ```
 
 `hints/project.md` is shared across all forge agents (env setup, base URLs, credentials, commands that need wrapping). `hints/author.md` is author-specific (snippet conventions, naming rules, POM composition, must-include wait patterns). When standalone forge is in use, neither file exists and there's nothing to apply.
@@ -83,7 +87,7 @@ When uncertain, **err toward saving**. Scratch has a 7-day TTL — useless captu
 
 ### 4. For each chunk you save, write a snippet file
 
-The path is `$ROOT/scratch/<name>.ts`. The format is fixed (see template below). Decide:
+The path is `<root>/scratch/<name>.ts`. The format is fixed (see template below). Decide:
 
 - **Name** — lowercase kebab-case, intent-level, specific. `hn-top-story-title` not `hn-thing`. `wikipedia-first-search-result-url` not `wiki-search`. `google-translate-en-to-fr` not `translate`.
 - **Description** — one sentence, what the snippet does, written so a future reader scanning INDEX.md will know whether to invoke it.
@@ -159,7 +163,7 @@ After writing all your snippets, regenerate the index:
 node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-registry.mjs reindex
 ```
 
-This updates `$ROOT/INDEX.md` so future drives see your new snippets.
+This updates `<root>/INDEX.md` so future drives see your new snippets.
 
 ### 6. Return a manifest
 
