@@ -2,90 +2,64 @@
 
 Regression coverage for `/forge` prompt edits, in [skill-creator](https://github.com/anthropics/skills/tree/main/skills/skill-creator) format.
 
-## Three separately-runnable suites
+One `evals.json`, 24 auto-runnable cases. Each case checks observable behaviour — routing decisions or script-invocation effects — without depending on what was already in the sandbox before the case ran.
 
-Three files, each a complete skill-creator-format evals JSON. Designed to be run in order — each suite has a distinct purpose and the ordering rationale preserves state across runs.
+## Design principle: stateless + parallel-safe
 
-| File | Suite | Cases | What it tests |
-|---|---|---|---|
-| `suite-1-routing.json` | **1. Routing decisions** | 19 | Phase 0 / 0a / 0b dispatch — route detection, mode detection, label parsing, false-positive elevations, case-sensitivity |
-| `suite-2-happy-path.json` | **2. Full chain happy path** | 1 | End-to-end `/forge spec` against the sandbox in baseline state, idempotent |
-| `suite-3-skill-scripts.json` | **3. Skill-routed scripts** | 5 | `/forge run` and `/forge export` — skill-routed but team-less, exercises the recording-on-demand and export-inlining paths |
+The suite tests **decisions and side-effects of script invocations**, not full team execution. Two reasons:
+
+- **Routing tests** check Phase 0 / 0a / 0b dispatch. The subagent reads `SKILL.md`, applies the routing rules to a prompt, outputs a JSON decision, and stops. No team spawned.
+- **Script tests** check `/forge run` and `/forge export`. These routes don't claim slots and don't spawn teammates — they invoke `forge-pool-run-spec.mjs` / `forge-export-spec.mjs` directly. The subagent invokes the skill end-to-end and we check the resulting artifacts.
+
+Both kinds of test are stateless and parallel-safe. The suite can re-run across iterations without sandbox reset.
 
 ## Running
 
-`/skill-creator` reads whichever file you point it at. From a Claude Code session:
-
 ```
-/skill-creator run the evals at plugins/forge/skills/forge/evals/suite-1-routing.json against /forge
+/skill-creator run the evals at plugins/forge/skills/forge/evals/evals.json against the /forge skill at plugins/forge/skills/forge/
 ```
 
-Repeat with `suite-2-happy-path.json` and `suite-3-skill-scripts.json`.
+That's it. One file, one invocation.
 
-### Skip the without-skill baseline
+**Skip the without-skill baseline.** Skill-creator's canonical pattern spawns two subagents per case — one with the skill, one without — to measure the delta. Don't do this for forge. The prompts explicitly say "Read the SKILL.md at the skill path"; without a path the baseline subagent has nothing to read and every assertion fails by construction. The delta becomes a tautology, not signal. Spawn `with_skill` only.
 
-Skill-creator's canonical pattern spawns two subagents per case — one with the skill, one without — to measure the delta. **Don't do this for forge.** The forge evals are routing-focused: the prompts explicitly say "Read the SKILL.md at the skill path." Without a skill path, the without_skill subagent has nothing to read and every assertion fails by construction. The delta number ends up being a tautology ("having the skill is better than not having it"), not a useful signal about the skill's behavior.
+## What's covered (24 cases)
 
-Spawn with_skill subagents only. The grader still produces pass/fail per case — that's the regression signal we care about.
+| Category | Cases | What's tested |
+|---|---|---|
+| `route-*` | 9 | `/forge init`, `/forge export`, `/forge run` — explicit keyword + natural-language variants |
+| `mode-*` | 6 | Drive vs spec mode selection, including negative cases for incidental "spec" or "record" keyword mentions |
+| `label-*` | 3 | Recording-label parsing (`record as 'X'`, `record a X video`, `label it X`) |
+| `case-insensitive` | 1 | `/Forge INIT` → init (case-insensitive first-word match) |
+| `run-*` | 3 | `/forge run` script invocation: verification-only, with `record as <label>`, with `last` resolution |
+| `export-*` | 2 | `/forge export` script invocation: default output path, `--output` override |
 
-This is documented to avoid burning cycles re-deriving it. If the situation ever changes (e.g. if a future suite tests behavior that COULD plausibly happen without the skill), revisit then.
+Three cases marked **PENDING** in their `expected_output` test desired natural-language detection for init/export routes that Phase 0 doesn't yet support. They fail today; will turn green when Phase 0 is expanded. TDD spec for that follow-up.
 
-### Ordering
+## What's deliberately NOT in the suite
 
-The three suites are independent — running one doesn't depend on running another — but the recommended order is 1 → 2 → 3 because:
+**Full spec-mode end-to-end** (`/forge spec <task>` with the team actually running) cannot be tested from a nested skill-eval subagent — the agent-teams primitive (`TeamCreate`, `Agent`, `SendMessage`) only exists in the top-level Claude Code session. The constraint is a Claude Code platform property, not a forge limitation.
 
-- Suite 1 doesn't execute, so it never mutates state.
-- Suite 2 is idempotent against the sandbox — it always converges to "3 snippets present" regardless of starting count.
-- Suite 3 may add files to `forge/videos/` and `<project>/forge-exports/` but doesn't touch snippets or specs.
+In practice this is fine: you exercise the happy path **ad hoc, manually**, by invoking `/forge spec <task>` at the top level when you've made changes to the team agents (driver / snippet-author / spec-writer / spec-verifier) or to `references/team-task.md`. Any concrete site works as the testbed — saucedemo via `~/repos/forge-tests/`, EventsAir, anything you have access to. No runbook needed; the assertions are what a developer would check by eye anyway.
 
-Re-runs across iterations don't require a sandbox reset. The suites are repeatable.
+**State-sensitive checks** also stay manual:
 
-## Suite 1 — Routing decisions (19 cases, fully parallel)
+- Snippet authoring discipline (does snippet-author write when work is novel?)
+- Library reuse discipline (does driver invoke vs re-drive?)
+- Spec-writer skip-when-match (does it correctly skip when an exact-match spec exists?)
 
-Pure stateless tests. Each subagent reads `SKILL.md`, applies Phase 0 / 0a / 0b to a given user prompt, and outputs a JSON object describing the routing decision. **No execution happens** — no `/forge` teammate is spawned, no script is invoked, no sandbox state is touched.
-
-Safe to parallelise. Cheap (~$0.05/case at low temperature).
-
-Catches: Phase 0 dispatch regressions, mode-detection drift (drive vs spec), label-parsing drift (RECORD_AS extraction), false-positive elevations (e.g. "record" or "spec" mentioned incidentally), case-sensitivity issues.
-
-Three cases marked **PENDING** in `expected_output` (numbers 2, 3, and 6) — they test desired natural-language detection for init/export routes which Phase 0 doesn't yet support. They fail today by design; will turn green when Phase 0 is expanded. TDD spec for that follow-up.
-
-## Suite 2 — Full chain happy path (1 case, serial)
-
-One end-to-end execution against the sandbox. Spec mode runs the full team: driver, snippet-author, spec-writer, spec-verifier.
-
-Designed to be **idempotent**: convergent on 3 snippets at end regardless of starting count. The sandbox can be in baseline state (3 snippets) or even empty (0 snippets) — either way, after this case runs, 3 snippets exist with semantically-correct names.
-
-Catches: full team mechanism regressions, library-reuse discipline, spec verification end-to-end, slot lifecycle.
-
-## Suite 3 — Skill-routed scripts (5 cases, parallel)
-
-Skill-routed cases that exercise the team-less paths: `/forge run` (verification-only, labeled-recording, last-resolution) and `/forge export` (default output, --output override).
-
-Safe to parallelise. No slot claim happens — Playwright uses an ephemeral browser; credentials come from `forge/.env`.
-
-Catches: `/forge run` route behavior, `/forge export` route behavior, recording filename convention.
-
-## What's deliberately NOT in the suites
-
-State-sensitive checks are documented in the project conventions / manual testing rather than the evals. Specifically:
-
-- **Snippet authoring discipline.** Does snippet-author actually write per-step snippets when the work is novel? Verify by running a drive against a sandbox where the library doesn't cover the task.
-- **Library reuse discipline.** Does driver invoke existing snippets instead of re-driving? Verify by running a drive against a covered task and watching the driver's narration for `invoked X` vs `drove fresh: X`.
-- **Spec-writer skip-when-match.** Does spec-writer correctly skip composition when an exact-match spec is already in `forge/specs/`?
-
-These checks would fail differently depending on what was already in the sandbox before the case ran. That makes them state-sensitive — better as human-eyeballed manual checks than automated regressions.
+These behaviours depend on what's already in `forge/snippets/` and `forge/specs/`. Automating them means controlling that pre-state, which costs more than it gives in regression signal. Eyeball them when you've changed something that could plausibly affect the behaviour.
 
 ## Adding cases
 
-To add a case to one of the suites, append to the `evals` array of the relevant file. Each case needs:
+Append to `evals.json`'s `evals` array. Each case needs:
 
-- `id` (next integer within that file — IDs are unique per file, not across files)
-- `name` (descriptive, kebab-case, prefixed with `s1-` / `s2-` / `s3-` to keep the suite visible in the case name)
-- `prompt` (for Suite 1: the routing-wrapper instruction with the user's prompt embedded; for Suite 2 & 3: the user's actual `/forge` invocation)
-- `expected_output` (human-readable success description; flag `PENDING` if the case is TDD-style and currently fails)
-- `files` (input files — empty for almost all forge cases)
-- `expectations` (list of programmatically-verifiable statements)
+- `id` (next integer)
+- `name` (descriptive, kebab-case, prefixed with the category — `route-` / `mode-` / `label-` / `run-` / `export-` / etc.)
+- `prompt` — for routing-decision cases, embed the routing-wrapper instruction (read SKILL.md, output JSON describing the routing decision). For script-execution cases, the user's actual `/forge` invocation.
+- `expected_output` — human-readable success description. Flag `PENDING` if the case is TDD-style and currently fails.
+- `files` — input files (empty for almost all forge cases)
+- `expectations` — list of programmatically-verifiable statements
 
 When in doubt about whether a check belongs in evals or in manual testing: if the assertion would behave differently depending on what was already in the sandbox before this case ran, it's state-sensitive — move it to manual testing.
 
