@@ -1,15 +1,13 @@
 #!/usr/bin/env bash
 # forge-init.sh — scaffold the forge/ project convention into the current directory.
 #
-# Creates forge/ with the canonical layout described in
-# plugins/forge/docs/project-conventions.md:
-#   - forge/.gitignore          (committed, self-documenting policy)
-#   - forge/README.md           (committed, points at the conventions doc)
-#   - forge/hints/              (committed dir; only forge artifact in version control)
-#   - forge/hints/README.md     (gitignored, local guidance for authoring hints)
+# Creates forge/ with the canonical layout: a gitignored data root, a hints/
+# directory for project-specific knowledge, a fallback Playwright config, and
+# a forge-level .env. Template content lives at plugins/forge/templates/init/
+# and is copied verbatim into the target on missing files.
 #
-# Idempotent: existing files are preserved. Re-running is safe — it fills in
-# anything missing without overwriting customizations.
+# Idempotent: existing files are preserved. Re-running fills in anything
+# missing without overwriting customizations.
 #
 # Usage:
 #   forge-init.sh [target-dir]
@@ -17,6 +15,15 @@
 # Defaults to PWD when no arg given.
 
 set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PLUGIN_ROOT="$(dirname "$SCRIPT_DIR")"
+TEMPLATES="$PLUGIN_ROOT/templates/init"
+
+if [ ! -d "$TEMPLATES" ]; then
+  echo "forge-init: missing templates directory at $TEMPLATES" >&2
+  exit 2
+fi
 
 TARGET_DIR="${1:-$PWD}"
 
@@ -28,287 +35,38 @@ fi
 FORGE_DIR="$TARGET_DIR/forge"
 HINTS_DIR="$FORGE_DIR/hints"
 
+mkdir -p "$FORGE_DIR" "$HINTS_DIR"
+
 CREATED=()
 SKIPPED=()
 
-mkdir -p "$FORGE_DIR" "$HINTS_DIR"
+# scaffold <template-name> <dest-relative-to-forge-dir>
+scaffold() {
+  local template="$1"
+  local dest_rel="$2"
+  local src="$TEMPLATES/$template"
+  local dest="$FORGE_DIR/$dest_rel"
 
-# forge/.gitignore — self-documenting policy
-GITIGNORE="$FORGE_DIR/.gitignore"
-if [ ! -e "$GITIGNORE" ]; then
-  cat > "$GITIGNORE" <<'EOF'
-# This file is itself gitignored (matched by the `*` blanket below, with
-# no allowlist exception for `.gitignore`) so the forge/ directory has
-# ZERO tracked files by default. /forge init scaffolds this file locally;
-# every teammate runs /forge init after clone to get their own copy.
-#
-# The only tracked content in forge/ is what you explicitly author in
-# hints/ — project-specific knowledge (env contract, provisioning recipes,
-# app structure) every contributor needs. Everything else (README.md,
-# playwright.config.ts, .env, snippets, specs, videos, pool state,
-# transcripts, test-results) is scaffolded or accreted locally.
-#
-# If your project has additional artifacts that should be shared (e.g.
-# specific snippets you've curated and want everyone to use), add a
-# `!path/` line below.
+  if [ ! -f "$src" ]; then
+    echo "forge-init: template missing: $src" >&2
+    exit 2
+  fi
 
-*
-!hints/
-!hints/**
+  if [ -e "$dest" ]; then
+    SKIPPED+=("forge/$dest_rel")
+  else
+    cp "$src" "$dest"
+    CREATED+=("forge/$dest_rel")
+  fi
+}
 
-# The hints/ README.md is scaffold-only — local guidance for authoring hints,
-# not project-specific knowledge. Each user gets a fresh copy from /forge init.
-hints/README.md
-EOF
-  CREATED+=("forge/.gitignore")
-else
-  SKIPPED+=("forge/.gitignore")
-fi
-
-# forge/README.md — committed, points at the conventions doc
-README="$FORGE_DIR/README.md"
-if [ ! -e "$README" ]; then
-  cat > "$README" <<'EOF'
-# forge/
-
-This directory holds forge artifacts for this project.
-
-Only `hints/` is committed. Everything else (snippets, specs, videos, pool
-state, transcripts) is local to your machine — see `.gitignore` for the
-policy.
-
-Hints are project-specific knowledge that every contributor needs: env
-contract, provisioning recipes, app structure, conventions. See
-`hints/README.md` (your local copy, gitignored) for guidance on authoring
-them, or the full convention doc in the forge plugin source at
-`plugins/forge/docs/project-conventions.md`.
-
-## Quick reference
-
-| File                      | Consumer                       | Typical content                                  |
-|---------------------------|--------------------------------|--------------------------------------------------|
-| `hints/forge.md`          | `/forge` skill                 | env contract, provisioning recipe, setup, teardown |
-| `hints/driver.md`         | `forge:driver` agent           | app structure, routes, personas, gotchas         |
-| `hints/snippet-author.md` | `forge:snippet-author` agent   | snippet conventions for this project             |
-| `hints/spec-writer.md`    | `forge:spec-writer` agent      | spec conventions, naming, required imports       |
-| `hints/spec-verifier.md`  | `forge:spec-verifier` agent    | how to verify specs, reset patterns              |
-
-Minimum-viable hint files are very small. Forge has sensible defaults for
-everything; hints encode only project-specific deviations.
-EOF
-  CREATED+=("forge/README.md")
-else
-  SKIPPED+=("forge/README.md")
-fi
-
-# forge/hints/README.md — gitignored, local hint authoring guidance
-HINTS_README="$HINTS_DIR/README.md"
-if [ ! -e "$HINTS_README" ]; then
-  cat > "$HINTS_README" <<'EOF'
-# Authoring hints
-
-This README is gitignored — it's local scaffold material, regenerated by
-`/forge init`. Don't put project-specific knowledge here; that belongs in
-the per-consumer hint files alongside this README.
-
-## File-per-consumer convention
-
-Each hint file is named after the agent or skill that reads it. Forge looks
-for files matching these specific names:
-
-- `forge.md`          — read by the `/forge` skill
-- `driver.md`         — read by `forge:driver`
-- `snippet-author.md` — read by `forge:snippet-author`
-- `spec-writer.md`    — read by `forge:spec-writer`
-- `spec-verifier.md`  — read by `forge:spec-verifier`
-
-You don't have to author all of them. Forge has defaults for everything;
-hint files override or augment those defaults for this specific project.
-
-## What each file typically contains
-
-### `forge.md` (skill-level orchestration)
-
-Most projects start here. Declares:
-- **Env contract** — which env keys each pool slot needs (e.g. `PORTAL_USERNAME`,
-  `PORTAL_PASSWORD`, or `TENANT_ID`, or feature flag overrides — anything
-  that varies per slot).
-- **Env loading approach** — how the slot's env gets onto the subprocess.
-  For direnv users: "each slot has a `.envrc`; wrap commands with
-  `direnv exec <slot-dir>`." For plain-dotenv: "each slot has a `.env`;
-  source it before invoking commands." For sops: see the conventions doc.
-- **Provisioning recipe** — how to mint a new slot when the pool is
-  exhausted. For apps with a fixed set of test users: pick one from this
-  list. For apps where users can be created on-demand: an SQL insert + scaffold
-  steps. The recipe runs without human help once authored.
-- **Setup before each run** (optional) — anything that should happen
-  before a run starts beyond the default. Write it in your own words:
-  "create a fresh test user with this SQL," "wipe the events table,"
-  "don't reset any state — runs share state intentionally." The skill
-  reads this as instructions to itself, not as a config file. By default
-  it wipes cookies + localStorage + sessionStorage from the slot's
-  chromium profile (covers cart-state-style leakage); opt out by saying
-  so explicitly, extend by adding your own steps.
-- **Teardown after each run** (optional) — anything that should happen
-  before a slot is returned to the pool: logout endpoints, account
-  cleanup, third-party integrations to reset. There is no default
-  teardown — start-of-next-run setup handles client-side leakage, so
-  this section is purely for server-side state forge can't infer.
-
-### `driver.md` (browser navigation knowledge)
-
-What the driver agent needs to know about *this specific app*:
-- Common routes / URL patterns
-- App structure (this is a planner with these tabs / this is an e-commerce
-  with these flows / etc.)
-- Available test users or personas
-- Known gotchas — UI quirks, timing issues, things that look broken but
-  aren't, anything the driver should be told upfront.
-
-### `author.md`, `spec-writer.md`, `verifier.md`
-
-Usually quite small. Project-specific exceptions to the universal forge
-defaults that ship with the agents. For example:
-- "Our checkout flow can take 30s on slow CI; allow longer waits."
-- "Specs in this project name themselves `<feature>-<scenario>.spec.ts`."
-
-If you don't have any deviations, don't author the file. Defaults apply.
-
-## Tips
-
-- Keep hints **declarative**, not procedural. "Use direnv exec to load env"
-  is better than "first cd into the slot dir, then run direnv allow, then..."
-  The skill knows how to apply a declared pattern.
-- Don't put credentials in hints. Hints are committed. Slot env files (`.env` /
-  `.envrc` / etc.) are gitignored — that's where secrets live, scoped per slot.
-- Don't repeat what's already covered by forge defaults. The agent prompts
-  enforce things like "snippets are idempotent" and "specs are E2E from
-  login" automatically. Only mention them in your hint if your project
-  needs to override them.
-
-## See also
-
-- `plugins/forge/docs/project-conventions.md` in the forge plugin source —
-  full convention details and rationale.
-EOF
-  CREATED+=("forge/hints/README.md")
-else
-  SKIPPED+=("forge/hints/README.md")
-fi
-
-# forge/playwright.config.ts — committed, fallback config for forge specs
-# when the project doesn't have a root-level Playwright runner.
-PW_CONFIG="$FORGE_DIR/playwright.config.ts"
-if [ ! -e "$PW_CONFIG" ]; then
-  cat > "$PW_CONFIG" <<'EOF'
-// Fallback Playwright config for forge specs in this project.
-//
-// Read by forge-pool-run-spec.mjs (and by Stage 4's verifier) when the
-// project has no root-level playwright.config.{ts,js,mjs}. If your project
-// has its own runner — e.g. e2e-tests/playwright.config.ts with custom
-// fixtures, globalSetup, baseURL, etc. — forge-pool-run-spec.mjs will
-// detect and prefer that config; this file is then unused and can stay
-// as-is.
-//
-// Env loading (highest-precedence wins):
-//
-//   1. Process env at config-load time — your shell env (direnv if any) +
-//      any slot env the wrapper injected via spawn { env } when invoked
-//      with --slot <slot>/.env. Already in process.env by the time this
-//      config loads.
-//   2. `forge/.env` — gitignored, scaffolded by /forge init with comments
-//      only. Fill in the keys your hints declare. Re-running /forge init
-//      preserves your values (idempotent).
-//   3. `<project-root>/.env` — loaded if it exists, NOT scaffolded by
-//      forge-init (we can't guarantee a gitignore at the project root
-//      covers it, so we leave it to the user to add intentionally).
-//
-// dotenv's `override: false` default means values already in process.env
-// are preserved, AND values set by an earlier dotenv call aren't clobbered
-// by a later one. So forge/.env is loaded FIRST below — its values win over
-// <project-root>/.env. The keys each spec needs are declared in your
-// project's forge/hints/forge.md.
-//
-// Customize this when you DO want forge specs to use a config but don't
-// want a project-wide one. Common additions:
-//   - globalSetup: './global-setup.ts'      // e.g. clear DB before tests
-//   - globalTeardown: './global-teardown.ts'
-//   - use.baseURL: 'https://your.app/'
-//   - reporter: [['list'], ['html']]
-//   - timeout: 60_000
-//
-// Committed to the repo so teammates pick up the same fallback config.
-import { defineConfig } from '@playwright/test'
-import { config as loadEnv } from 'dotenv'
-import { resolve } from 'node:path'
-
-// Playwright's config loader compiles .ts files as CJS, so __dirname and
-// process are injected automatically. We declare them to satisfy
-// TypeScript without pulling in @types/node as a dep just for this.
-declare const __dirname: string
-declare const process: { env: Record<string, string | undefined> }
-
-// Load forge/.env (forge-specific overrides — wins), then <project-root>/.env
-// (baseline — fills unset keys only). Both resolved from this config's
-// directory so the loading works regardless of the runner's cwd.
-loadEnv({ path: resolve(__dirname, '.env') })
-loadEnv({ path: resolve(__dirname, '..', '.env') })
-
-// FORGE_RECORD=1 enables Playwright's video + trace capture for this run.
-// Set by `forge-pool-run-spec.mjs --record` (used by the verifier teammate
-// in spec mode). If your project has its own playwright config, opt in by
-// checking the same env var — that keeps spec-mode video recordings
-// behaving consistently regardless of which config is in effect.
-const record = process.env.FORGE_RECORD === '1'
-
-export default defineConfig({
-  testDir: './specs',
-  // Pin output to forge/test-results regardless of cwd so test artifacts
-  // (including recorded video.webm + trace.zip) never land in the project
-  // root (where they wouldn't be gitignored).
-  outputDir: resolve(__dirname, 'test-results'),
-  fullyParallel: false,
-  workers: 1,
-  reporter: 'list',
-  use: {
-    video: record ? 'on' : 'off',
-    trace: record ? 'on' : 'off',
-  },
-})
-EOF
-  CREATED+=("forge/playwright.config.ts")
-else
-  SKIPPED+=("forge/playwright.config.ts")
-fi
-
-# forge/.env — gitignored, scaffolded with comments only. Users fill in the
-# keys their hints declare. Re-running /forge init preserves their values
-# (idempotent). Same pattern as hints/README.md — local, regenerated by
-# forge-init when missing.
-ENV_FILE="$FORGE_DIR/.env"
-if [ ! -e "$ENV_FILE" ]; then
-  cat > "$ENV_FILE" <<'EOF'
-# forge-level env, loaded by forge/playwright.config.ts via dotenv.
-# Gitignored. Fill in values declared by your project's forge/hints/forge.md.
-#
-# Loading order, last writer wins (process.env is non-override):
-#   1. Process env at config-load time   — user shell env (direnv if any),
-#                                          plus any slot env the wrapper
-#                                          injected via --slot. HIGHEST.
-#   2. forge/.env (this file)            — forge-specific overrides.
-#   3. <project-root>/.env (if exists)   — project-wide baseline. LOWEST.
-#
-# For genuinely secret credentials (deployed environment access, vault
-# tokens, etc.) that you don't want on disk in plain text: leave them
-# UNSET here and source them from your machine's direnv layer (or another
-# secrets manager). Direnv values land in process.env before this file
-# loads, so they win precedence and nothing secret ends up on disk.
-
-EOF
-  CREATED+=("forge/.env")
-else
-  SKIPPED+=("forge/.env")
-fi
+# Templates use dot-less names so they're visible in the templates dir;
+# scaffold them under their dotted destination names where appropriate.
+scaffold gitignore             .gitignore
+scaffold README.md             README.md
+scaffold hints-README.md       hints/README.md
+scaffold playwright.config.ts  playwright.config.ts
+scaffold env                   .env
 
 # Report
 echo "forge-init: scaffolded $FORGE_DIR"
