@@ -20,7 +20,7 @@
       "id": 2,
       "name": "route-init-natural-install",
       "prompt": "You are testing /forge's routing. Read the SKILL.md at the skill path and apply its Phase 0 dispatch rules + Phase 0a + Phase 0b to determine what would happen if a user typed:\n\n  /forge install forge here\n\nOutput a single JSON object on stdout describing the routing decision, then stop. Use null for fields that don't apply.\n\n{\n  \"route\": \"init\" | \"export\" | \"run\" | \"task\",\n  \"mode\": \"drive\" | \"spec\" | null,\n  \"record_as\": \"<label string>\" | null,\n  \"references_to_load\": [\"<filename>\", ...]\n}",
-      "expected_output": "PENDING. Currently fails \u2014 Phase 0 only matches init by first-word keyword. The desired behavior is for natural-language phrasings like 'install forge here' to also route to init. Will pass once Phase 0 is expanded.",
+      "expected_output": "JSON: { route: 'init', mode: null, record_as: null, references_to_load: ['init.md'] }. Natural-language signal 'install forge here' (install-verb + forge-as-object) triggers init route per Phase 0's natural-language signals section.",
       "files": [],
       "expectations": [
         "Output is valid JSON",
@@ -32,7 +32,7 @@
       "id": 3,
       "name": "route-init-natural-scaffold",
       "prompt": "You are testing /forge's routing. Read the SKILL.md at the skill path and apply its Phase 0 dispatch rules + Phase 0a + Phase 0b to determine what would happen if a user typed:\n\n  /forge scaffold forge in this project\n\nOutput a single JSON object on stdout describing the routing decision, then stop.\n\n{\n  \"route\": \"init\" | \"export\" | \"run\" | \"task\",\n  \"mode\": \"drive\" | \"spec\" | null,\n  \"record_as\": \"<label string>\" | null,\n  \"references_to_load\": [\"<filename>\", ...]\n}",
-      "expected_output": "PENDING. Will pass once Phase 0 supports natural-language init detection.",
+      "expected_output": "JSON: { route: 'init', mode: null, record_as: null, references_to_load: ['init.md'] }. Natural-language signal 'scaffold forge in this project' triggers init route per Phase 0.",
       "files": [],
       "expectations": [
         "Output is valid JSON",
@@ -71,7 +71,7 @@
       "id": 6,
       "name": "route-export-natural-ship",
       "prompt": "You are testing /forge's routing. Read the SKILL.md at the skill path and apply its Phase 0 dispatch rules + Phase 0a + Phase 0b to determine what would happen if a user typed:\n\n  /forge ship this spec for the team to use\n\nOutput a single JSON object on stdout describing the routing decision, then stop.\n\n{\n  \"route\": \"init\" | \"export\" | \"run\" | \"task\",\n  \"mode\": \"drive\" | \"spec\" | null,\n  \"record_as\": \"<label string>\" | null,\n  \"references_to_load\": [\"<filename>\", ...]\n}",
-      "expected_output": "PENDING. Currently routes to task fallthrough because first word isn't 'export'. Desired: natural-language phrasings like 'ship this spec' should route to export. Will pass once Phase 0 is expanded.",
+      "expected_output": "JSON: { route: 'export', mode: null, record_as: null, references_to_load: ['export.md'] }. Natural-language signal 'ship this spec' (ship-verb + spec-reference) triggers export route per Phase 0.",
       "files": [],
       "expectations": [
         "Output is valid JSON",
