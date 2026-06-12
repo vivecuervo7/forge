@@ -24,13 +24,13 @@ Otherwise → **drive mode**. The user wants the action performed; no spec artif
 
 Capture as `MODE` (one of `drive` | `spec`).
 
-**In spec mode only**, also look for a recording label. The verifier always records, but by default the artifact gets a timestamped filename in `forge/videos/`. If the user wants a specific name (typical for before/after comparisons), they'll say so:
+**In spec mode only**, also look for a recording label. The verifier always records; the persisted filename is always `<spec-basename>-<suffix>.webm` under `forge/videos/`. The suffix defaults to a timestamp; a user-supplied label replaces it:
 
-- "record as 'before'" / "record this as after" / "label it AE-1775-before" → capture `RECORD_AS = before` / `after` / `AE-1775-before`
+- "record as 'before'" / "record this as after" / "label it before-fix" → capture `RECORD_AS = before` / `after` / `before-fix`
 - "record a before video" → `RECORD_AS = before` (extract the adjective)
-- No mention → `RECORD_AS = none`, verifier uses the timestamped default
+- No mention → `RECORD_AS = none`, verifier uses the timestamp default
 
-If the user names a label, the file lands at `forge/videos/<label>.webm` and overwrites any existing file with that name (caller-controlled — they asked for it).
+Example: with spec `add-backpack-to-cart-standard.spec.ts` and `RECORD_AS = before`, the file lands at `forge/videos/add-backpack-to-cart-standard-before.webm`. A second run with `RECORD_AS = after` lands at `add-backpack-to-cart-standard-after.webm`. The spec context stays attached so labels stay scoped per spec — multiple specs can each have their own "before" without colliding. Existing files with the same name are overwritten (caller-controlled).
 
 This decision shapes everything downstream:
 

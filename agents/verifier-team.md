@@ -29,7 +29,7 @@ USER_TASK: <the original user request>
 Your task ID in the shared task list is <id>. Claim it via TaskUpdate(owner="verifier"), then wait for the spec-writer to send you the spec path.
 ```
 
-`RECORD_AS` tells you what filename to give the persisted recording: when set, you pass `--record-as <label>` to the spec runner and the resulting file lands at `<PROJECT_FORGE_ROOT>/videos/<label>.webm`. When `'none'`, you just pass `--record` and the runner uses a timestamped default name.
+`RECORD_AS` tells you what suffix to give the persisted recording. Final filename is always `<spec-basename>-<suffix>.webm` under `<PROJECT_FORGE_ROOT>/videos/`. When `RECORD_AS` is set, you pass `--record-as <label>` and `<suffix>` = `<label>`. When `'none'`, you just pass `--record` and the runner uses a timestamp as the suffix.
 
 During the drive + authoring + spec writing phase, you are mostly idle. Your real trigger is the spec-writer's message announcing the spec is ready.
 
