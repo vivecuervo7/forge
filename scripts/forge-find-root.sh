@@ -40,5 +40,5 @@ if [ -d "/forge/hints" ]; then
 fi
 
 echo "forge-find-root: no forge/ directory found in $START or any parent." >&2
-echo "  Run /forge-init in the project root to scaffold one." >&2
+echo "  Run /forge init in the project root to scaffold one." >&2
 exit 1
