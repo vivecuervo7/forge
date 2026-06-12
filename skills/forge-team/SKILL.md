@@ -1,15 +1,37 @@
 ---
 name: forge-team
-description: "Drive browser tasks via the forge agent team — four teammates communicating in mesh (driver, author, spec-writer, verifier). Driver runs in a per-slot chromium with per-slot env injection, scans the snippet library and invokes existing snippets where they match (driving fresh only for novel work). Author writes snippets for novel work and skips invocations. Spec-writer composes a self-contained .spec.ts from the driver's final-state summary. Verifier runs the spec against the still-warm slot to confirm it passes from a cold start; iterates with driver/spec-writer on failure. Walks up from CWD to find the project's forge/ directory, loads hints, claims a pool slot, creates an agent team, manages the team lifecycle."
+description: "Drive browser tasks via the forge agent team. Default (drive mode): driver + author — driver scans the snippet library and invokes matching snippets, author writes snippets for novel work, slot is released. Spec mode (opt-in via `/forge-team spec ...` or natural-language signals like 'create a spec'): adds spec-writer (composes a self-contained .spec.ts) and verifier (runs it from cold start against the still-warm slot, records video). Walks up from CWD to find the project's forge/ directory, loads hints, claims a pool slot, creates an agent team, manages the team lifecycle."
 model: sonnet
 effort: medium
-argument-hint: "<description of the browser task to perform>"
+argument-hint: "[spec] <description of the browser task to perform>"
 allowed-tools: Read, Skill, AskUserQuestion, Bash(bash **/forge/*/scripts/*), Bash(node **/forge/*/scripts/*), Bash(direnv:*), Bash(playwright-cli:*), Bash(mkdir:*), Bash(jq:*), Bash(cat:*), Bash(echo:*), Bash(ls:*), Agent, SendMessage, TeamCreate, TeamDelete, TaskCreate, TaskList, TaskGet, TaskUpdate
 ---
 
 # /forge-team
 
 You are the **team lead** for a forge agent team. You manage the team's lifecycle (session-pool slot, team creation, task coordination, shutdown, cleanup) while teammates do the actual work via mesh communication. **You do not relay content between teammates — they SendMessage each other directly.** Your job is setup, lifecycle, and the user channel.
+
+## Phase 0 — Decide the mode
+
+Before anything else, decide whether this run is **drive mode** (default — just do the thing the user asked for) or **spec mode** (also capture a reproducible Playwright spec for the work).
+
+Spec mode is selected when:
+
+- The first word of the argument is `spec` (case-insensitive). Strip it from the task description before proceeding. Example: `/forge-team spec AE-1775 add a backpack` → spec mode, task = `AE-1775 add a backpack`.
+- OR the task contains a clear spec-authoring intent in natural language: "create a spec", "write a spec", "spec for AE-XXXX", "produce a spec that…", "capture this as a spec", "build a verification spec". Use judgment — phrases that genuinely ask for a spec artifact, not phrases that incidentally mention specs ("the spec is already correct, just drive…").
+
+Otherwise → **drive mode**. The user wants the action performed; no spec artifact required.
+
+Capture as `MODE` (one of `drive` | `spec`). This decision shapes everything downstream:
+
+| Step | drive mode | spec mode |
+|---|---|---|
+| Tasks created in phase 2.3 | 2 (driver, author) | 4 (driver, author, spec-writer, verifier) |
+| Teammates spawned in phase 3 | driver, author | driver, author, spec-writer, verifier |
+| Completion pings to wait for in phase 4 | 2 | 4 |
+| Final report | "drove the task" | "drove the task + verified spec" |
+
+If the user's intent is ambiguous, default to drive mode — spec creation is an explicit opt-in.
 
 ## Prerequisite
 
@@ -128,12 +150,12 @@ This creates the team config at `~/.claude/teams/<TEAM_NAME>/config.json` and sh
 
 ### 2.3. Create the tasks
 
-The team currently has three tasks. Use `TaskCreate`:
+Always create the driver + author tasks. Add the spec-writer + verifier tasks **only in spec mode**.
 
 ```
 TaskCreate(
   subject="drive: <USER_TASK>",
-  description="Drive the user's browser task end-to-end in the slot at <SLOT_DIR>. Scan <FORGE_ROOT>/snippets/ first and invoke matching snippets via forge-pool-invoke-snippet.mjs instead of driving fresh. Narrate each step to `author` as 'invoked X' or 'drove fresh: X'. At end of drive, send `spec-writer` a final-state summary. Mark complete when the drive is finished; stay idle (advisor phase) until shutdown."
+  description="Drive the user's browser task end-to-end in the slot at <SLOT_DIR>. Scan <FORGE_ROOT>/snippets/ first and invoke matching snippets via forge-pool-invoke-snippet.mjs instead of driving fresh. Narrate each step to `author` as 'invoked X' or 'drove fresh: X'. MODE=<MODE>: in spec mode, at end of drive, send `spec-writer` a final-state summary. In drive mode, no spec-writer to message — just ping team-lead and go idle. Mark complete when the drive is finished; stay idle (advisor phase) until shutdown."
 )
 # Note the task ID returned — call it DRIVE_TASK_ID.
 
@@ -142,7 +164,11 @@ TaskCreate(
   description="Receive driver narration via SendMessage. Skip 'invoked' chunks (already in library). For 'drove fresh' chunks, decide which are snippet-worthy and write them to <FORGE_ROOT>/snippets/. Ask driver clarifying questions as needed. Mark complete when drive is done."
 )
 # Note as AUTHOR_TASK_ID.
+```
 
+**If MODE == spec**, also create:
+
+```
 TaskCreate(
   subject="spec-writer: produce self-contained spec from drive",
   description="Wait for driver's final-state summary at end of drive. Compose a self-contained .spec.ts in <FORGE_ROOT>/specs/ that reproduces the user task: import + compose snippets for invoked steps, inline code for fresh-drive steps, assert on captured values. Spec must be runnable from cold start. SendMessage `verifier` the spec path when done. Mark complete after."
@@ -150,8 +176,8 @@ TaskCreate(
 # Note as SPEC_WRITER_TASK_ID.
 
 TaskCreate(
-  subject="verifier: run spec against slot, confirm it passes from cold start",
-  description="Wait for spec-writer's 'spec ready' message. Run the spec via forge-pool-run-spec.mjs --spec <path> --slot <SLOT_DIR>. On pass: report verified-from-fresh to team-lead. On fail: SendMessage driver (selectors) or spec-writer (assertions/imports) for clarification, iterate up to 3 times, then either succeed or escalate. Mark complete when done."
+  subject="verifier: run spec against slot, confirm it passes from cold start, record video",
+  description="Wait for spec-writer's 'spec ready' message. Run the spec via forge-pool-run-spec.mjs --spec <path> --slot <SLOT_DIR> --record. On pass: locate the generated video.webm under <FORGE_ROOT>/test-results/ and include its path in the completion ping to team-lead. On fail: SendMessage driver (selectors) or spec-writer (assertions/imports) for clarification, iterate up to 3 times, then either succeed or escalate. Mark complete when done."
 )
 # Note as VERIFIER_TASK_ID.
 ```
@@ -159,6 +185,8 @@ TaskCreate(
 Don't set ownership in TaskCreate — teammates claim their own tasks.
 
 ## Phase 3 — Spawn the teammates
+
+Always spawn driver + author. In spec mode, also spawn spec-writer + verifier.
 
 ### 3.1. Spawn the driver
 
@@ -168,6 +196,8 @@ Agent(
   team_name="<TEAM_NAME>",
   name="driver",
   prompt="TEAM_NAME: <TEAM_NAME>
+MODE: <MODE>
+SPEC_WRITER_PRESENT: <yes if MODE=spec, else no>
 FORGE_SLOT: <SLOT_DIR>
 SESSION_NAME: <SESSION_NAME>
 PROJECT_FORGE_ROOT: <FORGE_ROOT>
@@ -179,7 +209,7 @@ PROJECT_HINT_DRIVER:
 
 USER_TASK: <user's task verbatim>
 
-Your task ID is <DRIVE_TASK_ID>. Claim it via TaskUpdate(owner='driver', status='in_progress'), then begin driving. SendMessage `author` with structured summaries after meaningful steps. When the drive is done, TaskUpdate status='completed' and go idle — author may have follow-up questions."
+Your task ID is <DRIVE_TASK_ID>. Claim it via TaskUpdate(owner='driver', status='in_progress'), then begin driving. SendMessage `author` with structured summaries after meaningful steps. When SPEC_WRITER_PRESENT=yes, send `spec-writer` a final-state summary at end of drive. When SPEC_WRITER_PRESENT=no, skip that — just TaskUpdate status='completed' and ping team-lead. Then go idle — author may have follow-up questions."
 )
 ```
 
@@ -200,7 +230,7 @@ Your task ID is <AUTHOR_TASK_ID>. Claim it via TaskUpdate(owner='author', status
 )
 ```
 
-### 3.3. Spawn the spec-writer
+### 3.3. Spawn the spec-writer (spec mode only — skip in drive mode)
 
 ```
 Agent(
@@ -219,7 +249,7 @@ Your task ID is <SPEC_WRITER_TASK_ID>. Claim it via TaskUpdate(owner='spec-write
 
 To load `spec-writer.md`, attempt `cat <FORGE_ROOT>/hints/spec-writer.md 2>/dev/null` during phase 1.2; if it doesn't exist, pass `none` as the hint content (the agent will use universal defaults).
 
-### 3.4. Spawn the verifier
+### 3.4. Spawn the verifier (spec mode only — skip in drive mode)
 
 ```
 Agent(
@@ -246,7 +276,7 @@ After spawning, the teammates self-coordinate. You (the lead) wait. Messages fro
 
 **What to watch for:**
 
-- **Completion pings from all four teammates** — this is your primary signal that the team is done. Driver, author, spec-writer, and verifier each SendMessage `team-lead` with a brief `task <id> complete` summary after marking their task `completed` via TaskUpdate. When you've received ALL FOUR pings, proceed to phase 5. Note: the natural order is driver/author → spec-writer → verifier (verifier waits for spec-writer's spec; spec-writer waits for driver's final-state).
+- **Completion pings from the spawned teammates** — this is your primary signal that the team is done. Drive mode: wait for driver + author (2 pings). Spec mode: wait for driver + author + spec-writer + verifier (4 pings). Each teammate SendMessages `team-lead` with a brief `task <id> complete` summary after marking their task `completed` via TaskUpdate. Proceed to phase 5 only after you've received all expected pings. In spec mode, the natural order is driver/author → spec-writer → verifier (verifier waits for spec-writer's spec; spec-writer waits for driver's final-state). In drive mode, driver and author can finish in either order.
 - **Messages addressed to you (`team-lead`)** — process them:
   - **STUCK from any teammate** (driver most commonly) — message is plain text with `STUCK` as the first line, then sections `QUESTION:`, `CONTEXT:`, and optionally `OPTIONS:` (each option as `- <label> | value: <value>`). Surface to the user via `AskUserQuestion`:
     - Build the question from the teammate's `QUESTION:` section.
@@ -265,11 +295,11 @@ After spawning, the teammates self-coordinate. You (the lead) wait. Messages fro
 
 ## Phase 5 — Shut down and clean up
 
-Once all four tasks are `completed` (you've received completion pings from driver, author, spec-writer, AND verifier):
+Once all spawned teammates' tasks are `completed` (drive mode: driver + author; spec mode: driver + author + spec-writer + verifier — you've received the matching completion pings):
 
 ### 5.1. Request shutdown
 
-For each teammate (driver, author, spec-writer, verifier):
+For each teammate you actually spawned (drive mode: driver + author; spec mode: all four):
 
 ```
 SendMessage(
@@ -305,7 +335,9 @@ bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-pool-release.sh <POOL_DIR> <SLOT_DIR>
 
 ### 5.4. Report to the user
 
-Compose a tight summary:
+Compose a tight summary. Drive mode is shorter — no spec/verifier lines.
+
+**Drive mode:**
 
 > Drove via `slot-<persona>`.
 >
@@ -313,13 +345,24 @@ Compose a tight summary:
 >
 > Author wrote N snippet(s):
 >   - <name1> — <description>
->   - <name2> — <description>
+> (or: "Author wrote 0 snippets — drive's work was covered by existing library.")
+>
+> Slot released. Team cleaned up.
+
+**Spec mode:**
+
+> Drove via `slot-<persona>`.
+>
+> <driver's final-result one-liner>
+>
+> Author wrote N snippet(s):
+>   - <name1> — <description>
 > (or: "Author wrote 0 snippets — drive's work was covered by existing library.")
 >
 > Spec-writer wrote `<name>.spec.ts` composing <list of snippets> and asserting <one-liner>.
 > (or: "Spec-writer updated `<name>.spec.ts` in place" / "No new spec — existing one covers this.")
 >
-> Verifier ran `<name>.spec.ts` against `slot-<persona>` — **passed** in <duration>.
+> Verifier ran `<name>.spec.ts` against `slot-<persona>` — **passed** in <duration>. Video: `<path-to-video.webm>`.
 > (or: "Verifier ran spec, FAILED after 3 iterations — escalated. See <details>.")
 >
 > Slot released. Team cleaned up.
@@ -337,6 +380,7 @@ If anything didn't go to plan (a teammate returned `cannot-drive`, the verifier 
 
 ## What this skill DOES do (current capabilities)
 
+- **Two modes**: drive (default, just do the task — driver + author only, fastest path) and spec (opt-in via `/forge-team spec ...` or natural-language signals — adds spec-writer + verifier, produces a verified-from-fresh `.spec.ts` with a video recording).
 - **Pool-aware slot management** — claims a per-persona/per-instance chromium slot, applies the project's provisioning recipe on exhaustion, releases when done.
 - **Hint-driven setup and teardown** — reads `## Setup before each run` and `## Teardown after each run` sections from `hints/forge.md` as natural-language instructions. The default setup is a filesystem-level scrub of cookies + localStorage + sessionStorage from the slot's chromium profile (covers the cart-bug class); projects can opt out, add SQL/curl/shell instructions to run, or describe teardown work forge can't infer.
 - **Mesh agent team** — spawns `driver`, `author`, `spec-writer`, and `verifier` as named teammates that SendMessage each other directly (no lead-mediated relay). Lead handles lifecycle only.

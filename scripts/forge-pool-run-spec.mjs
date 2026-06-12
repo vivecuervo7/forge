@@ -29,7 +29,12 @@
 // specific overrides, etc.
 //
 // Usage:
-//   forge-pool-run-spec.mjs --spec <path> [--slot <slot-dir>] [--headed]
+//   forge-pool-run-spec.mjs --spec <path> [--slot <slot-dir>] [--headed] [--record]
+//
+// --record sets FORGE_RECORD=1 in the spawn env. The forge-scaffolded
+// playwright.config.ts honors this by enabling `use.video = 'on'` and
+// `use.trace = 'on'`; projects with their own config can opt in by
+// checking the same env var. With no opt-in, --record is a no-op.
 //
 // Exit codes:
 //   0   spec passed
@@ -60,6 +65,7 @@ const argv = process.argv.slice(2)
 let specPath = null
 let slot = null
 let headed = false
+let record = false
 
 for (let i = 0; i < argv.length; i++) {
   const arg = argv[i]
@@ -71,6 +77,8 @@ for (let i = 0; i < argv.length; i++) {
     slot = argv[++i]
   } else if (arg === '--headed') {
     headed = true
+  } else if (arg === '--record') {
+    record = true
   } else {
     die(`unknown arg: ${arg}`)
   }
@@ -181,10 +189,16 @@ console.error(`forge-pool-run-spec: using ${mode} runner`)
 // design where direnv is the user's personal layer, not forge's mechanism.
 const slotEnv = loadSlotEnv(slot)
 
+// FORGE_RECORD is read by the forge-scaffolded playwright.config.ts to
+// enable video + trace. User env precedence still wins, so an explicit
+// FORGE_RECORD=0 in the shell can suppress recording even with --record.
+const baseEnv = composedEnv(slotEnv)
+const finalEnv = record ? { FORGE_RECORD: '1', ...baseEnv } : baseEnv
+
 const child = spawn(cmd, cmdArgs, {
   cwd,
   stdio: 'inherit',
-  env: composedEnv(slotEnv),
+  env: finalEnv,
 })
 
 child.on('error', (err) => {
