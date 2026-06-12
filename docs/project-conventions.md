@@ -1,6 +1,6 @@
 # Forge project conventions
 
-How a project structures its forge-related artifacts. Applies to any project that uses forge — sandbox, real apps, single-repo, wrapper-style. The plugin's own working directory will eventually adopt the same shape (after `/forge` absorbs `/forge`).
+How a project structures its forge-related artifacts. Applies to any project that uses forge — sandbox, real apps, single-repo, wrapper-style.
 
 ## The shape
 
@@ -11,16 +11,17 @@ How a project structures its forge-related artifacts. Applies to any project tha
     ├── README.md         # what this directory is, links here
     ├── hints/            # COMMITTED: project hint files
     │   ├── README.md     # local-only, gitignored — author guidance
-    │   ├── forge.md      # consumed by the /forge skill
-    │   ├── driver.md     # consumed by forge:driver
-    │   ├── author.md     # consumed by forge:snippet-author
-    │   ├── spec-writer.md  # consumed by forge:spec-writer
-    │   └── verifier.md   # consumed by forge:spec-verifier
+    │   ├── forge.md           # consumed by the /forge skill
+    │   ├── driver.md          # consumed by forge:driver
+    │   ├── snippet-author.md  # consumed by forge:snippet-author
+    │   ├── spec-writer.md     # consumed by forge:spec-writer
+    │   └── spec-verifier.md   # consumed by forge:spec-verifier
     ├── snippets/         # local: working snippets (auto-authored + curated)
     ├── specs/            # local: spec-writer output, copy wherever you want when ready
     ├── videos/           # local: screen recordings
-    ├── .pool/            # local: pool slots (created lazily when first run claims)
-    └── .transcripts/     # local: session jsonl, gitignored, debug-only
+    ├── playwright.config.ts  # local: fallback Playwright config (scaffolded by /forge init)
+    ├── .env              # local: forge-specific env baseline
+    └── .pool/            # local: pool slots (created lazily when first run claims)
 ```
 
 The project-root `.gitignore` says **nothing** about forge. The `forge/.gitignore` handles it internally.
@@ -128,10 +129,6 @@ multiple clones of this repo).
 
 The skill respects the declared location. Useful for CI (`/tmp/forge-pool/`), shared dev machines, etc.
 
-## Transcript location
-
-`forge/.transcripts/<run-id>.jsonl`. Gitignored. Debug-only — the system doesn't depend on it. Agents communicate live (via SendMessage) in the agent-team architecture; the transcript is the human's reference for post-mortems.
-
 ## Runtime state outside the project
 
 Some forge state is genuinely cross-project user state and lives outside any project's `forge/`:
@@ -149,7 +146,7 @@ Single-repo projects put `forge/` directly in the repo. Wrapper-style projects p
 
 ## Discovery
 
-The `/forge` skill (and future `/forge`) finds the project's forge root by walking up from the current working directory, looking for a `forge/` directory. First one found wins. Same pattern as git looking for `.git/`, npm looking for `node_modules/`. Run forge from anywhere in the project tree and it locates the right context automatically.
+The `/forge` skill finds the project's forge root by walking up from the current working directory, looking for a `forge/hints/` directory. First one found wins. Same pattern as git looking for `.git/`, npm looking for `node_modules/`. Run forge from anywhere in the project tree and it locates the right context automatically.
 
 If no `forge/` is found in the tree, the skill surfaces a helpful error: "no forge/ directory found — run `/forge init` to scaffold one in the current directory."
 
@@ -163,6 +160,5 @@ If no `forge/` is found in the tree, the skill surfaces a helpful error: "no for
 
 ## See also
 
-- `project-forge-session-pool.md` (memory) — design of the pool primitives that consume `forge/.pool/`.
-- `project-forge-agent-team.md` (memory) — design of the multi-agent orchestration that consumes the hints.
-- `session-pool-plan.md` (in this directory) — phased implementation plan.
+- `plugins/forge/README.md` — installation, commands, architecture overview.
+- `plugins/forge/templates/init/` — the scaffold contents `/forge init` writes.

@@ -9,7 +9,7 @@ allowed-tools: Read, Glob, Skill, AskUserQuestion, Bash(bash **/forge/*/scripts/
 
 # /forge
 
-`/forge` is a single skill with four routes. This SKILL.md is a thin router — it parses the route, captures route-specific context, and dispatches to a reference file that contains the actual instructions for that route. Only the reference for the chosen route is loaded; init/export invocations don't pull in team-orchestration content, and task/spec invocations don't pull in scaffold or export logic.
+`/forge` is a single skill with five routes (init, export, run, spec, and the default task route). This SKILL.md is a thin router — it parses the route, captures route-specific context, and dispatches to a reference file that contains the actual instructions for that route. Only the reference for the chosen route is loaded; init/export invocations don't pull in team-orchestration content, and task/spec invocations don't pull in scaffold or export logic.
 
 ## Phase 0 — Pick the route
 
@@ -115,14 +115,3 @@ When passing context into the reference's work, include the captured route-speci
 - **Route keyword recognition is case-insensitive but exact-match on the first word.** `Init` matches `init`. `spec-fixup` does NOT match the `spec` route (it's a fresh task with the word "spec" in it — natural-language detection in phase 0a may still pull it into spec mode, that's fine).
 - **If the user's input is ambiguous about which route they want, ask via AskUserQuestion** rather than guessing. The four routes are distinct enough that the user should be definitive.
 
-## What this skill DOES do
-
-Five routes unified under `/forge`:
-
-- **Drive mode** (`/forge <task>`) — default. Spawns driver + snippet-author teammates. Driver scans the snippet library and invokes matching snippets; snippet-author writes snippets for novel work. Fastest path; no spec artifact.
-- **Spec mode** (`/forge spec <task>` or natural-language signals) — adds spec-writer + spec-verifier. Composes a self-contained `.spec.ts`, runs it from cold start against the still-warm slot to verify it passes. No video recorded — recording is a separate concern, see `/forge run`.
-- **Run** (`/forge run <spec-name | last | latest>`) — re-runs an existing verified spec via `forge-pool-run-spec.mjs`. Optional `record as <label>` produces a video at `forge/videos/<spec>-<label>.webm`. Useful for paired before/after evidence around a fix.
-- **Init** (`/forge init [target-dir]`) — scaffolds the forge/ directory convention. Idempotent.
-- **Export** (`/forge export <spec-name>`) — inlines a composed spec for shipping outside forge/.
-
-For full details on each, follow the reference file the router loads.

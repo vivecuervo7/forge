@@ -4,30 +4,45 @@ A browser-automation team for Claude Code. Forge spawns a small mesh of agents t
 
 The default mode just does the thing you asked for. Spec mode is opt-in for when a flow is worth pinning into CI.
 
-## Install
-
-```bash
-claude plugin marketplace add vivecuervo7/claude-plugins
-claude plugin install forge@vive-claude
-```
-
-Forge depends on Claude Code's **experimental agent teams** primitive. Enable it once:
-
-```bash
-# in ~/.claude/settings.json
-"env": { "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1" }
-```
-
-Then restart Claude Code.
-
-Once a project is forge-init'd (below), the plugin lazy-installs its Playwright runner under `~/.claude/.vive-claude/forge/runner/` on first spec run.
-
 ## Requirements
 
 - **playwright-cli** — `brew install playwright-cli`. Forge wraps it.
 - **macOS or Linux**. Lock file primitives use `flock` (Linux) or `lockf` (macOS).
 - **Node.js** — any recent version (tested on 24).
 - **jq** — used by the pool scripts for state.json edits.
+
+## Quick start
+
+1. **Install the plugin** (one time per machine):
+
+   ```bash
+   claude plugin marketplace add vivecuervo7/claude-plugins
+   claude plugin install forge@vive-claude
+   ```
+
+2. **Enable experimental agent teams** in `~/.claude/settings.json`, then restart Claude Code:
+
+   ```json
+   { "env": { "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1" } }
+   ```
+
+3. **Scaffold your project** from inside it:
+
+   ```
+   /forge init
+   ```
+
+   This creates `forge/` with a `hints/` directory, a fallback Playwright config, and a self-documenting `.gitignore`.
+
+4. **Author `forge/hints/forge.md`** — the only required hint. At a minimum it declares the env contract (which env keys each pool slot needs) and a provisioning recipe (how to mint a new slot). See `forge/hints/README.md` after scaffolding for guidance.
+
+5. **Drive a task:**
+
+   ```
+   /forge log in and add the backpack to the cart
+   ```
+
+The plugin lazy-installs its Playwright runner under `~/.claude/.vive-claude/forge/runner/` on first spec run.
 
 ## Commands
 
@@ -45,14 +60,46 @@ Recording is on demand: `/forge run last spec, record as before` → fix the bug
 
 ## Architecture
 
-Four agents communicate in a mesh via `SendMessage`. The skill spawns them, manages the team lifecycle, and surfaces user-channel events (STUCK escalations, completion pings).
+Four agents communicate in a mesh via `SendMessage`. The `/forge` skill is the **team lead** — it spawns teammates, manages the lifecycle (slot claim, team creation, shutdown), and bridges the user channel for STUCK escalations.
+
+```mermaid
+flowchart LR
+    User([User])
+    Lead[/"/forge skill<br/>(team lead)"/]
+    Driver(["forge:driver"])
+    Author(["forge:snippet-author"])
+    Writer(["forge:spec-writer<br/><i>spec mode only</i>"])
+    Verifier(["forge:spec-verifier<br/><i>spec mode only</i>"])
+    Slot[("chromium slot<br/>+ playwright-cli")]
+    Snippets[("forge/snippets/")]
+    Specs[("forge/specs/")]
+
+    User <-->|"STUCK / report"| Lead
+    Lead -->|spawn| Driver
+    Lead -->|spawn| Author
+    Lead -.->|spawn| Writer
+    Lead -.->|spawn| Verifier
+
+    Driver <-->|"narrate steps"| Author
+    Driver -.->|"final-state"| Writer
+    Writer -.->|"spec ready"| Verifier
+    Verifier -.->|"failures"| Driver
+    Verifier -.->|"failures"| Writer
+
+    Driver -->|"drive / invoke"| Slot
+    Author -->|writes| Snippets
+    Writer -.->|writes| Specs
+    Verifier -.->|runs| Specs
+```
 
 | Agent | Role |
 |---|---|
-| `forge:driver` | Drives the browser via `playwright-cli` against a claimed slot. Invokes existing snippets where they match. |
+| `forge:driver` | Drives the browser via `playwright-cli` against a claimed slot. Invokes existing snippets where they match; drives fresh otherwise. |
 | `forge:snippet-author` | Listens to driver narration during the drive. Writes per-step snippets for novel work into `forge/snippets/`. |
 | `forge:spec-writer` *(spec mode)* | Composes a self-contained `.spec.ts` after the drive completes. Imports snippets for invoked steps; inlines code for fresh-drive steps. |
-| `forge:spec-verifier` *(spec mode)* | Runs the spec via `forge-pool-run-spec.mjs` against the still-warm slot, surfaces pass/fail. Iterates with driver/spec-writer on failure. |
+| `forge:spec-verifier` *(spec mode)* | Runs the spec via `forge-pool-run-spec.mjs` against the still-warm slot, surfaces pass/fail. Iterates with driver / spec-writer on failure. |
+
+Dashed edges fire only in spec mode. Drive mode runs the top two agents (driver + snippet-author) and stops once the task is done — no spec artifact produced.
 
 ## Pool + slot model
 

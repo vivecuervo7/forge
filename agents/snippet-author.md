@@ -52,27 +52,16 @@ TaskUpdate(taskId=<id>, owner="snippet-author", status="in_progress")
 
 Your spawn prompt includes `PROJECT_HINT_SNIPPET_AUTHOR` inline. If it's blank or you want to double-check, you can also Read `<PROJECT_FORGE_ROOT>/hints/snippet-author.md` directly. The hint declares project-specific conventions: snippet naming patterns, things to extract vs not, anything overriding the universal defaults below.
 
-### 3. Build up a picture as driver messages arrive
+### 3. Process driver messages as they arrive
 
-You're not chunking a static transcript — you're listening to a live narrator. Each driver message is one event. Group them mentally into chunks (same logic as the legacy snippet-author would use).
+Each driver SendMessage is one logical step the driver has already chunked for you. Your job is to classify it and act.
 
-**Critical distinction: invoked vs drove-fresh.** Driver narrates one of two kinds of step:
+**Critical distinction: invoked vs drove-fresh.** The `summary` field of the SendMessage tells you which case you're in:
 
-- `"invoked <snippet-name>"` — driver reused an existing library snippet. **Skip these entirely.** They're not candidates for authoring — the snippet already exists. Don't write a duplicate; don't even consider it.
-- `"drove fresh: <what>"` — driver did the step without a snippet (either no match in the library, or the existing snippet was inadequate and driver fell back). These ARE the candidates for new authoring or for updating an existing snippet.
+- `"invoked <snippet-name>"` — driver reused an existing library snippet. Skip — the snippet already exists.
+- `"drove fresh: <what>"` — driver did the step without a snippet (no match in the library, or the existing snippet was inadequate and driver fell back). These are the candidates for new authoring (or for updating an existing snippet).
 
-The `summary` field of each SendMessage tells you which case you're in. Lead with that. If every step in the drive was invocation, you'll write zero snippets — and that's the correct outcome.
-
-- A `goto` to a new domain or page starts a logical step
-- Zero or more interactions (`fill`, `click`, `press`, etc.) do the step
-- A `run-code` that captures a value, OR the chunk ends without one if the step is side-effectful
-
-**Strong chunk boundaries:**
-- Domain transitions (`goto news.ycombinator.com` then later `goto en.wikipedia.org` = two chunks)
-- A successful value extraction followed by a fresh `goto`
-- Explicit driver notes ("got X", "moving on to Y", "this was exploration")
-
-Don't be too clever. If three steps naturally read as "one snippet would do this," they're one chunk. If three concerns, three chunks.
+If every step in the drive was invocation, you'll write zero snippets — and that's the correct outcome.
 
 ### 4. Decide which fresh-drive chunks become snippets
 

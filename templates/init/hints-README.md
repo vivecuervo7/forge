@@ -58,7 +58,7 @@ What the driver agent needs to know about *this specific app*:
 - Known gotchas — UI quirks, timing issues, things that look broken but
   aren't, anything the driver should be told upfront.
 
-### `author.md`, `spec-writer.md`, `verifier.md`
+### `snippet-author.md`, `spec-writer.md`, `spec-verifier.md`
 
 Usually quite small. Project-specific exceptions to the universal forge
 defaults that ship with the agents. For example:
