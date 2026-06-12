@@ -38,12 +38,14 @@ GITIGNORE="$FORGE_DIR/.gitignore"
 if [ ! -e "$GITIGNORE" ]; then
   cat > "$GITIGNORE" <<'EOF'
 # By default, everything in this directory is local to your machine.
-# Snippets, specs pending review, videos, pool state, transcripts — these
-# are working artifacts you build up as you use forge, not things every
-# teammate needs in the repo.
+# The only tracked content is what you explicitly author in hints/ —
+# project-specific knowledge (env contract, provisioning recipes, etc.)
+# that every contributor needs.
 #
-# Hints are the exception: they describe project-specific knowledge that
-# every contributor needs (env contract, provisioning recipes, etc.).
+# Everything else — README.md, playwright.config.ts, .env, snippets,
+# specs, videos, pool state, transcripts, test-results — is regenerated
+# by /forge-init or accreted as you use forge. Each teammate gets a
+# fresh local copy by running /forge-init after clone.
 #
 # If your project has additional artifacts that should be shared (e.g.
 # specific snippets you've curated and want everyone to use), add a
@@ -51,10 +53,8 @@ if [ ! -e "$GITIGNORE" ]; then
 
 *
 !.gitignore
-!README.md
 !hints/
 !hints/**
-!playwright.config.ts
 
 # The hints/ README.md is scaffold-only — local guidance for authoring hints,
 # not project-specific knowledge. Each user gets a fresh copy from /forge-init.
