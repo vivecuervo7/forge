@@ -245,6 +245,10 @@ loadEnv({ path: resolve(__dirname, '..', '.env') })
 
 export default defineConfig({
   testDir: './specs',
+  // Skip exported-form specs (produced by /forge-export) since their composed
+  // siblings already cover the same test. They live alongside the originals
+  // for easy comparison/copying but shouldn't run twice in the same suite.
+  testIgnore: '**/*.exported.spec.ts',
   // Pin output to forge/test-results regardless of cwd so test artifacts
   // never land in the project root (where they wouldn't be gitignored).
   outputDir: resolve(__dirname, 'test-results'),
