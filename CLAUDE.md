@@ -1,6 +1,6 @@
 # Debugging forge sub-agent runs
 
-When forge spawns its sub-agents (`forge:driver`, `forge:author`, `forge:spec-writer`), each gets its own full transcript saved to disk. The parent session sees only the agent's final summary — but the entire internal execution (every tool call, every reasoning step, every file read) is recorded separately.
+When forge spawns its sub-agents (`forge:driver`, `forge:snippet-author`, `forge:spec-writer`, `forge:spec-verifier`), each gets its own full transcript saved to disk. The parent session sees only the agent's final summary — but the entire internal execution (every tool call, every reasoning step, every file read) is recorded separately.
 
 ## Where to look
 
@@ -43,5 +43,5 @@ jq -c 'select(.type == "assistant") | .message.content' <path>
 
 ## What's *not* captured
 
-- `forge:driver` invocations of `playwright-cli` via the registry: the playwright-cli session itself doesn't write to the sub-agent transcript — only the driver's *calls* to it. The browser-side log (drove / invoked / note events) lives in the forge session transcript at `$FORGE_ROOT/sessions/<id>.jsonl`, where `<id>` is the parent `CLAUDE_CODE_SESSION_ID`. The per-run `runs/<id>/` directory holds the browser profile + `state.json`, not the transcript.
+- `forge:driver` invocations of `playwright-cli`: the playwright-cli session itself doesn't write to the sub-agent transcript — only the driver's *calls* to it.
 - Anything the agent decided to `Read` but didn't show in its summary — still recorded in `tool_use_result` blocks within the sub-agent transcript.

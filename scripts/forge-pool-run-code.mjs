@@ -1,10 +1,9 @@
 #!/usr/bin/env node
 // forge-pool-run-code.mjs — playwright-cli run-code with --env injection.
 //
-// Mirrors the --env shim from forge-registry.mjs but parameterized by
-// playwright-cli session name (not FORGE_SESSION / FORGE_ROOT). Designed for
-// the team architecture where slot-bound chromium sessions are managed by
-// the /forge-team skill, not by the legacy registry.
+// Parameterized by playwright-cli session name. Designed for the team
+// architecture where slot-bound chromium sessions are managed by the /forge
+// skill.
 //
 // Why this exists: playwright-cli's run-code sandbox does NOT expose Node's
 // `process` object. Naive `process.env.X` references in user code resolve to

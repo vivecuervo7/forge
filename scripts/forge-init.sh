@@ -85,13 +85,13 @@ them, or the full convention doc in the forge plugin source at
 
 ## Quick reference
 
-| File                  | Consumer                | Typical content                                  |
-|-----------------------|-------------------------|--------------------------------------------------|
-| `hints/forge.md`      | `/forge` skill          | env contract, provisioning recipe, env loading   |
-| `hints/driver.md`     | `forge:driver` agent    | app structure, routes, personas, gotchas         |
-| `hints/author.md`     | `forge:author` agent    | snippet conventions for this project             |
-| `hints/spec-writer.md`| `forge:spec-writer` agent | spec conventions, naming, required imports     |
-| `hints/verifier.md`   | `forge:verifier` agent  | how to verify specs, reset patterns              |
+| File                      | Consumer                       | Typical content                                  |
+|---------------------------|--------------------------------|--------------------------------------------------|
+| `hints/forge.md`          | `/forge` skill                 | env contract, provisioning recipe, setup, teardown |
+| `hints/driver.md`         | `forge:driver` agent           | app structure, routes, personas, gotchas         |
+| `hints/snippet-author.md` | `forge:snippet-author` agent   | snippet conventions for this project             |
+| `hints/spec-writer.md`    | `forge:spec-writer` agent      | spec conventions, naming, required imports       |
+| `hints/spec-verifier.md`  | `forge:spec-verifier` agent    | how to verify specs, reset patterns              |
 
 Minimum-viable hint files are very small. Forge has sensible defaults for
 everything; hints encode only project-specific deviations.
@@ -116,11 +116,11 @@ the per-consumer hint files alongside this README.
 Each hint file is named after the agent or skill that reads it. Forge looks
 for files matching these specific names:
 
-- `forge.md`       — read by the `/forge` (or `/forge-team`) skill
-- `driver.md`      — read by `forge:driver`
-- `author.md`      — read by `forge:author`
-- `spec-writer.md` — read by `forge:spec-writer`
-- `verifier.md`    — read by `forge:verifier`
+- `forge.md`          — read by the `/forge` skill
+- `driver.md`         — read by `forge:driver`
+- `snippet-author.md` — read by `forge:snippet-author`
+- `spec-writer.md`    — read by `forge:spec-writer`
+- `spec-verifier.md`  — read by `forge:spec-verifier`
 
 You don't have to author all of them. Forge has defaults for everything;
 hint files override or augment those defaults for this specific project.

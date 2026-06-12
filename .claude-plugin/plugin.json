@@ -1,10 +1,10 @@
 {
   "name": "forge",
-  "description": "Drive your live browser session from Claude — attach over CDP, invoke replayable snippets, author new ones on demand",
-  "version": "0.10.0-dev",
+  "description": "Browser-automation agent team for Claude Code — drive tasks end-to-end against a pool of chromium slots, accrete reusable snippets, optionally compose verified Playwright specs with video recordings",
+  "version": "0.11.0",
   "author": {
     "name": "Isaac Dedini"
   },
   "license": "MIT",
-  "keywords": ["browser", "playwright", "cdp", "automation", "snippets", "productivity"]
+  "keywords": ["browser", "playwright", "automation", "snippets", "agent-team", "productivity"]
 }
