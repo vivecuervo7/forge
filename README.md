@@ -34,13 +34,14 @@ Once a project is forge-init'd (below), the plugin lazy-installs its Playwright 
 | Command | What it does |
 |---|---|
 | `/forge <task>` | **Drive mode.** Driver + snippet-author. Does the task end-to-end, accretes reusable snippets from novel work. Fastest path. |
-| `/forge spec <task>` | **Spec mode.** Adds spec-writer + spec-verifier. Composes a self-contained `.spec.ts`, runs it from a cold start, records video. |
+| `/forge spec <task>` | **Spec mode.** Adds spec-writer + spec-verifier. Composes a self-contained `.spec.ts` and confirms it passes from a cold start. |
+| `/forge run <spec\|last\|latest>` | Re-runs a verified spec via the standalone runner. Add `record as <label>` to capture a video at `forge/videos/<spec>-<label>.webm`. No team spawned; no slot claimed. |
 | `/forge init` | Scaffolds the `forge/` directory convention into the current project. Idempotent. |
 | `/forge export <spec-name>` | Exports a composed spec to a self-contained inlined form, suitable for shipping into another test suite. |
 
 Spec mode also fires on natural-language signals — "create a spec for AE-1775", "write a spec that…", "capture as a spec". Plain `/forge <task>` is the unambiguous drive case.
 
-Add `record as <label>` to spec mode and the verifier's video lands at `forge/videos/<spec-basename>-<label>.webm`. Without a label, the suffix is a timestamp. Re-running with the same label overwrites — useful for before/after comparisons against the same spec.
+Recording is on demand: `/forge run last spec, record as before` → fix the bug → `/forge run last spec, record as after` → attach both videos to the PR. The same spec produces paired evidence.
 
 ## Architecture
 
@@ -51,7 +52,7 @@ Four agents communicate in a mesh via `SendMessage`. The skill spawns them, mana
 | `forge:driver` | Drives the browser via `playwright-cli` against a claimed slot. Invokes existing snippets where they match. |
 | `forge:snippet-author` | Listens to driver narration during the drive. Writes per-step snippets for novel work into `forge/snippets/`. |
 | `forge:spec-writer` *(spec mode)* | Composes a self-contained `.spec.ts` after the drive completes. Imports snippets for invoked steps; inlines code for fresh-drive steps. |
-| `forge:spec-verifier` *(spec mode)* | Runs the spec via `forge-pool-run-spec.mjs` against the still-warm slot, records video, surfaces pass/fail. Iterates with driver/spec-writer on failure. |
+| `forge:spec-verifier` *(spec mode)* | Runs the spec via `forge-pool-run-spec.mjs` against the still-warm slot, surfaces pass/fail. Iterates with driver/spec-writer on failure. |
 
 ## Pool + slot model
 
@@ -118,7 +119,7 @@ The default scrub fires unless the hint says not to. `## Teardown after each run
 │   └── ...
 ├── snippets/               # gitignored by default — accreted via author
 ├── specs/                  # gitignored — composed during spec mode
-├── videos/                 # gitignored — verifier recordings
+├── videos/                 # gitignored — recordings from /forge run
 ├── .env                    # gitignored — forge-specific env
 ├── playwright.config.ts    # scaffold — fallback if no project runner
 └── .gitignore              # self-ignores; only hints/ tracked by default
@@ -142,7 +143,7 @@ User shell env (e.g. `direnv` with 1Password injecting `OP_TOKEN`) sits on top �
 - **PR / GitHub flows.** "Paste the GIF at `~/Desktop/demo.gif` into PR #42's description."
 - **Multi-step forms.** JIRA submissions, expense reports, deploy approval pages.
 - **Triage + verification.** "Open the dashboard, check the error count, screenshot anything > 50."
-- **Bug repro + verification specs.** `/forge spec AE-1775 record as before` then again with `record as after` to produce a paired before/after recording bound to the spec.
+- **Bug repro + verification specs.** `/forge spec AE-1775 add backpack` to author the spec, then `/forge run last spec, record as before` → fix bug → `/forge run last spec, record as after`. Paired evidence for the PR.
 
 ## License
 

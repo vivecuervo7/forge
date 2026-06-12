@@ -44,8 +44,6 @@ For task and spec routes, you also need to set `MODE` before loading the referen
 
 Otherwise → **drive mode**. The user wants the action performed; no spec artifact required. If intent is ambiguous, default to drive — spec creation is an explicit opt-in.
 
-Spec mode does **not** record video — the verifier just confirms the spec passes from cold start. Recording is a separate concern handled by `/forge run` (below).
-
 ## Phase 0b — Recording label detection (run route only)
 
 For the run route, look for a recording label in the args:
@@ -56,7 +54,7 @@ For the run route, look for a recording label in the args:
 
 The persisted recording filename is always `<spec-basename>-<suffix>.webm` under `forge/videos/`. Suffix is the user-supplied label or a timestamp default. Spec context stays attached so multiple specs can each have their own "before" without colliding. Existing files with the same name are overwritten — caller-controlled.
 
-Recording lives under `/forge run` (not spec mode) because recordings are evidence — the same verified spec might be run twice (before and after a bug fix) to produce paired videos. Tying recording to the spec-authoring run would force re-authoring whenever you wanted fresh evidence.
+Recording is opt-in evidence: the same spec can be run multiple times with different labels for paired before/after videos around a bug fix.
 
 ## Phase 1 — Load the route's reference
 
