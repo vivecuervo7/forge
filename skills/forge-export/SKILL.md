@@ -1,10 +1,10 @@
 ---
 name: forge-export
-description: "Export a composed forge spec to a self-contained inlined form, suitable for shipping into another project's test suite. Wraps forge-export-spec.mjs with sensible defaults (output lands beside the composed spec as `<name>.exported.spec.ts`). Triggers on `/forge-export <spec-name>` slash invocation."
+description: "Export a composed forge spec to a self-contained inlined form, suitable for shipping into another project's test suite. Wraps forge-export-spec.mjs with sensible defaults (output lands at <project-root>/forge-exports/<name>.spec.ts, outside the gitignored forge/ directory). Triggers on `/forge-export <spec-name>` slash invocation."
 model: haiku
 effort: low
-argument-hint: "<spec-name>"
-allowed-tools: Read, Glob, Bash(node **/forge/*/scripts/*), Bash(bash **/forge/*/scripts/*), Bash(ls:*), Bash(cat:*), AskUserQuestion
+argument-hint: "<spec-name> [--output <path>]"
+allowed-tools: Read, Glob, Bash(node **/forge/*/scripts/*), Bash(bash **/forge/*/scripts/*), Bash(ls:*), Bash(cat:*), Bash(mkdir:*), AskUserQuestion
 ---
 
 # /forge-export
@@ -16,13 +16,12 @@ Export a composed forge spec (the working artifact that imports from `forge/snip
 1. Walks up from CWD to find the project's `forge/` directory.
 2. Lists specs in `<forge>/specs/`. If no spec name was provided as an argument, surfaces the list via AskUserQuestion so the user can pick.
 3. Resolves the spec path: `<forge>/specs/<name>.spec.ts`.
-4. Computes the default output path: `<forge>/specs/<name>.exported.spec.ts` (sibling to the original, with `.exported` infix).
-5. Invokes `forge-export-spec.mjs --spec <input> --output <output> --force`.
-6. Reports the outcome.
+4. Computes the default output path: `<project-root>/forge-exports/<name>.spec.ts` — **outside** the gitignored `forge/` directory, so the exported spec is naturally trackable by the project's main `.gitignore` policy (the user decides whether to commit). The user can override with `--output <path>` to drop the spec directly into their project's main test suite (e.g. `e2e-tests/cart.spec.ts`).
+5. Creates the output's parent directory if it doesn't exist.
+6. Invokes `forge-export-spec.mjs --spec <input> --output <output> --force`.
+7. Reports the outcome.
 
-The exported file is gitignored along with everything else in `forge/`. To ship the spec into your project's main test suite, copy it from `forge/specs/<name>.exported.spec.ts` to wherever your test runner looks.
-
-The scaffolded `forge/playwright.config.ts` has `testIgnore: '**/*.exported.spec.ts'`, so the forge runner only runs the composed versions — the exported ones sit beside their originals for easy inspection without doubling up the test run.
+The exported spec lives outside `forge/` deliberately — the composed form (working artifact, evolves with library) stays in the gitignored `forge/specs/`; the exported form (shipping artifact, frozen snapshot) lives where your project's normal source-control policy applies.
 
 ## Phase 1 — Discovery
 
@@ -42,9 +41,7 @@ Capture as `FORGE_ROOT`.
 ls <FORGE_ROOT>/specs/*.spec.ts 2>/dev/null
 ```
 
-Filter out anything ending in `.exported.spec.ts` (those are already exported).
-
-If no composed specs exist, surface: *"No specs found in `<FORGE_ROOT>/specs/`. Run `/forge-team <task>` to produce one first."* and stop.
+If no specs exist, surface: *"No specs found in `<FORGE_ROOT>/specs/`. Run `/forge-team <task>` to produce one first."* and stop.
 
 ## Phase 2 — Resolve the target spec
 
@@ -80,10 +77,22 @@ If there are more than 4, mention this in the question text and show the first 3
 
 ## Phase 3 — Export
 
+Compute paths:
+- `PROJECT_ROOT` = `dirname(FORGE_ROOT)` (the directory containing `forge/`)
+- `OUTPUT_PATH` = `<PROJECT_ROOT>/forge-exports/<name>.spec.ts` (default), OR the `--output` value if the user passed one
+
+Ensure the output's parent directory exists:
+
+```bash
+mkdir -p "$(dirname OUTPUT_PATH)"
+```
+
+Then export:
+
 ```bash
 node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-export-spec.mjs \
   --spec <FORGE_ROOT>/specs/<name>.spec.ts \
-  --output <FORGE_ROOT>/specs/<name>.exported.spec.ts \
+  --output <OUTPUT_PATH> \
   --force
 ```
 
@@ -93,24 +102,23 @@ node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-export-spec.mjs \
 
 Surface a tight summary:
 
-> Exported `<name>.spec.ts` → `<name>.exported.spec.ts` (sibling, in `forge/specs/`).
+> Exported `<name>.spec.ts` → `<output-relative-to-project-root>`.
 >
 > Inlined N snippets: <list>.
 >
-> Both files are gitignored. To ship into your project's main test suite, copy the `.exported.spec.ts` to wherever your project keeps its E2E tests. It only needs `@playwright/test` to run — no forge dependency, no snippets directory.
+> The exported spec lives outside `forge/` so it's trackable by your project's normal git policy. It only needs `@playwright/test` to run — no forge dependency, no snippets directory. To ship into your project's main test suite, either commit `forge-exports/` to your repo, or re-run /forge-export with `--output <your-test-suite-path>` to drop the spec directly where your tests live.
 
 If forge-export-spec.mjs returned a non-zero exit code, surface its error message verbatim and don't claim success.
 
 ## Hard rules
 
 - **You are a thin wrapper.** All the transformation logic lives in `forge-export-spec.mjs`. This skill exists for UX — path defaulting, spec listing, friendly error surfaces. Don't try to inline logic the script already handles.
-- **Default output location is canonical.** `<FORGE_ROOT>/specs/<name>.exported.spec.ts`. Only deviate if the user passed an explicit `--output` override (not supported in v1; could be added later).
-- **Don't write files yourself.** The script writes the output. You just invoke it and report.
+- **Default output location is canonical.** `<PROJECT_ROOT>/forge-exports/<name>.spec.ts`. Only deviate if the user passed an explicit `--output` override.
+- **Don't write files yourself.** The script writes the output. You just invoke it and report. You DO `mkdir -p` the output's parent directory if needed — the script doesn't create directories.
 - **Surface script errors verbatim.** If `forge-export-spec.mjs` fails, the user needs to see the exact reason (missing spec, no snippet imports, etc.).
 
 ## Failure modes
 
 - **Spec doesn't exist under `forge/specs/`** — surface "spec not found" with the list of available specs.
-- **Spec is already an exported one** (ends in `.exported.spec.ts`) — surface "that's an exported spec; you probably meant `<name without .exported>`".
 - **No `forge/` directory** — surface forge-find-root.sh's error and instruct user to run `/forge-init`.
 - **`forge-export-spec.mjs` reports no snippet imports** — surface its message; the spec is already inlined (or wasn't composed in the first place).
