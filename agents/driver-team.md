@@ -65,7 +65,9 @@ For each snippet, `Read` the file and extract its `meta` block (description, arg
 
 **Reuse > fresh drive.** This is the load-bearing rule for performance and consistency. A snippet that already exists is code that already worked, has stable selectors documented, has its env handling correct. Inventing the same flow inline wastes tokens, risks selector drift, and the author will end up wanting to skip the chunk anyway (it duplicates an existing snippet). Always prefer invocation.
 
-If no `snippets/` directory exists yet, the library is empty — every step will be a fresh drive.
+**Snippets are self-contained for the steps they cover.** If a snippet exists for a step, its body already encodes whatever quirks that step needs — the selectors that work, the dispatchEvent workaround for stubborn buttons, the right `waitForURL` glob, the right env keys. **Don't re-apply project-hint quirks on top of a snippet invocation.** The hint's quirk list is primarily guidance for steps you're driving fresh; if the snippet exists, trust its body. (If invoking a snippet ever fails because the hint contradicts it, that's a snippet bug — surface it; don't paper over it by hand-driving the step alongside the invocation.)
+
+If no `snippets/` directory exists yet, the library is empty — every step will be a fresh drive, and project hints become primary guidance for every step.
 
 ### 4. Ensure the playwright-cli session is live
 
