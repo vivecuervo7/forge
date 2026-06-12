@@ -1,6 +1,6 @@
 ---
 name: forge-team
-description: "Drive browser tasks via the forge agent team — three teammates communicating in mesh (driver, author, spec-writer). Driver runs in a per-slot chromium with per-slot env injection, scans the snippet library and invokes existing snippets where they match (driving fresh only for novel work). Author writes snippets for novel work and skips invocations. Spec-writer composes a self-contained .spec.ts from the driver's final-state summary. Walks up from CWD to find the project's forge/ directory, loads hints, claims a pool slot, creates an agent team, manages the team lifecycle. Verifier teammate lands in Stage 4."
+description: "Drive browser tasks via the forge agent team — four teammates communicating in mesh (driver, author, spec-writer, verifier). Driver runs in a per-slot chromium with per-slot env injection, scans the snippet library and invokes existing snippets where they match (driving fresh only for novel work). Author writes snippets for novel work and skips invocations. Spec-writer composes a self-contained .spec.ts from the driver's final-state summary. Verifier runs the spec against the still-warm slot to confirm it passes from a cold start; iterates with driver/spec-writer on failure. Walks up from CWD to find the project's forge/ directory, loads hints, claims a pool slot, creates an agent team, manages the team lifecycle."
 model: sonnet
 effort: medium
 argument-hint: "<description of the browser task to perform>"
@@ -38,9 +38,10 @@ cat <FORGE_ROOT>/hints/forge.md
 cat <FORGE_ROOT>/hints/driver.md
 cat <FORGE_ROOT>/hints/author.md
 cat <FORGE_ROOT>/hints/spec-writer.md 2>/dev/null || echo "(no spec-writer.md — using defaults)"
+cat <FORGE_ROOT>/hints/verifier.md 2>/dev/null || echo "(no verifier.md — using defaults)"
 ```
 
-Capture all four contents — you'll inline them in the spawn prompts so teammates don't need to read the files themselves.
+Capture all five contents — you'll inline them in the spawn prompts so teammates don't need to read the files themselves.
 
 If `forge.md` is missing, fail with: "missing forge/hints/forge.md — required to know how to set up env injection and the pool." Other hints are optional (teammates use defaults).
 
@@ -121,9 +122,15 @@ TaskCreate(
 
 TaskCreate(
   subject="spec-writer: produce self-contained spec from drive",
-  description="Wait for driver's final-state summary at end of drive. Compose a self-contained .spec.ts in <FORGE_ROOT>/specs/ that reproduces the user task: import + compose snippets for invoked steps, inline code for fresh-drive steps, assert on captured values. Spec must be runnable from cold start. Mark complete when written."
+  description="Wait for driver's final-state summary at end of drive. Compose a self-contained .spec.ts in <FORGE_ROOT>/specs/ that reproduces the user task: import + compose snippets for invoked steps, inline code for fresh-drive steps, assert on captured values. Spec must be runnable from cold start. SendMessage `verifier` the spec path when done. Mark complete after."
 )
 # Note as SPEC_WRITER_TASK_ID.
+
+TaskCreate(
+  subject="verifier: run spec against slot, confirm it passes from cold start",
+  description="Wait for spec-writer's 'spec ready' message. Run the spec via forge-pool-run-spec.mjs --spec <path> --slot <SLOT_DIR>. On pass: report verified-from-fresh to team-lead. On fail: SendMessage driver (selectors) or spec-writer (assertions/imports) for clarification, iterate up to 3 times, then either succeed or escalate. Mark complete when done."
+)
+# Note as VERIFIER_TASK_ID.
 ```
 
 Don't set ownership in TaskCreate — teammates claim their own tasks.
@@ -183,11 +190,32 @@ USER_TASK: <user's task verbatim>
 PROJECT_HINT_SPEC_WRITER:
 <spec-writer.md contents from <FORGE_ROOT>/hints/spec-writer.md, or 'none' if missing>
 
-Your task ID is <SPEC_WRITER_TASK_ID>. Claim it via TaskUpdate(owner='spec-writer', status='in_progress'). Wait for driver's final-state message at end of drive. Write a self-contained .spec.ts to <FORGE_ROOT>/specs/ that composes snippets for invoked steps and inlines code for fresh-drive steps. Add assertions on captured values. Mark task complete when written."
+Your task ID is <SPEC_WRITER_TASK_ID>. Claim it via TaskUpdate(owner='spec-writer', status='in_progress'). Wait for driver's final-state message at end of drive. Write a self-contained .spec.ts to <FORGE_ROOT>/specs/ that composes snippets for invoked steps and inlines code for fresh-drive steps. Add assertions on captured values. When done, SendMessage `verifier` with the spec path so they can verify it. Mark task complete after."
 )
 ```
 
 To load `spec-writer.md`, attempt `cat <FORGE_ROOT>/hints/spec-writer.md 2>/dev/null` during phase 1.2; if it doesn't exist, pass `none` as the hint content (the agent will use universal defaults).
+
+### 3.4. Spawn the verifier
+
+```
+Agent(
+  subagent_type="forge:verifier-team",
+  team_name="<TEAM_NAME>",
+  name="verifier",
+  prompt="TEAM_NAME: <TEAM_NAME>
+PROJECT_FORGE_ROOT: <FORGE_ROOT>
+FORGE_SLOT: <SLOT_DIR>
+PLUGIN_ROOT: ${CLAUDE_PLUGIN_ROOT}
+USER_TASK: <user's task verbatim>
+PROJECT_HINT_VERIFIER:
+<verifier.md contents from <FORGE_ROOT>/hints/verifier.md, or 'none' if missing>
+
+Your task ID is <VERIFIER_TASK_ID>. Claim it via TaskUpdate(owner='verifier', status='in_progress'). Wait for spec-writer's 'spec ready' message. Run the spec via forge-pool-run-spec.mjs --spec <path> --slot <FORGE_SLOT>. On pass, ping team-lead with verified-from-fresh status. On fail, ask driver (selectors) or spec-writer (assertions) for clarification, iterate up to 3 times, then succeed or escalate."
+)
+```
+
+(Add `cat <FORGE_ROOT>/hints/verifier.md 2>/dev/null` to phase 1.2's hint loading — same pattern as spec-writer.md.)
 
 ## Phase 4 — Wait for team to finish
 
@@ -195,7 +223,7 @@ After spawning, the teammates self-coordinate. You (the lead) wait. Messages fro
 
 **What to watch for:**
 
-- **Completion pings from all three teammates** — this is your primary signal that the team is done. Driver, author, and spec-writer each SendMessage `team-lead` with a brief `task <id> complete` summary after marking their task `completed` via TaskUpdate. When you've received ALL THREE pings, proceed to phase 5. Note: spec-writer's ping arrives last (they wait for driver's final-state message before composing the spec).
+- **Completion pings from all four teammates** — this is your primary signal that the team is done. Driver, author, spec-writer, and verifier each SendMessage `team-lead` with a brief `task <id> complete` summary after marking their task `completed` via TaskUpdate. When you've received ALL FOUR pings, proceed to phase 5. Note: the natural order is driver/author → spec-writer → verifier (verifier waits for spec-writer's spec; spec-writer waits for driver's final-state).
 - **Messages addressed to you (`team-lead`)** — process them:
   - `STUCK: ...` from driver → surface to user, get user response, SendMessage back to driver (Stage 5 work; if it happens in Stage 3a, just surface the question and tell the user the team is paused).
   - Status updates / questions from teammates → answer concisely or relay relevant context.
@@ -208,11 +236,11 @@ After spawning, the teammates self-coordinate. You (the lead) wait. Messages fro
 
 ## Phase 5 — Shut down and clean up
 
-Once all three tasks are `completed` (you've received completion pings from driver, author, AND spec-writer):
+Once all four tasks are `completed` (you've received completion pings from driver, author, spec-writer, AND verifier):
 
 ### 5.1. Request shutdown
 
-For each teammate (driver, author, spec-writer):
+For each teammate (driver, author, spec-writer, verifier):
 
 ```
 SendMessage(
@@ -256,13 +284,16 @@ Compose a tight summary:
 > Spec-writer wrote `<name>.spec.ts` composing <list of snippets> and asserting <one-liner>.
 > (or: "Spec-writer updated `<name>.spec.ts` in place" / "No new spec — existing one covers this.")
 >
+> Verifier ran `<name>.spec.ts` against `slot-<persona>` — **passed** in <duration>.
+> (or: "Verifier ran spec, FAILED after 3 iterations — escalated. See <details>.")
+>
 > Slot released. Team cleaned up.
 
 If anything didn't go to plan (a teammate returned `cannot-drive`, the verifier escalated, snippet invocation failed mid-drive, etc.), surface that prominently — the user wants the truth, not a sanitized success report.
 
 ## Hard rules
 
-- **You are an orchestrator, not an actor.** All browser driving belongs to `driver`. Snippet authoring belongs to `author`. Spec writing belongs to `spec-writer`. You set up the team, create tasks, spawn teammates, manage the lifecycle, handle the user channel. You do NOT invoke `playwright-cli` yourself, write snippet or spec files, or message-relay between teammates.
+- **You are an orchestrator, not an actor.** All browser driving belongs to `driver`. Snippet authoring belongs to `author`. Spec writing belongs to `spec-writer`. Spec verification belongs to `verifier`. You set up the team, create tasks, spawn teammates, manage the lifecycle, handle the user channel. You do NOT invoke `playwright-cli` yourself, write snippet or spec files, run specs, or message-relay between teammates.
 - **Teammates message each other directly.** Do NOT parse driver messages and forward to author — they're already addressed to author directly. You only handle messages explicitly addressed to `team-lead`.
 - **Always release the slot.** Even if the drive returned `cannot-drive` or a teammate rejected shutdown, eventually call `forge-pool-release.sh`. Leaving a slot perpetually checked out wastes capacity.
 - **Always TeamDelete.** Don't leave team config files lying around in `~/.claude/teams/`.
@@ -272,14 +303,14 @@ If anything didn't go to plan (a teammate returned `cannot-drive`, the verifier 
 ## What this skill DOES do (current capabilities)
 
 - **Pool-aware slot management** — claims a per-persona/per-instance chromium slot, applies the project's provisioning recipe on exhaustion, releases with cookie + localStorage + sessionStorage wipe.
-- **Mesh agent team** — spawns `driver`, `author`, and `spec-writer` as named teammates that SendMessage each other directly (no lead-mediated relay). Lead handles lifecycle only.
+- **Mesh agent team** — spawns `driver`, `author`, `spec-writer`, and `verifier` as named teammates that SendMessage each other directly (no lead-mediated relay). Lead handles lifecycle only.
 - **Snippet library reuse** — driver scans `<PROJECT_FORGE_ROOT>/snippets/` at planning time and invokes existing snippets via `forge-pool-invoke-snippet.mjs` instead of re-driving. Author skips invoked steps (no duplicates) and may patch existing snippets in place when driver's narration reveals a latent bug.
 - **Snippet authoring discipline** — author only writes snippets for fresh-drive steps (no library coverage). Library grows from successful novel work; never duplicates.
 - **Spec generation that composes the library** — spec-writer receives driver's final-state summary and writes a self-contained `.spec.ts` to `<PROJECT_FORGE_ROOT>/specs/`. Invoked steps become `snippet.run()` calls; fresh-drive steps become inline code; captured values become `expect()` assertions.
+- **In-slot spec verification** — verifier runs the spec via `forge-pool-run-spec.mjs` against the still-warm slot before slot release. On pass, the spec is verified-from-fresh. On fail, verifier asks driver (selectors) or spec-writer (assertions) for clarification and iterates up to 3 times before escalating.
 
 ## What this skill does NOT do (yet)
 
-- **No verifier teammate.** Stage 4 adds `forge:verifier-team` and the in-slot advisor-phase verification loop — verifier runs the spec against the still-warm slot, asks driver/spec-writer questions on failure, iterates until pass.
 - **No user escalation channel for stuck-driver scenarios.** Stage 5. If the driver SendMessages you `STUCK: ...`, surface it manually and pause the team.
 - **No parallel-runs handling beyond what the pool already provides.** Stage 6 stress-tests concurrent invocations.
 
