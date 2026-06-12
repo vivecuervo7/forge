@@ -2,18 +2,45 @@
 
 Regression coverage for `/forge` prompt edits, in [skill-creator](https://github.com/anthropics/skills/tree/main/skills/skill-creator) format.
 
-## Design principle: routing-focused
+## Three suites, distinct purposes
 
-These evals check **decisions**, not **artifacts**. Each case asserts on:
+The 25 cases in `evals.json` are organised by `s1-` / `s2-` / `s3-` name prefix and intended to be run as **three logical suites in order**. Skill-creator's runner doesn't natively understand suite separation, so the convention lives in the case names and is documented here.
 
-- Which route Phase 0 selected (init / export / spec / drive)
-- Which references the lead loaded
-- Which subagents got spawned
-- Which flags propagated through to script invocations
+### Suite 1 — Routing decisions (cases `s1-*`, 19 cases)
 
-They do **not** assert on what got written to disk, whether snippets accreted, or whether the spec-verifier passed from cold start. Those outcomes depend on what's already in the sandbox (existing snippets, prior specs, etc.) — they're state-sensitive in ways that make repeatable evals brittle. We leave them to manual testing where state can be controlled by hand.
+Pure stateless tests. Each subagent reads `SKILL.md`, applies Phase 0 / 0a / 0b to a given user prompt, and outputs a JSON object describing the routing decision. **No execution happens** — no /forge teammate is spawned, no script is invoked, no sandbox state is touched.
 
-Where an invariant artifact check is safe to include (e.g. "if a spec file is produced, it doesn't contain literal credentials"), the expectation is conditional — it only fires when the artifact exists, so the case stays stateless.
+Safe to parallelise. Cheap (~$0.05/case at low temperature). Re-runs in isolation; no fixture setup needed.
+
+Catches: Phase 0 dispatch regressions (route detection), Phase 0a mode-detection drift (drive vs spec), Phase 0b label-parsing drift (RECORD_AS extraction), case-sensitivity issues, false-positive elevations (e.g. "record" or "spec" in incidental context).
+
+Cases 2, 3, and 6 are marked **PENDING** in their `expected_output` — they test desired natural-language detection for init/export routes, which Phase 0 doesn't yet support. They fail today by design; will turn green when Phase 0 is expanded. TDD spec for that follow-up.
+
+### Suite 2 — Full chain happy path (case `s2-*`, 1 case)
+
+One end-to-end execution against the sandbox in baseline state. Spec mode runs the full team — driver invokes existing snippets, snippet-author writes (or doesn't, if covered), spec-writer composes (or updates), spec-verifier confirms pass from cold start.
+
+Designed to be **idempotent**: convergent on 3 snippets at end regardless of starting count. Sandbox can be in baseline state (3 snippets) or even empty (0 snippets) — either way, after this case runs, 3 snippets exist with semantically-correct names. Re-running is safe.
+
+Catches: full team mechanism regressions, library-reuse discipline, spec verification end-to-end, slot lifecycle.
+
+### Suite 3 — Skill-routed scripts (cases `s3-*`, 5 cases)
+
+Skill-routed cases that exercise the script-bound paths (run, export) without spawning a team. The user-facing surface IS `/forge`, but these routes are team-less by design — they invoke `forge-pool-run-spec.mjs` and `forge-export-spec.mjs` directly.
+
+Safe to parallelise. No slot claim happens (the runner uses Playwright's ephemeral browser; credentials come from `forge/.env`).
+
+Catches: `/forge run` route behavior (verification-only, labeled recording, `last` resolution), `/forge export` route behavior (default output path, override), and the recording filename convention.
+
+### Ordering
+
+Cases within a suite are independent. Between suites, the recommended order is **1 → 2 → 3** because:
+
+- Suite 1 doesn't execute, so it never mutates state.
+- Suite 2 is idempotent against the sandbox — it always converges to "3 snippets present" regardless of start.
+- Suite 3 may add files to `forge/videos/` and `<project>/forge-exports/` but doesn't touch snippets or specs.
+
+Re-runs across iterations don't require a sandbox reset. The suite is genuinely repeatable.
 
 ## Running
 
@@ -23,52 +50,19 @@ Exercise via `/skill-creator`'s eval runner. From a Claude Code session:
 /skill-creator run the evals for /forge against the sandbox at ~/repos/forge-tests/
 ```
 
-Skill-creator handles the runner machinery (subagent spawning, baseline comparison, grading, HTML viewer). Don't reinvent it here.
-
-Because each case is routing-focused and stateless, cases can run in parallel safely. No fixture reset script is required between cases or between iterations.
-
-## Cases
-
-| # | Name | What's tested |
-|---|---|---|
-| 1 | `route-init-keyword` | `/forge init` → init route detected; `init.md` loaded; `forge-init.sh` invoked |
-| 2 | `route-init-natural-PENDING-PHASE0` | `/forge install forge here` → init via natural language *(currently fails)* |
-| 3 | `route-export-keyword` | `/forge export <name>` → export route; `export.md` loaded; `forge-export-spec.mjs` invoked; if a file was produced it inlines snippets |
-| 4 | `route-export-natural-PENDING-PHASE0` | `/forge export the spec from latest recording` → export via natural language *(currently fails)* |
-| 5 | `mode-spec-keyword` | `/forge spec <task>` → spec mode; 4 teammates spawned; no literal credentials in any spec produced |
-| 6 | `mode-spec-natural` | `/forge create a spec for...` → spec mode via natural language; same downstream as case 5 |
-| 7 | `mode-drive-default` | Bare drive task → drive mode; exactly 2 teammates; no spec-writer or spec-verifier |
-| 8 | `mode-drive-incidental-spec` | Task with negated "spec" mention → drive mode (no false-positive elevation) |
-| 9 | `mode-drive-record-keyword` | Task with colloquial "record" mention → drive mode; no `--record` flag reaches any script |
-| 10 | `record-as-label-capture` | `/forge spec X, record as before` → RECORD_AS=before captured; `--record-as before` reaches the spec runner |
-
-Cases 2 and 4 are marked `PENDING-PHASE0`. They test desired natural-language detection for init/export routes, which `SKILL.md`'s Phase 0 doesn't yet support. They serve as TDD-style spec for the follow-up Phase 0 expansion commit — they fail today, turn green when Phase 0 is expanded.
-
-## What moves to manual testing
-
-The evals deliberately don't cover these — they're state-sensitive enough that automating them produces more false alarms than real signal. Run them by hand against the sandbox when prompt edits touch the relevant agents:
-
-- **Snippet authoring discipline.** Does snippet-author actually write per-step snippets when the work is novel? Verify by running a drive against a sandbox where the library doesn't cover the task, then inspecting `forge/snippets/` afterward.
-- **Library reuse discipline.** Does driver invoke existing snippets instead of re-driving? Verify by running a drive against a sandbox where the library covers the task and watching the driver's narration for `invoked X` vs `drove fresh: X`.
-- **Spec-writer skip when matching spec exists.** Does spec-writer correctly skip composition when an exact-match spec is already in `forge/specs/`? Verify by running spec mode twice on the same task.
-- **Spec-verifier passes from cold start.** Does the produced spec actually pass when run fresh? Verify by inspecting the spec file and the verifier's pass/fail report.
-- **Recording filename convention.** Does the persisted video preserve the spec-basename prefix? Does labeled vs default naming work correctly? Verify by inspecting `forge/videos/` after spec mode runs with and without `record as <label>`.
-
-## Cost / time
-
-Routing-focused cases short-circuit relatively fast — most don't need a full drive to completion. Rough estimate: 10 cases × ~$0.20–$1.00/case (with baseline doubles this) = **$4–$20 per full pass**. ~1–3 minutes per case clock time.
+Skill-creator handles the runner machinery (subagent spawning, baseline comparison, grading, HTML viewer). To filter by suite, you can manually invoke specific case names.
 
 ## Adding cases
 
 Append to the `evals` array. Each case needs:
 
 - `id` (next integer)
-- `name` (descriptive, kebab-case — used for the workspace subdir)
-- `prompt` (what gets passed to `/forge`)
-- `expected_output` (human-readable success description)
+- `name` (descriptive, kebab-case, prefixed with `s1-` / `s2-` / `s3-`)
+- `prompt` (for Suite 1: the routing-wrapper instruction with the user's prompt embedded; for Suite 2 & 3: the user's actual `/forge` invocation)
+- `expected_output` (human-readable success description; flag `PENDING` if the case is TDD-style and currently fails)
 - `files` (input files — empty for almost all forge cases)
 - `expectations` (list of programmatically-verifiable statements)
 
-Stay in the routing/invariant lane. If you find yourself wanting to assert on "N new files appeared" or "the spec passed verification," that's a signal the case belongs in the manual checklist above.
+When in doubt about whether a check belongs in evals or in manual testing: if the assertion would fail differently depending on what was already in the sandbox before this case ran, it's state-sensitive — move it to manual testing.
 
 See `schemas.md` in skill-creator's references directory for the canonical schema.

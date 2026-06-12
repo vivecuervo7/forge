@@ -3,136 +3,336 @@
   "evals": [
     {
       "id": 1,
-      "name": "route-init-keyword",
-      "prompt": "/forge init",
-      "expected_output": "First-word 'init' triggers the init route. Lead loads references/init.md and invokes forge-init.sh via Bash. No team-task or export reference is loaded. Lead relays the script's output to the user.",
+      "name": "s1-route-init-keyword",
+      "prompt": "You are testing /forge's routing. Read the SKILL.md at the skill path and apply its Phase 0 dispatch rules + Phase 0a (mode detection) + Phase 0b (recording label detection) to determine what would happen if a user typed:\n\n  /forge init\n\nOutput a single JSON object on stdout describing the routing decision, then stop. Use null for fields that don't apply.\n\n{\n  \"route\": \"init\" | \"export\" | \"run\" | \"task\",\n  \"mode\": \"drive\" | \"spec\" | null,\n  \"record_as\": \"<label string>\" | null,\n  \"references_to_load\": [\"<filename>\", ...]\n}",
+      "expected_output": "JSON: { route: 'init', mode: null, record_as: null, references_to_load: ['init.md'] }",
       "files": [],
       "expectations": [
-        "Lead loads references/init.md via Bash cat or Read (visible in tool call log)",
-        "Lead does NOT load references/team-task.md",
-        "Lead does NOT load references/export.md",
-        "Lead invokes forge-init.sh via Bash",
-        "Lead's final user-facing output includes the script's report (either created or preserved file listing)"
+        "Output is valid JSON",
+        "JSON has route equal to 'init'",
+        "JSON has mode equal to null",
+        "JSON has record_as equal to null",
+        "JSON has references_to_load containing 'init.md'",
+        "JSON does NOT have references_to_load containing 'team-task.md', 'export.md', or 'run.md'"
       ]
     },
     {
       "id": 2,
-      "name": "route-init-natural-PENDING-PHASE0",
-      "prompt": "/forge install forge here",
-      "expected_output": "PENDING — currently fails. Natural-language phrasings like 'install forge here', 'scaffold forge', 'set up forge in this project' should route to the init scaffolder. Today they fall through to drive mode. Will pass after Phase 0 is expanded to natural-language-detect the init route.",
+      "name": "s1-route-init-natural-install",
+      "prompt": "You are testing /forge's routing. Read the SKILL.md at the skill path and apply its Phase 0 dispatch rules + Phase 0a + Phase 0b to determine what would happen if a user typed:\n\n  /forge install forge here\n\nOutput a single JSON object on stdout describing the routing decision, then stop. Use null for fields that don't apply.\n\n{\n  \"route\": \"init\" | \"export\" | \"run\" | \"task\",\n  \"mode\": \"drive\" | \"spec\" | null,\n  \"record_as\": \"<label string>\" | null,\n  \"references_to_load\": [\"<filename>\", ...]\n}",
+      "expected_output": "PENDING. Currently fails — Phase 0 only matches init by first-word keyword. The desired behavior is for natural-language phrasings like 'install forge here' to also route to init. Will pass once Phase 0 is expanded.",
       "files": [],
       "expectations": [
-        "Lead loads references/init.md via Bash cat or Read",
-        "Lead does NOT load references/team-task.md",
-        "Lead invokes forge-init.sh via Bash"
+        "Output is valid JSON",
+        "JSON has route equal to 'init'",
+        "JSON has references_to_load containing 'init.md'"
       ]
     },
     {
       "id": 3,
-      "name": "route-export-keyword",
-      "prompt": "/forge export add-backpack-to-cart-standard",
-      "expected_output": "First-word 'export' triggers the export route. Lead loads references/export.md and invokes forge-export-spec.mjs with --spec, --output, and --force. No team-task or init reference is loaded. Lead relays the export outcome to the user. If an export file is written, it is self-contained (no snippet imports).",
+      "name": "s1-route-init-natural-scaffold",
+      "prompt": "You are testing /forge's routing. Read the SKILL.md at the skill path and apply its Phase 0 dispatch rules + Phase 0a + Phase 0b to determine what would happen if a user typed:\n\n  /forge scaffold forge in this project\n\nOutput a single JSON object on stdout describing the routing decision, then stop.\n\n{\n  \"route\": \"init\" | \"export\" | \"run\" | \"task\",\n  \"mode\": \"drive\" | \"spec\" | null,\n  \"record_as\": \"<label string>\" | null,\n  \"references_to_load\": [\"<filename>\", ...]\n}",
+      "expected_output": "PENDING. Will pass once Phase 0 supports natural-language init detection.",
       "files": [],
       "expectations": [
-        "Lead loads references/export.md via Bash cat or Read",
-        "Lead does NOT load references/team-task.md",
-        "Lead does NOT load references/init.md",
-        "forge-export-spec.mjs is invoked via Bash with --spec, --output, and --force flags",
-        "If an exported .spec.ts file was produced under <project>/forge-exports/, the file contains zero occurrences of `from '../snippets/'` (snippets are inlined, not imported)"
+        "Output is valid JSON",
+        "JSON has route equal to 'init'",
+        "JSON has references_to_load containing 'init.md'"
       ]
     },
     {
       "id": 4,
-      "name": "route-export-natural-PENDING-PHASE0",
-      "prompt": "/forge export the spec from the latest recording",
-      "expected_output": "PENDING — currently fails. Natural-language phrasings like 'export the spec from the latest recording', 'export the most recent spec' should route to the spec exporter. Today they fall through to drive mode. Will pass after Phase 0 is expanded to natural-language-detect the export route. The lead may use AskUserQuestion to disambiguate which spec to export before invoking the script.",
+      "name": "s1-route-export-keyword",
+      "prompt": "You are testing /forge's routing. Read the SKILL.md at the skill path and apply its Phase 0 dispatch rules + Phase 0a + Phase 0b to determine what would happen if a user typed:\n\n  /forge export add-backpack-to-cart-standard\n\nOutput a single JSON object on stdout describing the routing decision, then stop.\n\n{\n  \"route\": \"init\" | \"export\" | \"run\" | \"task\",\n  \"mode\": \"drive\" | \"spec\" | null,\n  \"record_as\": \"<label string>\" | null,\n  \"references_to_load\": [\"<filename>\", ...]\n}",
+      "expected_output": "JSON: { route: 'export', mode: null, record_as: null, references_to_load: ['export.md'] }",
       "files": [],
       "expectations": [
-        "Lead loads references/export.md via Bash cat or Read",
-        "Lead does NOT load references/team-task.md",
-        "Either forge-export-spec.mjs is invoked, OR the lead calls AskUserQuestion to confirm which spec before invoking"
+        "Output is valid JSON",
+        "JSON has route equal to 'export'",
+        "JSON has mode equal to null",
+        "JSON has record_as equal to null",
+        "JSON has references_to_load containing 'export.md'",
+        "JSON does NOT have references_to_load containing 'team-task.md', 'init.md', or 'run.md'"
       ]
     },
     {
       "id": 5,
-      "name": "mode-spec-keyword",
-      "prompt": "/forge spec add the backpack to cart and verify the badge count is 1",
-      "expected_output": "First-word 'spec' selects MODE=spec within the team-task route. Lead loads references/team-task.md and spawns all four teammates. If a .spec.ts file is produced during the run, it contains no literal credentials (must reference process.env instead). If spec-verifier runs the spec, it does so via forge-pool-run-spec.mjs.",
+      "name": "s1-route-export-natural-from-recording",
+      "prompt": "You are testing /forge's routing. Read the SKILL.md at the skill path and apply its Phase 0 dispatch rules + Phase 0a + Phase 0b to determine what would happen if a user typed:\n\n  /forge export the spec from the latest recording\n\nOutput a single JSON object on stdout describing the routing decision, then stop.\n\n{\n  \"route\": \"init\" | \"export\" | \"run\" | \"task\",\n  \"mode\": \"drive\" | \"spec\" | null,\n  \"record_as\": \"<label string>\" | null,\n  \"references_to_load\": [\"<filename>\", ...]\n}",
+      "expected_output": "Currently passes by first-word matching ('export'), even though the rest of the phrase is non-standard. Worth keeping as a watchdog that the first-word route stays load-bearing even for tricky tails.",
       "files": [],
       "expectations": [
-        "Lead declares MODE=spec in its planning",
-        "Lead loads references/team-task.md",
-        "Lead does NOT load references/init.md or references/export.md",
-        "Exactly 4 Agent (subagent) calls are made: forge:driver, forge:snippet-author, forge:spec-writer, and forge:spec-verifier",
-        "If any new .spec.ts file is created in forge/specs/ during the run, it contains zero occurrences of the literal strings 'secret_sauce', 'standard_user', or 'problem_user'",
-        "If spec-verifier runs the spec, it invokes forge-pool-run-spec.mjs via Bash"
+        "Output is valid JSON",
+        "JSON has route equal to 'export'",
+        "JSON has references_to_load containing 'export.md'"
       ]
     },
     {
       "id": 6,
-      "name": "mode-spec-natural",
-      "prompt": "/forge create a spec for adding the backpack to the cart and verifying the badge count",
-      "expected_output": "Natural-language signal 'create a spec for...' selects MODE=spec without the 'spec' keyword. Same downstream as case 5: 4 teammates, references/team-task.md loaded.",
+      "name": "s1-route-export-natural-ship",
+      "prompt": "You are testing /forge's routing. Read the SKILL.md at the skill path and apply its Phase 0 dispatch rules + Phase 0a + Phase 0b to determine what would happen if a user typed:\n\n  /forge ship this spec for the team to use\n\nOutput a single JSON object on stdout describing the routing decision, then stop.\n\n{\n  \"route\": \"init\" | \"export\" | \"run\" | \"task\",\n  \"mode\": \"drive\" | \"spec\" | null,\n  \"record_as\": \"<label string>\" | null,\n  \"references_to_load\": [\"<filename>\", ...]\n}",
+      "expected_output": "PENDING. Currently routes to task fallthrough because first word isn't 'export'. Desired: natural-language phrasings like 'ship this spec' should route to export. Will pass once Phase 0 is expanded.",
       "files": [],
       "expectations": [
-        "Lead declares MODE=spec in its planning (despite first word not being 'spec')",
-        "Lead loads references/team-task.md",
-        "Exactly 4 Agent calls: forge:driver, forge:snippet-author, forge:spec-writer, forge:spec-verifier",
-        "If any new .spec.ts file is created in forge/specs/, it contains zero literal credential strings ('secret_sauce', 'standard_user', 'problem_user')"
+        "Output is valid JSON",
+        "JSON has route equal to 'export'",
+        "JSON has references_to_load containing 'export.md'"
       ]
     },
     {
       "id": 7,
-      "name": "mode-drive-default",
-      "prompt": "/forge log in as standard_user and tell me what's on the inventory page",
-      "expected_output": "Bare drive task with no spec-authoring intent and no special keywords. Lead routes to task fallthrough and selects MODE=drive. Only 2 teammates spawned (driver + snippet-author). No spec written, no spec-verifier spawned.",
+      "name": "s1-route-run-explicit",
+      "prompt": "You are testing /forge's routing. Read the SKILL.md at the skill path and apply its Phase 0 dispatch rules + Phase 0a + Phase 0b to determine what would happen if a user typed:\n\n  /forge run add-backpack-to-cart-standard\n\nOutput a single JSON object on stdout describing the routing decision, then stop.\n\n{\n  \"route\": \"init\" | \"export\" | \"run\" | \"task\",\n  \"mode\": \"drive\" | \"spec\" | null,\n  \"record_as\": \"<label string>\" | null,\n  \"references_to_load\": [\"<filename>\", ...]\n}",
+      "expected_output": "JSON: { route: 'run', mode: null, record_as: null, references_to_load: ['run.md'] }",
       "files": [],
       "expectations": [
-        "Lead declares MODE=drive in its planning",
-        "Lead loads references/team-task.md",
-        "Exactly 2 Agent calls: forge:driver and forge:snippet-author",
-        "No Agent call is made for forge:spec-writer or forge:spec-verifier"
+        "Output is valid JSON",
+        "JSON has route equal to 'run'",
+        "JSON has mode equal to null",
+        "JSON has record_as equal to null",
+        "JSON has references_to_load containing 'run.md'",
+        "JSON does NOT have references_to_load containing 'team-task.md', 'init.md', or 'export.md'"
       ]
     },
     {
       "id": 8,
-      "name": "mode-drive-incidental-spec",
-      "prompt": "/forge add the backpack to cart. We just need this done — no spec writing or test creation needed.",
-      "expected_output": "Task contains the word 'spec' but in an explicitly negating context. Lead correctly selects MODE=drive despite the keyword appearing. Tests that natural-language detection doesn't naively keyword-match without considering intent.",
+      "name": "s1-route-run-last",
+      "prompt": "You are testing /forge's routing. Read the SKILL.md at the skill path and apply its Phase 0 dispatch rules + Phase 0a + Phase 0b to determine what would happen if a user typed:\n\n  /forge run last spec\n\nOutput a single JSON object on stdout describing the routing decision, then stop.\n\n{\n  \"route\": \"init\" | \"export\" | \"run\" | \"task\",\n  \"mode\": \"drive\" | \"spec\" | null,\n  \"record_as\": \"<label string>\" | null,\n  \"references_to_load\": [\"<filename>\", ...]\n}",
+      "expected_output": "JSON: { route: 'run', mode: null, record_as: null, references_to_load: ['run.md'] }. The 'last spec' phrasing is for run.md to resolve, not Phase 0.",
       "files": [],
       "expectations": [
-        "Lead declares MODE=drive (the 'spec' mention is incidental and explicitly negated)",
-        "Lead loads references/team-task.md",
-        "Exactly 2 Agent calls: forge:driver and forge:snippet-author",
-        "No Agent call is made for forge:spec-writer or forge:spec-verifier"
+        "Output is valid JSON",
+        "JSON has route equal to 'run'",
+        "JSON has record_as equal to null",
+        "JSON has references_to_load containing 'run.md'"
       ]
     },
     {
       "id": 9,
-      "name": "mode-drive-record-keyword",
-      "prompt": "/forge add the backpack to cart and record the badge count for me",
-      "expected_output": "Task uses 'record' colloquially ('report' / 'note down'), not as a recording-flag request. Lead correctly selects MODE=drive. The recording-label detection in Phase 0a is scoped to spec mode only, and 'record the badge count' doesn't match the spec-intent patterns. No --record flag should reach any script.",
+      "name": "s1-route-run-empty",
+      "prompt": "You are testing /forge's routing. Read the SKILL.md at the skill path and apply its Phase 0 dispatch rules + Phase 0a + Phase 0b to determine what would happen if a user typed:\n\n  /forge run\n\nOutput a single JSON object on stdout describing the routing decision, then stop.\n\n{\n  \"route\": \"init\" | \"export\" | \"run\" | \"task\",\n  \"mode\": \"drive\" | \"spec\" | null,\n  \"record_as\": \"<label string>\" | null,\n  \"references_to_load\": [\"<filename>\", ...]\n}",
+      "expected_output": "JSON: { route: 'run', mode: null, record_as: null, references_to_load: ['run.md'] }. With no spec argument, the route is still 'run' — disambiguation happens inside run.md (via AskUserQuestion), not in Phase 0.",
       "files": [],
       "expectations": [
-        "Lead declares MODE=drive (the word 'record' does not elevate to spec mode)",
-        "Lead loads references/team-task.md",
-        "Exactly 2 Agent calls: forge:driver and forge:snippet-author",
-        "No Agent call is made for forge:spec-writer or forge:spec-verifier",
-        "No Bash invocation contains the flags --record or --record-as"
+        "Output is valid JSON",
+        "JSON has route equal to 'run'",
+        "JSON has references_to_load containing 'run.md'"
       ]
     },
     {
       "id": 10,
-      "name": "record-as-label-capture",
-      "prompt": "/forge spec add the backpack to cart and verify the badge count is 1, record as before",
-      "expected_output": "Spec mode with explicit 'record as before' label. Lead captures RECORD_AS=before in its planning and threads it through to spec-verifier's spawn prompt. Spec-verifier invokes forge-pool-run-spec.mjs with --record-as before.",
+      "name": "s1-mode-spec-keyword",
+      "prompt": "You are testing /forge's routing. Read the SKILL.md at the skill path and apply its Phase 0 dispatch rules + Phase 0a + Phase 0b to determine what would happen if a user typed:\n\n  /forge spec add the backpack to cart and verify badge count\n\nOutput a single JSON object on stdout describing the routing decision, then stop.\n\n{\n  \"route\": \"init\" | \"export\" | \"run\" | \"task\",\n  \"mode\": \"drive\" | \"spec\" | null,\n  \"record_as\": \"<label string>\" | null,\n  \"references_to_load\": [\"<filename>\", ...]\n}",
+      "expected_output": "JSON: { route: 'task', mode: 'spec', record_as: null, references_to_load: ['team-task.md'] }. First word 'spec' selects MODE=spec within the task route.",
       "files": [],
       "expectations": [
-        "Lead declares MODE=spec AND RECORD_AS=before in its planning",
-        "Lead loads references/team-task.md",
-        "Exactly 4 Agent calls: forge:driver, forge:snippet-author, forge:spec-writer, forge:spec-verifier",
-        "The spec-verifier's spawn prompt includes 'RECORD_AS: before'",
-        "A Bash invocation of forge-pool-run-spec.mjs includes the flag pair '--record-as before'"
+        "Output is valid JSON",
+        "JSON has route equal to 'task'",
+        "JSON has mode equal to 'spec'",
+        "JSON has record_as equal to null",
+        "JSON has references_to_load containing 'team-task.md'"
+      ]
+    },
+    {
+      "id": 11,
+      "name": "s1-mode-spec-natural-create",
+      "prompt": "You are testing /forge's routing. Read the SKILL.md at the skill path and apply its Phase 0 dispatch rules + Phase 0a + Phase 0b to determine what would happen if a user typed:\n\n  /forge create a spec for adding the backpack to the cart\n\nOutput a single JSON object on stdout describing the routing decision, then stop.\n\n{\n  \"route\": \"init\" | \"export\" | \"run\" | \"task\",\n  \"mode\": \"drive\" | \"spec\" | null,\n  \"record_as\": \"<label string>\" | null,\n  \"references_to_load\": [\"<filename>\", ...]\n}",
+      "expected_output": "JSON: { route: 'task', mode: 'spec', record_as: null, references_to_load: ['team-task.md'] }. Natural-language 'create a spec' selects MODE=spec.",
+      "files": [],
+      "expectations": [
+        "Output is valid JSON",
+        "JSON has route equal to 'task'",
+        "JSON has mode equal to 'spec'",
+        "JSON has references_to_load containing 'team-task.md'"
+      ]
+    },
+    {
+      "id": 12,
+      "name": "s1-mode-spec-natural-write",
+      "prompt": "You are testing /forge's routing. Read the SKILL.md at the skill path and apply its Phase 0 dispatch rules + Phase 0a + Phase 0b to determine what would happen if a user typed:\n\n  /forge write a spec that verifies the cart badge increments after adding the backpack\n\nOutput a single JSON object on stdout describing the routing decision, then stop.\n\n{\n  \"route\": \"init\" | \"export\" | \"run\" | \"task\",\n  \"mode\": \"drive\" | \"spec\" | null,\n  \"record_as\": \"<label string>\" | null,\n  \"references_to_load\": [\"<filename>\", ...]\n}",
+      "expected_output": "JSON: { route: 'task', mode: 'spec', record_as: null, references_to_load: ['team-task.md'] }.",
+      "files": [],
+      "expectations": [
+        "Output is valid JSON",
+        "JSON has route equal to 'task'",
+        "JSON has mode equal to 'spec'",
+        "JSON has references_to_load containing 'team-task.md'"
+      ]
+    },
+    {
+      "id": 13,
+      "name": "s1-mode-drive-default",
+      "prompt": "You are testing /forge's routing. Read the SKILL.md at the skill path and apply its Phase 0 dispatch rules + Phase 0a + Phase 0b to determine what would happen if a user typed:\n\n  /forge log in as standard_user and tell me what's on the inventory page\n\nOutput a single JSON object on stdout describing the routing decision, then stop.\n\n{\n  \"route\": \"init\" | \"export\" | \"run\" | \"task\",\n  \"mode\": \"drive\" | \"spec\" | null,\n  \"record_as\": \"<label string>\" | null,\n  \"references_to_load\": [\"<filename>\", ...]\n}",
+      "expected_output": "JSON: { route: 'task', mode: 'drive', record_as: null, references_to_load: ['team-task.md'] }. Bare task with no spec-authoring intent; drive mode.",
+      "files": [],
+      "expectations": [
+        "Output is valid JSON",
+        "JSON has route equal to 'task'",
+        "JSON has mode equal to 'drive'",
+        "JSON has references_to_load containing 'team-task.md'"
+      ]
+    },
+    {
+      "id": 14,
+      "name": "s1-mode-drive-incidental-spec",
+      "prompt": "You are testing /forge's routing. Read the SKILL.md at the skill path and apply its Phase 0 dispatch rules + Phase 0a + Phase 0b to determine what would happen if a user typed:\n\n  /forge add the backpack to cart. We just need this done — no spec writing or test creation needed.\n\nOutput a single JSON object on stdout describing the routing decision, then stop.\n\n{\n  \"route\": \"init\" | \"export\" | \"run\" | \"task\",\n  \"mode\": \"drive\" | \"spec\" | null,\n  \"record_as\": \"<label string>\" | null,\n  \"references_to_load\": [\"<filename>\", ...]\n}",
+      "expected_output": "JSON: { route: 'task', mode: 'drive', record_as: null, references_to_load: ['team-task.md'] }. The 'spec' keyword appears but in an explicitly-negated context; mode stays drive.",
+      "files": [],
+      "expectations": [
+        "Output is valid JSON",
+        "JSON has route equal to 'task'",
+        "JSON has mode equal to 'drive'",
+        "JSON has references_to_load containing 'team-task.md'"
+      ]
+    },
+    {
+      "id": 15,
+      "name": "s1-mode-drive-record-keyword",
+      "prompt": "You are testing /forge's routing. Read the SKILL.md at the skill path and apply its Phase 0 dispatch rules + Phase 0a + Phase 0b to determine what would happen if a user typed:\n\n  /forge add the backpack to cart and record the badge count for me\n\nOutput a single JSON object on stdout describing the routing decision, then stop.\n\n{\n  \"route\": \"init\" | \"export\" | \"run\" | \"task\",\n  \"mode\": \"drive\" | \"spec\" | null,\n  \"record_as\": \"<label string>\" | null,\n  \"references_to_load\": [\"<filename>\", ...]\n}",
+      "expected_output": "JSON: { route: 'task', mode: 'drive', record_as: null, references_to_load: ['team-task.md'] }. 'Record the badge count' uses 'record' colloquially as 'report' — doesn't elevate to spec mode and doesn't change the route.",
+      "files": [],
+      "expectations": [
+        "Output is valid JSON",
+        "JSON has route equal to 'task'",
+        "JSON has mode equal to 'drive'",
+        "JSON has record_as equal to null",
+        "JSON has references_to_load containing 'team-task.md'"
+      ]
+    },
+    {
+      "id": 16,
+      "name": "s1-label-quoted",
+      "prompt": "You are testing /forge's routing. Read the SKILL.md at the skill path and apply its Phase 0 dispatch rules + Phase 0a + Phase 0b to determine what would happen if a user typed:\n\n  /forge run add-backpack-to-cart-standard, record as 'before'\n\nOutput a single JSON object on stdout describing the routing decision, then stop.\n\n{\n  \"route\": \"init\" | \"export\" | \"run\" | \"task\",\n  \"mode\": \"drive\" | \"spec\" | null,\n  \"record_as\": \"<label string>\" | null,\n  \"references_to_load\": [\"<filename>\", ...]\n}",
+      "expected_output": "JSON: { route: 'run', mode: null, record_as: 'before', references_to_load: ['run.md'] }. Quoted label parses cleanly, quotes stripped.",
+      "files": [],
+      "expectations": [
+        "Output is valid JSON",
+        "JSON has route equal to 'run'",
+        "JSON has record_as equal to 'before' (without quotes)",
+        "JSON has references_to_load containing 'run.md'"
+      ]
+    },
+    {
+      "id": 17,
+      "name": "s1-label-adjective",
+      "prompt": "You are testing /forge's routing. Read the SKILL.md at the skill path and apply its Phase 0 dispatch rules + Phase 0a + Phase 0b to determine what would happen if a user typed:\n\n  /forge run add-backpack-to-cart-standard, record a before video\n\nOutput a single JSON object on stdout describing the routing decision, then stop.\n\n{\n  \"route\": \"init\" | \"export\" | \"run\" | \"task\",\n  \"mode\": \"drive\" | \"spec\" | null,\n  \"record_as\": \"<label string>\" | null,\n  \"references_to_load\": [\"<filename>\", ...]\n}",
+      "expected_output": "JSON: { route: 'run', mode: null, record_as: 'before', references_to_load: ['run.md'] }. The adjective 'before' is extracted as the label per Phase 0b's pattern.",
+      "files": [],
+      "expectations": [
+        "Output is valid JSON",
+        "JSON has route equal to 'run'",
+        "JSON has record_as equal to 'before'",
+        "JSON has references_to_load containing 'run.md'"
+      ]
+    },
+    {
+      "id": 18,
+      "name": "s1-label-compound",
+      "prompt": "You are testing /forge's routing. Read the SKILL.md at the skill path and apply its Phase 0 dispatch rules + Phase 0a + Phase 0b to determine what would happen if a user typed:\n\n  /forge run add-backpack-to-cart-standard, label it AE-1775-before\n\nOutput a single JSON object on stdout describing the routing decision, then stop.\n\n{\n  \"route\": \"init\" | \"export\" | \"run\" | \"task\",\n  \"mode\": \"drive\" | \"spec\" | null,\n  \"record_as\": \"<label string>\" | null,\n  \"references_to_load\": [\"<filename>\", ...]\n}",
+      "expected_output": "JSON: { route: 'run', mode: null, record_as: 'AE-1775-before', references_to_load: ['run.md'] }. Compound label with hyphen + ticket reference; should be preserved intact.",
+      "files": [],
+      "expectations": [
+        "Output is valid JSON",
+        "JSON has route equal to 'run'",
+        "JSON has record_as equal to 'AE-1775-before'",
+        "JSON has references_to_load containing 'run.md'"
+      ]
+    },
+    {
+      "id": 19,
+      "name": "s1-case-insensitive",
+      "prompt": "You are testing /forge's routing. Read the SKILL.md at the skill path and apply its Phase 0 dispatch rules + Phase 0a + Phase 0b to determine what would happen if a user typed:\n\n  /forge INIT\n\nOutput a single JSON object on stdout describing the routing decision, then stop.\n\n{\n  \"route\": \"init\" | \"export\" | \"run\" | \"task\",\n  \"mode\": \"drive\" | \"spec\" | null,\n  \"record_as\": \"<label string>\" | null,\n  \"references_to_load\": [\"<filename>\", ...]\n}",
+      "expected_output": "JSON: { route: 'init', mode: null, record_as: null, references_to_load: ['init.md'] }. First-word matching is case-insensitive per Phase 0.",
+      "files": [],
+      "expectations": [
+        "Output is valid JSON",
+        "JSON has route equal to 'init'",
+        "JSON has references_to_load containing 'init.md'"
+      ]
+    },
+    {
+      "id": 20,
+      "name": "s2-happy-path-spec-covered",
+      "prompt": "/forge spec add the backpack to cart and verify the badge count is 1",
+      "expected_output": "Full chain: spec mode executes against sandbox in baseline state (3 baseline snippets, both slots free). Driver invokes existing snippets, spec-writer produces or updates a spec, spec-verifier confirms it passes from cold start. Convergent — sandbox ends with 3 snippets present (regardless of starting count) and a passing spec.",
+      "files": [],
+      "expectations": [
+        "After the run, forge/snippets/ contains exactly 3 .ts files",
+        "One snippet's filename semantically maps to login (contains 'login' or 'auth' or 'sign-in')",
+        "One snippet's filename semantically maps to add-to-cart (contains 'add' and either 'cart' or 'item')",
+        "One snippet's filename semantically maps to badge / cart count (contains 'badge' or 'count')",
+        "After the run, at least one .spec.ts file exists in forge/specs/",
+        "The lead's final report indicates the spec-verifier confirmed the spec passes from cold start",
+        "Exactly 4 Agent (subagent) calls were made: forge:driver, forge:snippet-author, forge:spec-writer, and forge:spec-verifier"
+      ]
+    },
+    {
+      "id": 21,
+      "name": "s3-run-verify-only",
+      "prompt": "/forge run add-backpack-to-cart-standard",
+      "expected_output": "Run route executes against an existing spec. forge-pool-run-spec.mjs is invoked with --spec but without --record or --record-as. Verification-only — exit 0 indicates spec passes. No new file appears in forge/videos/.",
+      "files": [],
+      "expectations": [
+        "Lead loads references/run.md (visible in tool call log)",
+        "forge-pool-run-spec.mjs is invoked via Bash with --spec",
+        "The Bash invocation does NOT include --record or --record-as flags",
+        "After the run, no new .webm file with a recent modification time appears in forge/videos/",
+        "No Agent (subagent) calls are made — run route is team-less"
+      ]
+    },
+    {
+      "id": 22,
+      "name": "s3-run-with-label",
+      "prompt": "/forge run add-backpack-to-cart-standard, record as smoke-s3",
+      "expected_output": "Run route with explicit recording label. forge-pool-run-spec.mjs is invoked with --spec and --record-as smoke-s3. After the run, a video file lands at forge/videos/add-backpack-to-cart-standard-smoke-s3.webm.",
+      "files": [],
+      "expectations": [
+        "Lead loads references/run.md",
+        "forge-pool-run-spec.mjs is invoked via Bash with --spec and --record-as smoke-s3",
+        "After the run, forge/videos/add-backpack-to-cart-standard-smoke-s3.webm exists",
+        "The video file is larger than 10000 bytes (not empty)",
+        "No Agent subagent calls are made"
+      ]
+    },
+    {
+      "id": 23,
+      "name": "s3-run-last-spec",
+      "prompt": "/forge run last spec",
+      "expected_output": "Run route with 'last' shorthand. Lead resolves to the most recently modified spec in forge/specs/ and invokes the runner against it. No recording.",
+      "files": [],
+      "expectations": [
+        "Lead loads references/run.md",
+        "Lead resolves 'last' to a specific spec name (lists forge/specs/ sorted by mtime)",
+        "forge-pool-run-spec.mjs is invoked via Bash with --spec pointing to the resolved file",
+        "The Bash invocation does NOT include --record or --record-as flags",
+        "Lead's final report names the resolved spec so the user can correct if needed"
+      ]
+    },
+    {
+      "id": 24,
+      "name": "s3-export-default",
+      "prompt": "/forge export add-backpack-to-cart-standard",
+      "expected_output": "Export route invokes forge-export-spec.mjs against the named spec. Default output lands at <project-root>/forge-exports/<name>.spec.ts (outside the gitignored forge/ dir). Output is self-contained — no snippet imports.",
+      "files": [],
+      "expectations": [
+        "Lead loads references/export.md",
+        "forge-export-spec.mjs is invoked via Bash with --spec and --output and --force flags",
+        "After the run, a file exists at <project-root>/forge-exports/add-backpack-to-cart-standard.spec.ts",
+        "The exported file contains zero occurrences of `from '../snippets/'`",
+        "The exported file imports only from '@playwright/test' (self-contained for shipping)"
+      ]
+    },
+    {
+      "id": 25,
+      "name": "s3-export-output-override",
+      "prompt": "/forge export add-backpack-to-cart-standard --output /tmp/forge-eval-export.spec.ts",
+      "expected_output": "Export route with explicit --output override. Output lands at the user-specified path instead of the default forge-exports/ location.",
+      "files": [],
+      "expectations": [
+        "Lead loads references/export.md",
+        "forge-export-spec.mjs is invoked via Bash with --output /tmp/forge-eval-export.spec.ts",
+        "After the run, a file exists at /tmp/forge-eval-export.spec.ts",
+        "The exported file contains zero `from '../snippets/'` imports"
       ]
     }
   ]
