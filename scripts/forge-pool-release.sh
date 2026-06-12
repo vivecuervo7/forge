@@ -6,8 +6,9 @@
 #
 # Cleanup responsibilities are split elsewhere:
 #   - Client-side scrub (cookies, localStorage, sessionStorage on the
-#     chromium profile) fires at CLAIM time via forge-pool-reset.sh, not
-#     here. Reliable across crashed runs and "I know better" persona
+#     chromium profile) fires at CLAIM time via forge-pool-reset.sh,
+#     invoked by the /forge skill lead during phase 1.5b — not by this
+#     script. Reliable across crashed runs and "I know better" persona
 #     overrides; no live session to coordinate with.
 #   - Project-specific teardown (server-side state, logout endpoints,
 #     account resets, etc.) is governed by the `## Teardown after each
@@ -74,18 +75,7 @@ fi
 
 NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
-# Client-side storage scrub fires at CLAIM time, not release — see
-# forge-pool-reset.sh. Doing the scrub at claim is more reliable (no live
-# chromium session to coordinate with, no current-page-origin scoping
-# gotcha, survives crashed runs) and makes "I know better" persona
-# overrides safe by default.
-#
-# Project-specific teardown (server-side state, logout endpoints, third-
-# party integrations) is governed by the `## Teardown after each run`
-# section in forge/hints/forge.md — the lead reads it as natural-language
-# instructions and executes them during SKILL.md phase 5 before invoking
-# this release. There is no release.sh hook anymore: hints are the source
-# of truth for both ends of the lifecycle.
+# Cleanup happens elsewhere — see the header comment for the split.
 
 TMP=$(mktemp)
 jq --arg ts "$NOW" \

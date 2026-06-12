@@ -1,11 +1,10 @@
 // Fallback Playwright config for forge specs in this project.
 //
-// Read by forge-pool-run-spec.mjs (and by Stage 4's verifier) when the
-// project has no root-level playwright.config.{ts,js,mjs}. If your project
-// has its own runner — e.g. e2e-tests/playwright.config.ts with custom
-// fixtures, globalSetup, baseURL, etc. — forge-pool-run-spec.mjs will
-// detect and prefer that config; this file is then unused and can stay
-// as-is.
+// Read by forge-pool-run-spec.mjs when the project has no root-level
+// playwright.config.{ts,js,mjs}. If your project has its own runner —
+// e.g. e2e-tests/playwright.config.ts with custom fixtures, globalSetup,
+// baseURL, etc. — forge-pool-run-spec.mjs will detect and prefer that
+// config; this file is then unused and can stay as-is.
 //
 // Env loading (highest-precedence wins):
 //
@@ -52,10 +51,10 @@ loadEnv({ path: resolve(__dirname, '.env') })
 loadEnv({ path: resolve(__dirname, '..', '.env') })
 
 // FORGE_RECORD=1 enables Playwright's video + trace capture for this run.
-// Set by `forge-pool-run-spec.mjs --record` (used by the verifier teammate
-// in spec mode). If your project has its own playwright config, opt in by
-// checking the same env var — that keeps spec-mode video recordings
-// behaving consistently regardless of which config is in effect.
+// Set by `forge-pool-run-spec.mjs --record` (used by `/forge run … record as
+// <label>` for paired before/after evidence). If your project has its own
+// playwright config, opt in by checking the same env var — that keeps
+// recordings behaving consistently regardless of which config is in effect.
 const record = process.env.FORGE_RECORD === '1'
 
 export default defineConfig({
