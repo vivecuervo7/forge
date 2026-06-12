@@ -135,13 +135,25 @@ export async function run(page, args) {
 
 **envKeys** — when the body references `process.env.X`, add a `meta.envKeys` array listing the keys. Future runners use this to know what env to inject. Omit if no env refs.
 
-### 7. Mark task complete
+### 7. Mark task complete and signal the lead
 
 Once the driver has signalled the drive is complete AND you've authored all snippets you intend to, AND any clarifying questions are resolved:
 
 ```
 TaskUpdate(taskId=<id>, status="completed")
 ```
+
+Then SendMessage `team-lead` with a brief completion signal so the lead knows you're done and can begin coordinating shutdown:
+
+```
+SendMessage(
+  to="team-lead",
+  summary="author task complete",
+  message="Author task <id> complete. Wrote N snippet(s): <name1>, <name2>, ... (or 'no new snippets — drive's work was already covered by existing library'). Going idle."
+)
+```
+
+This is the lead's primary signal that your work is done — idle notifications alone aren't sufficient (they fire after every turn, including ones where you're still working).
 
 Then go idle. The lead may shut you down via SendMessage with shutdown_request — respond with shutdown_response to confirm.
 
