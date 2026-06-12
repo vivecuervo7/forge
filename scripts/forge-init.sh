@@ -141,9 +141,19 @@ Most projects start here. Declares:
   exhausted. For apps with a fixed set of test users: pick one from this
   list. For apps where users can be created on-demand: an SQL insert + scaffold
   steps. The recipe runs without human help once authored.
-- **Release cleanup** (optional) — anything project-specific that should
-  happen when a slot is returned to the pool, beyond the default cookie
-  and localStorage wipe.
+- **Setup before each run** (optional) — anything that should happen
+  before a run starts beyond the default. Write it in your own words:
+  "create a fresh test user with this SQL," "wipe the events table,"
+  "don't reset any state — runs share state intentionally." The skill
+  reads this as instructions to itself, not as a config file. By default
+  it wipes cookies + localStorage + sessionStorage from the slot's
+  chromium profile (covers cart-state-style leakage); opt out by saying
+  so explicitly, extend by adding your own steps.
+- **Teardown after each run** (optional) — anything that should happen
+  before a slot is returned to the pool: logout endpoints, account
+  cleanup, third-party integrations to reset. There is no default
+  teardown — start-of-next-run setup handles client-side leakage, so
+  this section is purely for server-side state forge can't infer.
 
 ### `driver.md` (browser navigation knowledge)
 

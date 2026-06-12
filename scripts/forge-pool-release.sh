@@ -1,18 +1,19 @@
 #!/usr/bin/env bash
 # forge-pool-release.sh — release a previously-claimed slot back to the pool.
 #
-# Sets state.json's checkedOutBy to null and updates lastReleased. If the
-# slot contains an executable release.sh hook, it's invoked with the slot
-# dir as its single argument BEFORE the checkout is cleared — giving
-# projects a chance to do their own cleanup (logout calls, state reset,
-# etc.) while still holding the lock.
+# Sets state.json's checkedOutBy to null and updates lastReleased. That's
+# the entire job: pure bookkeeping under the pool lock.
 #
-# If the release hook exits non-zero, the slot is NOT released — caller
-# should treat as a release failure.
-#
-# Default cleanup expected by most projects (cookie + localStorage wipe on
-# the chromium profile) lives elsewhere; this script only handles the
-# checkout-state side and the optional hook.
+# Cleanup responsibilities are split elsewhere:
+#   - Client-side scrub (cookies, localStorage, sessionStorage on the
+#     chromium profile) fires at CLAIM time via forge-pool-reset.sh, not
+#     here. Reliable across crashed runs and "I know better" persona
+#     overrides; no live session to coordinate with.
+#   - Project-specific teardown (server-side state, logout endpoints,
+#     account resets, etc.) is governed by the `## Teardown after each
+#     run` section in forge/hints/forge.md — interpreted by the lead as
+#     natural-language instructions during SKILL.md phase 5, before this
+#     script is invoked.
 #
 # Locking: re-execs itself under the platform's lock tool (flock on
 # Linux, lockf on macOS) to serialize claim/release operations.
@@ -73,35 +74,18 @@ fi
 
 NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
-# Best-effort storage wipe on the current page of the slot's chromium session
-# (if a session is named in state.json AND it's currently live). Clears
-# cookies, localStorage, and sessionStorage for the page's current origin
-# so the next claim doesn't inherit cart contents, auth tokens, etc. that
-# survive cookie-clear alone.
+# Client-side storage scrub fires at CLAIM time, not release — see
+# forge-pool-reset.sh. Doing the scrub at claim is more reliable (no live
+# chromium session to coordinate with, no current-page-origin scoping
+# gotcha, survives crashed runs) and makes "I know better" persona
+# overrides safe by default.
 #
-# This is "best effort" — if the chromium is on about:blank or the session
-# isn't alive, the clears are no-ops. Projects with multi-origin state
-# should add their own per-slot release.sh hook to handle the full picture.
-SESSION_NAME=$(jq -r '.playwrightSessionName // empty' "$STATE_FILE" 2>/dev/null || true)
-if [ -n "$SESSION_NAME" ] && command -v playwright-cli >/dev/null 2>&1; then
-  if playwright-cli list 2>/dev/null | grep -q "$SESSION_NAME"; then
-    playwright-cli -s="$SESSION_NAME" cookie-clear >/dev/null 2>&1 || true
-    playwright-cli -s="$SESSION_NAME" localstorage-clear >/dev/null 2>&1 || true
-    playwright-cli -s="$SESSION_NAME" sessionstorage-clear >/dev/null 2>&1 || true
-  fi
-fi
-
-# Run project release hook (if present and executable) for cleanup the
-# pool can't handle generically (multi-origin state, server-side logout,
-# database resets, etc.). The hook gets the slot dir as its single argument.
-RELEASE_HOOK="$SLOT_DIR/release.sh"
-if [ -x "$RELEASE_HOOK" ]; then
-  if ! "$RELEASE_HOOK" "$SLOT_DIR"; then
-    echo "forge-pool-release: release hook exited non-zero for $SLOT_DIR" >&2
-    echo "  Slot is NOT being released. Investigate and re-run." >&2
-    exit 5
-  fi
-fi
+# Project-specific teardown (server-side state, logout endpoints, third-
+# party integrations) is governed by the `## Teardown after each run`
+# section in forge/hints/forge.md — the lead reads it as natural-language
+# instructions and executes them during SKILL.md phase 5 before invoking
+# this release. There is no release.sh hook anymore: hints are the source
+# of truth for both ends of the lifecycle.
 
 TMP=$(mktemp)
 jq --arg ts "$NOW" \

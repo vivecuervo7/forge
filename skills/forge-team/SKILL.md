@@ -69,6 +69,29 @@ Three outcomes:
 - **`EXHAUSTED` (exit 1)** — execute the **Provisioning recipe** from `forge.md` (the hint enumerates exact steps: pick identifier, mkdir, write `.envrc`, write `state.json`, `direnv allow`, etc.). After provisioning, re-attempt the claim. If recipe genuinely can't satisfy a new slot, surface to user and stop.
 - **Other error (exit ≥2)** — surface and stop.
 
+### 1.5b. Apply setup instructions
+
+Before handing the slot to the team, reset its state per the project's policy. You are the only place hints get interpreted — the mechanical scripts know nothing about them.
+
+1. **Look for a `## Setup before each run` (or similarly-named) section in `forge.md`.** The author writes it in their own words; treat it as instructions to you, not as a config file. They might describe SQL to run, an account-reset endpoint to call, a directory to wipe, or an explicit "don't reset anything."
+
+2. **Decide whether the default scrub applies.** The default is: invoke
+
+   ```bash
+   bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-pool-reset.sh <SLOT_DIR>
+   ```
+
+   which deletes cookies + localStorage + sessionStorage from the slot's chromium profile (the universally-biting class — cart state, stale auth, etc.). Run it **unless** the hint clearly tells you not to (e.g. "don't reset any state between runs," "runs share state intentionally"). If there's no section at all, run the default.
+
+3. **Execute any additional instructions the hint provides.** Use the tools you already have: `Bash` for SQL via `psql`, shell commands, file deletes; `curl` for endpoint calls; whatever the user asked for. Use any captured values (e.g. a freshly-generated test-user email) by re-writing them into the slot's `.env` so the spawned spec/teammates pick them up:
+
+   ```bash
+   # example only — pattern, not prescription
+   echo "TEST_USER_EMAIL=$generated" >> <SLOT_DIR>/.env
+   ```
+
+4. If the hint's instructions fail (SQL error, endpoint timeout, etc.), surface to the user and stop — don't proceed with a half-initialized slot.
+
 ### 1.6. Compute or retrieve the playwright-cli session name
 
 ```bash
@@ -268,6 +291,12 @@ TeamDelete()
 
 This removes the team config and task list directories.
 
+### 5.2b. Apply teardown instructions
+
+Mirror of phase 1.5b for end-of-run cleanup. Look for a `## Teardown after each run` (or similarly-named) section in `forge.md`. If present, execute its instructions as you would for setup: SQL queries, endpoint calls, whatever the author asked for. There is no automatic teardown default — the start-of-next-run scrub handles client-side leakage. This phase is purely for things the project knows about that forge can't (server-side state, account cleanup, third-party integrations, etc.).
+
+If the hint has no teardown section, skip this phase entirely.
+
 ### 5.3. Release the pool slot
 
 ```bash
@@ -308,7 +337,8 @@ If anything didn't go to plan (a teammate returned `cannot-drive`, the verifier 
 
 ## What this skill DOES do (current capabilities)
 
-- **Pool-aware slot management** — claims a per-persona/per-instance chromium slot, applies the project's provisioning recipe on exhaustion, releases with cookie + localStorage + sessionStorage wipe.
+- **Pool-aware slot management** — claims a per-persona/per-instance chromium slot, applies the project's provisioning recipe on exhaustion, releases when done.
+- **Hint-driven setup and teardown** — reads `## Setup before each run` and `## Teardown after each run` sections from `hints/forge.md` as natural-language instructions. The default setup is a filesystem-level scrub of cookies + localStorage + sessionStorage from the slot's chromium profile (covers the cart-bug class); projects can opt out, add SQL/curl/shell instructions to run, or describe teardown work forge can't infer.
 - **Mesh agent team** — spawns `driver`, `author`, `spec-writer`, and `verifier` as named teammates that SendMessage each other directly (no lead-mediated relay). Lead handles lifecycle only.
 - **Snippet library reuse** — driver scans `<PROJECT_FORGE_ROOT>/snippets/` at planning time and invokes existing snippets via `forge-pool-invoke-snippet.mjs` instead of re-driving. Author skips invoked steps (no duplicates) and may patch existing snippets in place when driver's narration reveals a latent bug.
 - **Snippet authoring discipline** — author only writes snippets for fresh-drive steps (no library coverage). Library grows from successful novel work; never duplicates.
