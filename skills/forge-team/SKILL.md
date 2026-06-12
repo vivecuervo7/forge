@@ -169,22 +169,16 @@ After spawning, the teammates self-coordinate. You (the lead) wait. Messages fro
 
 **What to watch for:**
 
-- **Both tasks complete (status="completed" in TaskList)** — team is done; proceed to phase 5.
+- **Completion pings from both teammates** — this is your primary signal that the team is done. The driver and author each SendMessage `team-lead` with a brief `task <id> complete` summary after marking their task `completed` via TaskUpdate. When you've received BOTH pings, proceed to phase 5.
 - **Messages addressed to you (`team-lead`)** — process them:
   - `STUCK: ...` from driver → surface to user, get user response, SendMessage back to driver (Stage 5 work; if it happens in Stage 3a, just surface the question and tell the user the team is paused).
   - Status updates / questions from teammates → answer concisely or relay relevant context.
   - Anything you can't handle → ask the user.
-- **Idle notifications** — informational. Don't act on them unless a teammate has been idle suspiciously long with incomplete tasks (in which case nudge via SendMessage).
+- **Idle notifications** — informational only. They fire after every turn including ones where the teammate is still working. Do NOT treat an idle notification as a "done" signal — wait for the explicit `task <id> complete` SendMessage instead. An idle teammate with an incomplete task hasn't finished; they're just between turns.
 
-You can check team progress periodically:
+> **Note on `TaskList()`:** calling `TaskList` from the lead session does NOT surface team tasks reliably — completed tasks often report as `No tasks found`. Treat lead-pings as authoritative; don't gate phase 5 on TaskList status.
 
-```
-TaskList()
-```
-
-But don't poll aggressively. Messages will reach you when they're ready.
-
-**Bounded waiting**: if 10+ minutes pass with no progress and no messages, something's stuck. SendMessage each teammate asking for a status update.
+**Bounded waiting**: if 10+ minutes pass without both completion pings AND no other messages from teammates, something's stuck. SendMessage each teammate asking for a status update. If they don't respond, the team may need manual recovery — surface to user.
 
 ## Phase 5 — Shut down and clean up
 
@@ -245,10 +239,17 @@ If anything didn't go to plan (a teammate returned `cannot-drive`, the verifier 
 - **One team at a time per session.** If a previous `/forge-team` invocation didn't clean up, `TeamDelete()` first before `TeamCreate`. (Claude Code allows only one active team per lead session.)
 - **Provisioning recipe is the source of truth for slot creation.** Don't invent fields. Execute literally from the hint.
 
+## What this skill DOES do (current capabilities)
+
+- **Pool-aware slot management** — claims a per-persona/per-instance chromium slot, applies the project's provisioning recipe on exhaustion, releases with cookie + localStorage + sessionStorage wipe.
+- **Mesh agent team** — spawns `driver` and `author` as named teammates that SendMessage each other directly (no lead-mediated relay). Lead handles lifecycle only.
+- **Snippet library reuse** — driver scans `<PROJECT_FORGE_ROOT>/snippets/` at planning time and invokes existing snippets via `forge-pool-invoke-snippet.mjs` instead of re-driving. Author skips invoked steps (no duplicates) and may patch existing snippets in place when driver's narration reveals a latent bug.
+- **Snippet authoring discipline** — author only writes snippets for fresh-drive steps (no library coverage). Library grows from successful novel work; never duplicates.
+
 ## What this skill does NOT do (yet)
 
-- **No spec-writer teammate.** Stage 3b adds `forge:spec-writer-team`. The author-only team handles snippet authoring this stage.
-- **No verifier teammate.** Stage 4 adds `forge:verifier-team` and the in-slot advisor-phase verification loop.
+- **No spec-writer teammate.** Stage 3c adds `forge:spec-writer-team` — driver's final-state summary feeds the spec-writer, which produces a self-contained `.spec.ts` that does its own login and can reference existing snippets.
+- **No verifier teammate.** Stage 4 adds `forge:verifier-team` and the in-slot advisor-phase verification loop — verifier runs the spec against the still-warm slot, asks driver/spec-writer questions on failure, iterates until pass.
 - **No user escalation channel for stuck-driver scenarios.** Stage 5. If the driver SendMessages you `STUCK: ...`, surface it manually and pause the team.
 - **No parallel-runs handling beyond what the pool already provides.** Stage 6 stress-tests concurrent invocations.
 
