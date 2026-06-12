@@ -15,7 +15,8 @@
 //
 //   2. PLUGIN-SHIPPED FALLBACK. If no project runner exists, lean on the
 //      one-time-installed runner at ~/.claude/.vive-claude/forge/runner/
-//      (set up by forge-bootstrap.sh). We symlink that runner's node_modules
+//      (lazy-installed by ensurePluginRunner below on first use). We symlink
+//      that runner's node_modules
 //      into the project's forge/ dir so the spec's `import '@playwright/test'`
 //      resolves, then run from forge/ using the project-committed config at
 //      forge/playwright.config.ts (scaffolded by /forge-init). This is the
@@ -54,8 +55,8 @@
 //   6   plugin fallback selected but forge/playwright.config.ts missing
 //       (project hasn't been /forge-init'd, or the config was deleted)
 
-import { spawn } from 'node:child_process'
-import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync, symlinkSync } from 'node:fs'
+import { spawn, spawnSync } from 'node:child_process'
+import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, dirname, join, relative, resolve } from 'node:path'
 import { loadSlotEnv, composedEnv } from './forge-slot-env.mjs'
@@ -156,12 +157,7 @@ if (projectRunner) {
 } else {
   // Path 2: plugin-shipped fallback
   if (!existsSync(PLUGIN_PW_MARKER)) {
-    die(
-      `no project runner found above ${projectForge}, AND plugin runner is ` +
-      `not bootstrapped at ${PLUGIN_RUNNER_ROOT}. Run \`/forge\` once to ` +
-      `bootstrap the plugin runner (it installs @playwright/test there).`,
-      3
-    )
+    ensurePluginRunner()
   }
   mode = `plugin (${PLUGIN_RUNNER_ROOT})`
   // Symlink plugin runner's node_modules into project's forge/ so resolution
@@ -302,6 +298,46 @@ function findFilesNewerThan(dir, pattern, sinceMs) {
   }
   walk(dir)
   return results
+}
+
+function ensurePluginRunner() {
+  // Lazy-install the plugin-shipped Playwright runner the first time a spec
+  // needs it. Idempotent — re-runs npm install if any declared dep is missing,
+  // so dep additions/version bumps land on existing installs.
+  mkdirSync(PLUGIN_RUNNER_ROOT, { recursive: true })
+
+  const pkgPath = join(PLUGIN_RUNNER_ROOT, 'package.json')
+  const pkgContent = JSON.stringify({
+    name: 'forge-spec-runner',
+    private: true,
+    description: 'Forge-managed Playwright workspace for running generated specs. Maintained by forge-pool-run-spec.mjs.',
+    dependencies: {
+      '@playwright/test': '^1.49.0',
+      dotenv: '^16.4.0',
+    },
+  }, null, 2) + '\n'
+  // Overwrite on every install attempt so version bumps land deterministically.
+  writeFileSync(pkgPath, pkgContent)
+
+  console.error(`forge-pool-run-spec: installing plugin runner deps in ${PLUGIN_RUNNER_ROOT}/ (~30s on first run)…`)
+  const result = spawnSync('npm', ['install', '--silent', '--no-audit', '--no-fund', '--no-progress'], {
+    cwd: PLUGIN_RUNNER_ROOT,
+    stdio: ['ignore', 'inherit', 'inherit'],
+  })
+  if (result.status !== 0) {
+    die(
+      `npm install failed in ${PLUGIN_RUNNER_ROOT}/ (exit ${result.status}). ` +
+      `Investigate and re-run.`,
+      3
+    )
+  }
+  if (!existsSync(PLUGIN_PW_MARKER)) {
+    die(
+      `npm install completed but @playwright/test still missing at ` +
+      `${PLUGIN_PW_MARKER}. This shouldn't happen — check the runner dir.`,
+      3
+    )
+  }
 }
 
 function timestamp() {

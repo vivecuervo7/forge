@@ -1,6 +1,6 @@
 # Forge project conventions
 
-How a project structures its forge-related artifacts. Applies to any project that uses forge — sandbox, real apps, single-repo, wrapper-style. The plugin's own working directory will eventually adopt the same shape (after `/forge-team` absorbs `/forge`).
+How a project structures its forge-related artifacts. Applies to any project that uses forge — sandbox, real apps, single-repo, wrapper-style. The plugin's own working directory will eventually adopt the same shape (after `/forge` absorbs `/forge`).
 
 ## The shape
 
@@ -11,11 +11,11 @@ How a project structures its forge-related artifacts. Applies to any project tha
     ├── README.md         # what this directory is, links here
     ├── hints/            # COMMITTED: project hint files
     │   ├── README.md     # local-only, gitignored — author guidance
-    │   ├── forge.md      # consumed by the /forge (or /forge-team) skill
+    │   ├── forge.md      # consumed by the /forge skill
     │   ├── driver.md     # consumed by forge:driver
-    │   ├── author.md     # consumed by forge:author
+    │   ├── author.md     # consumed by forge:snippet-author
     │   ├── spec-writer.md  # consumed by forge:spec-writer
-    │   └── verifier.md   # consumed by forge:verifier
+    │   └── verifier.md   # consumed by forge:spec-verifier
     ├── snippets/         # local: working snippets (auto-authored + curated)
     ├── specs/            # local: spec-writer output, copy wherever you want when ready
     ├── videos/           # local: screen recordings
@@ -69,11 +69,11 @@ Each hint file is named after the **consumer** that reads it, not the **topic** 
 
 | File | Consumer | Typical content |
 |---|---|---|
-| `forge.md` | the /forge (or /forge-team) skill | env contract, provisioning recipe, env-loading approach, pool location override (if needed) |
+| `forge.md` | the /forge skill | env contract, provisioning recipe, env-loading approach, pool location override (if needed) |
 | `driver.md` | forge:driver | app structure, common routes, available test users / personas, known gotchas |
-| `author.md` | forge:author | snippet conventions for this project, naming patterns, what to extract vs not |
+| `snippet-author.md` | forge:snippet-author | snippet conventions for this project, naming patterns, what to extract vs not |
 | `spec-writer.md` | forge:spec-writer | spec conventions, output location, naming convention, required imports |
-| `verifier.md` | forge:verifier | how to verify specs for this project, project-specific reset patterns |
+| `spec-verifier.md` | forge:spec-verifier | how to verify specs for this project, project-specific reset patterns |
 
 The skill includes excerpts of `forge.md` when it spawns each agent, so shared knowledge propagates without the user having to cross-reference between files. The user authors once; the skill handles distribution.
 
@@ -149,7 +149,7 @@ Single-repo projects put `forge/` directly in the repo. Wrapper-style projects p
 
 ## Discovery
 
-The `/forge` skill (and future `/forge-team`) finds the project's forge root by walking up from the current working directory, looking for a `forge/` directory. First one found wins. Same pattern as git looking for `.git/`, npm looking for `node_modules/`. Run forge from anywhere in the project tree and it locates the right context automatically.
+The `/forge` skill (and future `/forge`) finds the project's forge root by walking up from the current working directory, looking for a `forge/` directory. First one found wins. Same pattern as git looking for `.git/`, npm looking for `node_modules/`. Run forge from anywhere in the project tree and it locates the right context automatically.
 
 If no `forge/` is found in the tree, the skill surfaces a helpful error: "no forge/ directory found — run `/forge-init` to scaffold one in the current directory."
 

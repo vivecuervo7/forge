@@ -1,12 +1,8 @@
 # forge
 
-A browser assistant for repeatable user actions.
+A browser-automation team for Claude Code. Forge spawns a small mesh of agents that drive a real browser, capture reusable snippets, and (on request) compose verified Playwright specs from the work.
 
-`forge` lets Claude drive a browser to do repeatable user actions — fill the form you fill every week, paste a GIF into a PR description, navigate a five-step UI you'd rather not click through again. The first time Claude does it, forge captures the path as a small `.ts` snippet. Next time you ask, it's already in the library; cheap invocation rather than fresh investigation.
-
-Each Claude session gets its own managed Chrome by default, with an isolated profile under `$FORGE_ROOT/runs/<session-id>/`. Two concurrent Claude sessions (e.g. across worktrees) run independent browsers — no shared tabs, no clobbering. If you'd rather Claude drive your everyday browser session, opt in to attach mode via `FORGE_CDP_PORT` (see [Browser model](#browser-model)).
-
-Specs are downstream and optional — if a flow becomes worth pinning into CI, `/forge spec` synthesises a runnable `.spec.ts` from the recorded drive.
+The default mode just does the thing you asked for. Spec mode is opt-in for when a flow is worth pinning into CI.
 
 ## Install
 
@@ -15,196 +11,138 @@ claude plugin marketplace add vivecuervo7/claude-plugins
 claude plugin install forge@vive-claude
 ```
 
-First use bootstraps a data root under `~/.claude/.vive-claude/forge/`. The bootstrap is idempotent.
+Forge depends on Claude Code's **experimental agent teams** primitive. Enable it once:
+
+```bash
+# in ~/.claude/settings.json
+"env": { "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1" }
+```
+
+Then restart Claude Code.
+
+Once a project is forge-init'd (below), the plugin lazy-installs its Playwright runner under `~/.claude/.vive-claude/forge/runner/` on first spec run.
 
 ## Requirements
 
-- **playwright-cli** — `brew install playwright-cli`. Forge is a wrapper, not a replacement.
-- **macOS** for now (the managed-launch fallback targets `/Applications/Google Chrome.app`; the CDP-attach path works against any Chromium-family browser).
+- **playwright-cli** — `brew install playwright-cli`. Forge wraps it.
+- **macOS or Linux**. Lock file primitives use `flock` (Linux) or `lockf` (macOS).
 - **Node.js** — any recent version (tested on 24).
-
-## Browser model
-
-By default forge launches a fresh headed Chrome per Claude session, with a per-session profile under `$FORGE_ROOT/runs/<session-id>/profile/`. Two Claude sessions (e.g. across worktrees) get two independent browsers — no shared tabs, no shared profile, no fight over state. The browser stays open across forge calls in the same Claude session and is reused.
-
-For "take-the-reins" mode where Claude acts on your everyday browser session, launch your Chromium-family browser (Chrome, Arc, Brave, Edge) with `--remote-debugging-port=9222`:
-
-```bash
-alias chrome='/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222 --user-data-dir=$HOME/.cache/chrome-cdp'
-```
-
-Then opt into attach mode by setting `FORGE_CDP_PORT=9222` in your env before invoking forge. `forge-session.sh` will attach to that browser instead of launching a managed one.
+- **jq** — used by the pool scripts for state.json edits.
 
 ## Commands
 
-| Command | Description |
-|---------|-------------|
-| `/forge <description>` | Drive a task end-to-end. Reuses existing snippets where they fit, authors new ones for novel steps. |
-| `/forge snippet <name> [args]` | Cheap invocation of a known snippet — bypasses the agents, just runs the registry. |
-| `/forge spec [url-or-description]` | *Optional export.* Drive the task (or work retrospectively from the session transcript) and synthesise a runnable `.spec.ts` — useful when a flow becomes worth pinning into CI. |
-| `/forge doctor` | Read-only diagnostic checklist — confirms data root, snippet tiers, playwright-cli install, session state, and CDP browser presence. |
+| Command | What it does |
+|---|---|
+| `/forge <task>` | **Drive mode.** Driver + snippet-author. Does the task end-to-end, accretes reusable snippets from novel work. Fastest path. |
+| `/forge spec <task>` | **Spec mode.** Adds spec-writer + spec-verifier. Composes a self-contained `.spec.ts`, runs it from a cold start, records video. |
+| `/forge-init` | Scaffolds the `forge/` directory convention into the current project. Idempotent. |
+| `/forge-export <spec-name>` | Exports a composed spec to a self-contained inlined form, suitable for shipping into another test suite. |
 
-The skill also fires on natural-language phrases like `"use forge to ..."` — see [Invocation paths](#invocation-paths) for the routing tradeoff.
+Spec mode also fires on natural-language signals — "create a spec for AE-1775", "write a spec that…", "capture as a spec". Plain `/forge <task>` is the unambiguous drive case.
 
-## How it works
+Add `record as <label>` to spec mode and the verifier's video lands at `forge/videos/<spec-basename>-<label>.webm`. Without a label, the suffix is a timestamp. Re-running with the same label overwrites — useful for before/after comparisons against the same spec.
 
-Three single-purpose agents fan out from a Haiku-driven skill, with the session transcript as the contract between them. The driver does all the browser work; downstream agents read its log with full hindsight and produce snippets or specs.
+## Architecture
 
-```mermaid
-flowchart TB
-    User(["/forge &lt;task&gt;"])
-    Skill["<b>forge skill</b><br/>orchestrator · Haiku"]
+Four agents communicate in a mesh via `SendMessage`. The skill spawns them, manages the team lifecycle, and surfaces user-channel events (STUCK escalations, completion pings).
 
-    subgraph agents["agents · Sonnet"]
-        Driver["<b>driver</b><br/>drives the browser"]
-        Author["<b>author</b><br/>writes snippets"]
-        SpecWriter["<b>spec-writer</b><br/>writes specs"]
-    end
+| Agent | Role |
+|---|---|
+| `forge:driver` | Drives the browser via `playwright-cli` against a claimed slot. Invokes existing snippets where they match. |
+| `forge:snippet-author` | Listens to driver narration during the drive. Writes per-step snippets for novel work into `forge/snippets/`. |
+| `forge:spec-writer` *(spec mode)* | Composes a self-contained `.spec.ts` after the drive completes. Imports snippets for invoked steps; inlines code for fresh-drive steps. |
+| `forge:spec-verifier` *(spec mode)* | Runs the spec via `forge-pool-run-spec.mjs` against the still-warm slot, records video, surfaces pass/fail. Iterates with driver/spec-writer on failure. |
 
-    subgraph artifacts["artifacts on disk"]
-        Transcript[("session transcript<br/>drove · invoked · note")]
-        Library[("snippet library")]
-        Specs[("specs/&lt;label&gt;.spec.ts")]
-    end
+## Pool + slot model
 
-    User --> Skill
-    Skill -- "drive the task" --> Driver
-    Driver -. "reads INDEX,<br/>invokes existing" .-> Library
-    Driver -- "appends events" --> Transcript
-    Skill -. "if novel work" .-> Author
-    Skill -. "if spec mode" .-> SpecWriter
-    Author -- "reads" --> Transcript
-    Author -- "writes new snippets" --> Library
-    SpecWriter -- "reads" --> Transcript
-    SpecWriter -. "inlines snippet bodies" .-> Library
-    SpecWriter -- "writes" --> Specs
+Forge owns a per-project pool of chromium "slots." Each slot is persona-bound (e.g. `slot-standard_user`, `slot-problem_user`) with its own profile dir and `.env` for credentials. Claims are serialized by a file lock; two concurrent `/forge` invocations grab different slots and run in parallel.
+
+At claim time, the lead invokes a filesystem-level scrub of cookies + localStorage + sessionStorage on the slot's profile — covers the universally-biting class without depending on the previous chromium session being alive. Project-specific cleanup (database resets, account churn, third-party state) is hint-driven (see below).
+
+## Hints
+
+`forge-init` scaffolds `forge/hints/` with one file per consumer. Hints are natural-language instructions to the agents, not config.
+
+| File | Read by |
+|---|---|
+| `forge.md` | The skill (env contract, provisioning recipe, setup, teardown) |
+| `driver.md` | `forge:driver` (app structure, gotchas) |
+| `snippet-author.md` | `forge:snippet-author` (project-specific snippet conventions) |
+| `spec-writer.md` | `forge:spec-writer` (spec naming, imports) |
+| `spec-verifier.md` | `forge:spec-verifier` (verification conventions) |
+
+All are optional. The minimum to be operational is `forge.md` with an env contract + provisioning recipe.
+
+### Setup / teardown
+
+`forge.md`'s `## Setup before each run` section drives the lead's pre-drive work. Examples:
+
+```markdown
+## Setup before each run
+
+Create a fresh test user:
+
+\`\`\`sql
+INSERT INTO users (email, role)
+VALUES ('test-' || gen_random_uuid() || '@example.com', 'standard')
+\`\`\`
+
+Capture the generated email; the spec needs it as the login identity.
 ```
 
-- **Driver never authors.** It reads `INDEX.md`, invokes existing snippets where they fit, drives novel actions inline, and leaves a flat log. Naming, chunking, and intent-detection are downstream agents' jobs.
-- **The transcript is the only contract.** Three event types — `drove` (raw browser actions), `invoked` (existing-snippet calls with args + result), `note` (optional driver annotations). The author and spec-writer consume it independently.
-- **Author is conditional, spec-writer is mode-gated.** If the transcript contains only `invoked` events (library reuse was complete), the author is skipped. The spec-writer runs only when invoked via `/forge spec ...`.
-- **Specs run without host project setup.** Generated specs run via `forge-spec.mjs run <label>` against an isolated Playwright workspace at `~/.claude/.vive-claude/forge/runner/`.
+Or simply:
 
-### Snippet lifecycle
+```markdown
+## Setup before each run
 
-```mermaid
-flowchart LR
-    Authored([authored]) --> Scratch[scratch/]
-    Scratch -- "2nd use" --> Staged[staged/]
-    Staged -- "3rd use" --> Library[library/]
-    Scratch -. "7d unused" .-> Pruned([pruned])
-    Staged -. "60d unused" .-> Scratch
-    Library -. "90d unused" .-> Review([flagged for review])
+Don't reset any state — runs share state intentionally.
 ```
 
-New snippets land in `scratch/`. Repeat use promotes them — `library/` entries are never auto-deleted. Thresholds configurable via `FORGE_STAGE_AT` / `FORGE_LIBRARY_AT`; cleanup runs via `forge-registry.mjs prune`.
+The default scrub fires unless the hint says not to. `## Teardown after each run` is the symmetric escape hatch for end-of-run cleanup forge can't infer (server-side state, logout endpoints).
 
-## Invocation paths
+## Storage layout
 
-Forge exposes two routes, deliberately differentiated:
+```
+<project>/forge/
+├── hints/                  # committed
+│   ├── forge.md
+│   ├── driver.md
+│   ├── snippet-author.md
+│   ├── spec-writer.md
+│   └── spec-verifier.md
+├── .pool/                  # gitignored — slot state
+│   ├── slot-<persona>/
+│   │   ├── .env           # per-persona credentials
+│   │   ├── profile/       # chromium profile
+│   │   └── state.json     # { checkedOutBy, lastClaimed, lastReleased }
+│   └── ...
+├── snippets/               # gitignored by default — accreted via author
+├── specs/                  # gitignored — composed during spec mode
+├── videos/                 # gitignored — verifier recordings
+├── .env                    # gitignored — forge-specific env
+├── playwright.config.ts    # scaffold — fallback if no project runner
+└── .gitignore              # self-ignores; only hints/ tracked by default
+```
 
-| Path | Trigger | Behaviour |
-|---|---|---|
-| **Slash** | `/forge:forge <description>` or `/forge:forge snippet <name>` | Runs entirely on Haiku — the `model: haiku` pin re-engages on every fresh slash invocation. |
-| **Natural language** | `"use forge to ..."` | Session model (e.g. Opus) decides whether to trigger the skill; the skill body still runs on Haiku. |
+Only `hints/` is tracked. Everything else is local per-machine. `forge-init` regenerates the rest from convention. See the scaffold's inline comments for adapting to projects with their own Playwright runner.
 
-The slash path is the cheap-and-predictable case for routine reuse. The natural-language path costs more on the first hit but is the discovery affordance — useful when you don't know the snippet name yet. Wall-time floor is browser I/O (typically 10–50s for a page navigation + scrape) regardless of path; on slash invocations, the model side is negligible relative to that floor.
+## Credentials
+
+Forge speaks dotenv natively. Three layers, last-set wins:
+
+1. **`<project-root>/.env`** — baseline.
+2. **`forge/.env`** — forge-specific overrides.
+3. **`<slot>/.env`** — per-persona overrides (injected by `--slot` on wrapper scripts).
+
+User shell env (e.g. `direnv` with 1Password injecting `OP_TOKEN`) sits on top — already in `process.env` when the wrappers start; wins via `dotenv`'s non-override default. Direnv is your personal layer, not forge's mechanism.
 
 ## Use cases
 
-The library accretes from real repetition. A few representative shapes:
-
 - **Routine drudgery.** "Delete all emails from `noreply@noisy-vendor.com`."
-- **PR / GitHub flows.** "Paste the GIF at `~/Desktop/demo.gif` into the description of PR #42."
+- **PR / GitHub flows.** "Paste the GIF at `~/Desktop/demo.gif` into PR #42's description."
 - **Multi-step forms.** JIRA submissions, expense reports, deploy approval pages.
-- **Triage and verification.** "Open the dashboard, check the error count, click into anything > 50, screenshot."
-- **API-less integrations.** Apps without public APIs are still driveable via their UI. A snippet *is* the integration.
-
-## Storage
-
-Runtime data lives at `~/.claude/.vive-claude/forge/`:
-
-```
-~/.claude/.vive-claude/forge/
-├── INDEX.md              # auto-generated retrieval index (name — description per line)
-├── stats.json            # per-snippet { tier, useCount, lastUsed, createdAt }
-├── scratch/              # see Snippet lifecycle above
-├── staged/
-├── library/
-├── broken/               # quarantined after failed repair
-├── sessions/             # per-Claude-session transcripts (drove + invoked + note events)
-├── runs/<session-id>/    # per-Claude-session browser state — profile, session metadata
-├── specs/                # generated `<label>.spec.ts` files
-├── runner/               # bundled Playwright workspace used by `forge-spec.mjs run`
-└── hints/                # optional domain hints — see below
-```
-
-Override the data root with `FORGE_ROOT=/some/other/path` — every script and every agent honors it. This is how other plugins can wrap forge (point at a side directory, invoke `forge:driver` / `forge:author` by name) without colliding with a standalone install.
-
-Nothing here belongs in a git repo. Snippets may contain user-specific selectors, URLs, or paths captured during authoring — keep them off-disk-of-record.
-
-## Domain hints
-
-Drop markdown files into `$FORGE_ROOT/hints/` to inject domain knowledge into the agents. Each agent reads `hints/project.md` (shared) plus its own role-specific file at the start of every run:
-
-| File | Read by | Use for |
-|---|---|---|
-| `hints/project.md` | all three agents | environment setup, base URLs, credential env vars, command wrapping (e.g. `direnv exec ...`) |
-| `hints/driver.md` | driver | live UI quirks, click workarounds, wait patterns |
-| `hints/author.md` | author | snippet conventions, naming rules, must-include wait patterns, POM composition |
-| `hints/spec-writer.md` | spec-writer | fixture imports, spec naming conventions, assertion style |
-
-All four are optional — standalone forge with no `hints/` directory is unaffected. Keep each file short and reviewable; this is a prompt-injection surface for every agent run.
-
-## Credentials & secrets
-
-playwright-cli's `run-code` sandbox does NOT expose Node's `process.env`. Naive `process.env.PASSWORD` inside a drive block resolves to `undefined`, and direct `playwright-cli fill` of literal credentials leaks them into the transcript verbatim. Forge solves both via env injection:
-
-**Driver side**: pass `--env KEY` per env var on every `drive run-code` invocation that needs them.
-
-```bash
-node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-registry.mjs drive run-code \
-  "async page => { await page.getByLabel('Username').fill(process.env.PORTAL_USERNAME); }" \
-  --env PORTAL_USERNAME
-```
-
-Forge resolves the value at the Node layer (where direnv-loaded env is visible), wraps the user's code with a `process` shim into the sandbox, and records only the original code (with `process.env.X` refs intact) to the transcript. Literals never reach disk.
-
-**Snippet side**: snippets that read credentials declare them in `meta.envKeys`. The author agent populates this automatically from drove events that used `--env`.
-
-```ts
-export const meta = {
-  description: "...",
-  envKeys: ['PORTAL_USERNAME', 'PORTAL_PASSWORD'],
-  args: {},
-}
-```
-
-When the snippet is later invoked, forge resolves the env vars and shims `process.env` into the sandbox, same shape as the drive `--env` flow. Cheap reuse, no plumbing per call.
-
-Both mechanisms require the env vars to be set when the bash invocation runs. Wrap with your env-loading mechanism if needed (e.g. `direnv exec ~/project ...`).
-
-### Env layering (agent-team architecture)
-
-The newer `/forge-team` skill and its wrapper scripts (`forge-pool-*.mjs`) speak **dotenv** end-to-end. No direnv requirement on the machine. Three layers, last-set wins:
-
-1. **`<project-root>/.env`** — baseline values everyone in the project shares. Loaded by the scaffolded `forge/playwright.config.ts` via the `dotenv` package. Used by VS Code's Playwright extension, direct `npx playwright test`, and the forge wrappers when invoked without `--slot`.
-2. **`forge/.env`** *(optional)* — forge-specific overrides. Same loading path as #1 but read first so it wins. Useful when forge specs need different values (baseURL, timeouts, fixtures) than the rest of the project without polluting project-wide config.
-3. **`<slot>/.env`** — per-persona override for parallel slot runs. Read by the forge wrappers (`forge-pool-run-spec.mjs`, `forge-pool-run-code.mjs`, `forge-pool-invoke-snippet.mjs`) when invoked with `--slot <slot-dir>`, then injected as spawn env above the dotenv-loaded baseline.
-
-The user's shell env sits on top of all three. If you already use **direnv** (e.g. for 1Password integration — `export OP_TOKEN="$(op read 'op://Personal/Forge/token')"` in your `.envrc`), it composes naturally: direnv loads into your shell env, which is `process.env` when the forge wrapper starts, which wins over all three dotenv layers (because dotenv defaults to non-override). The [`direnv` VS Code extension](https://marketplace.visualstudio.com/items?itemName=mkhl.direnv) bridges shell direnv into the editor's process model so the VS Code Playwright extension picks up the same env.
-
-Caveat: if your machine direnv redeclares a key that's part of slot identity (e.g. `SAUCE_USERNAME` in a saucedemo project), parallel slot semantics break — all parallel runs see your value. Keep machine direnv scoped to keys that *aren't* part of slot identity (API tokens, dev URLs, 1Password injections — not personas).
-
-## Wrapping forge for project-specific use
-
-Forge is domain-agnostic; project-specific knowledge belongs in a wrapper plugin. To wrap:
-
-1. **Point `FORGE_ROOT` at a side directory** owned by your project (e.g. `~/myproject/.forge/`). All forge scripts and agents honor it; your project's snippet library, transcripts, and managed Chrome profile stay isolated from a standalone forge install.
-2. **Seed `$FORGE_ROOT/hints/`** with project-specific facts the agents need — base URLs, auth env var names, repo layout, known UI quirks.
-3. **Invoke `forge:driver` and `forge:author` by name** from your wrapper skill, passing `FORGE_ROOT` and `FORGE_SESSION` in their prompts. Your wrapper handles the orchestration and any project-specific spec composition.
-
-Both forge agents read `$ROOT/hints/project.md` plus their role-specific hint file on every run. Snippets authored by the wrapped instance live in the wrapper's `FORGE_ROOT`, not in standalone forge's. The two libraries never collide.
+- **Triage + verification.** "Open the dashboard, check the error count, screenshot anything > 50."
+- **Bug repro + verification specs.** `/forge spec AE-1775 record as before` then again with `record as after` to produce a paired before/after recording bound to the spec.
 
 ## License
 
