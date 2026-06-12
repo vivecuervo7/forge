@@ -1,0 +1,113 @@
+#!/usr/bin/env node
+// forge-pool-run-code.mjs — playwright-cli run-code with --env injection.
+//
+// Mirrors the --env shim from forge-registry.mjs but parameterized by
+// playwright-cli session name (not FORGE_SESSION / FORGE_ROOT). Designed for
+// the team architecture where slot-bound chromium sessions are managed by
+// the /forge-team skill, not by the legacy registry.
+//
+// Why this exists: playwright-cli's run-code sandbox does NOT expose Node's
+// `process` object. Naive `process.env.X` references in user code resolve to
+// undefined. The fix is to wrap the user's code with a shimmed `process`
+// that carries exactly the env vars the caller explicitly requested via
+// --env flags. Those values are read from THIS process's env (where direnv
+// or whatever env loader the project uses has resolved them) and inlined
+// into the wrapped code that's sent to playwright-cli.
+//
+// Hygiene: the literal values appear only in the wrapped code that's passed
+// to playwright-cli. This script does NOT print the wrapped form to stdout
+// or stderr — only the original (with `process.env.X` refs intact) would
+// surface if anything were to log it. Calling agents see only the wrapper
+// invocation with --env KEY flags in their tool-call transcripts; never
+// the resolved values.
+//
+// Usage:
+//   forge-pool-run-code.mjs -s=<session> <code> [--env KEY]...
+//   forge-pool-run-code.mjs --session <session> <code> [--env KEY]...
+//
+// Each KEY must be set in THIS process's env. To ensure that, callers wrap
+// the invocation with the project's env loader, typically:
+//
+//   direnv exec <slot-dir> node forge-pool-run-code.mjs -s=<session> "<code>" --env SAUCE_USERNAME
+//
+// Exit codes:
+//   0   success — playwright-cli output is forwarded verbatim to stdout
+//   2   usage / arg error
+//   3   --env KEY not set in process.env
+//   4   playwright-cli not installed
+//   any other — playwright-cli's exit code is propagated
+
+import { spawnSync } from 'node:child_process'
+
+function die(msg, code = 2) {
+  console.error('forge-pool-run-code:', msg)
+  process.exit(code)
+}
+
+const argv = process.argv.slice(2)
+
+let session = null
+let code = null
+const envKeys = []
+
+for (let i = 0; i < argv.length; i++) {
+  const arg = argv[i]
+  if (arg.startsWith('-s=')) {
+    session = arg.slice(3)
+  } else if (arg === '--session' || arg === '-s') {
+    if (i + 1 >= argv.length) die('--session requires a value')
+    session = argv[++i]
+  } else if (arg === '--env') {
+    if (i + 1 >= argv.length) die('--env requires a KEY')
+    envKeys.push(argv[++i])
+  } else if (arg.startsWith('-')) {
+    die(`unknown flag: ${arg}`)
+  } else if (code === null) {
+    code = arg
+  } else {
+    die(`unexpected positional arg: ${arg}`)
+  }
+}
+
+if (!session) die('missing -s=<session-name>')
+if (code === null) die('missing <code> positional arg')
+
+// Resolve env vars from this process's env. If a key isn't set, fail loudly —
+// the caller almost certainly forgot to wrap with their env loader.
+const envObj = {}
+for (const key of envKeys) {
+  if (process.env[key] === undefined) {
+    die(
+      `--env ${key}: env var not set in this process. ` +
+      `Wrap your invocation with the project's env loader (e.g. \`direnv exec <slot-dir> ...\`).`,
+      3
+    )
+  }
+  envObj[key] = process.env[key]
+}
+
+// Wrap the user's code so `process.env.X` references resolve to the injected
+// literals inside playwright-cli's sandbox. The shadowed `process` only
+// carries `env`; everything else on real `process` remains unavailable in
+// run-code (which is the intended sandbox behavior).
+const wrappedCode = envKeys.length > 0
+  ? `async page => { const process = { env: ${JSON.stringify(envObj)} }; return await (${code})(page); }`
+  : code
+
+const result = spawnSync(
+  'playwright-cli',
+  [`-s=${session}`, 'run-code', wrappedCode],
+  { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 }
+)
+
+if (result.error) {
+  if (result.error.code === 'ENOENT') {
+    die('playwright-cli not installed or not on PATH', 4)
+  }
+  die(`spawn error: ${result.error.message}`, 5)
+}
+
+// Forward playwright-cli's output verbatim — its stdout, stderr, and exit code.
+if (result.stdout) process.stdout.write(result.stdout)
+if (result.stderr) process.stderr.write(result.stderr)
+process.exit(result.status ?? 1)
