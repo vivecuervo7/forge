@@ -1,0 +1,4 @@
+# Eval-run iteration artifacts. Per-machine results from /skill-creator
+# runs against /forge — graded outputs, benchmarks, timing data. The
+# evals/evals.json is the committed spec; iteration outputs are ephemeral.
+skills/forge-workspace/
