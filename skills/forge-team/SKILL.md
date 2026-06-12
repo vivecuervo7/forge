@@ -4,7 +4,7 @@ description: "Drive browser tasks via the forge agent team — four teammates co
 model: sonnet
 effort: medium
 argument-hint: "<description of the browser task to perform>"
-allowed-tools: Read, Skill, Bash(bash **/forge/*/scripts/*), Bash(node **/forge/*/scripts/*), Bash(direnv:*), Bash(playwright-cli:*), Bash(mkdir:*), Bash(jq:*), Bash(cat:*), Bash(echo:*), Bash(ls:*), Agent, SendMessage, TeamCreate, TeamDelete, TaskCreate, TaskList, TaskGet, TaskUpdate
+allowed-tools: Read, Skill, AskUserQuestion, Bash(bash **/forge/*/scripts/*), Bash(node **/forge/*/scripts/*), Bash(direnv:*), Bash(playwright-cli:*), Bash(mkdir:*), Bash(jq:*), Bash(cat:*), Bash(echo:*), Bash(ls:*), Agent, SendMessage, TeamCreate, TeamDelete, TaskCreate, TaskList, TaskGet, TaskUpdate
 ---
 
 # /forge-team
@@ -225,9 +225,15 @@ After spawning, the teammates self-coordinate. You (the lead) wait. Messages fro
 
 - **Completion pings from all four teammates** — this is your primary signal that the team is done. Driver, author, spec-writer, and verifier each SendMessage `team-lead` with a brief `task <id> complete` summary after marking their task `completed` via TaskUpdate. When you've received ALL FOUR pings, proceed to phase 5. Note: the natural order is driver/author → spec-writer → verifier (verifier waits for spec-writer's spec; spec-writer waits for driver's final-state).
 - **Messages addressed to you (`team-lead`)** — process them:
-  - `STUCK: ...` from driver → surface to user, get user response, SendMessage back to driver (Stage 5 work; if it happens in Stage 3a, just surface the question and tell the user the team is paused).
-  - Status updates / questions from teammates → answer concisely or relay relevant context.
-  - Anything you can't handle → ask the user.
+  - **STUCK from any teammate** (driver most commonly) — message body is `{ type: "stuck", question, context, options? }`. Surface to the user via `AskUserQuestion`:
+    - Build the question from the teammate's `question` field.
+    - If `options` is provided, map each option to an AskUserQuestion option (use option.label as the label, option.value carries the value you'll relay). AskUserQuestion always also allows "Other" for free-form answers.
+    - If no `options`, ask the question open-ended — the user types their answer via "Other".
+    - When the user responds, SendMessage the originating teammate with `{ type: "stuck_response", answer: <chosen value or free-form text> }`. They'll wake on receive, apply the answer, and continue.
+    - The team is effectively paused while you wait for the user — don't try to do anything else. Once you relay the response, they resume on their own.
+  - **`cannot-drive` from driver** — terminal failure. Surface to user as part of the final report; proceed to phase 5 cleanup (team's done).
+  - **Status updates / questions from teammates** — answer concisely or relay relevant context.
+  - **Anything you can't handle** — ask the user.
 - **Idle notifications** — informational only. They fire after every turn including ones where the teammate is still working. Do NOT treat an idle notification as a "done" signal — wait for the explicit `task <id> complete` SendMessage instead. An idle teammate with an incomplete task hasn't finished; they're just between turns.
 
 > **Note on `TaskList()`:** calling `TaskList` from the lead session does NOT surface team tasks reliably — completed tasks often report as `No tasks found`. Treat lead-pings as authoritative; don't gate phase 5 on TaskList status.
@@ -293,7 +299,7 @@ If anything didn't go to plan (a teammate returned `cannot-drive`, the verifier 
 
 ## Hard rules
 
-- **You are an orchestrator, not an actor.** All browser driving belongs to `driver`. Snippet authoring belongs to `author`. Spec writing belongs to `spec-writer`. Spec verification belongs to `verifier`. You set up the team, create tasks, spawn teammates, manage the lifecycle, handle the user channel. You do NOT invoke `playwright-cli` yourself, write snippet or spec files, run specs, or message-relay between teammates.
+- **You are an orchestrator, not an actor.** All browser driving belongs to `driver`. Snippet authoring belongs to `author`. Spec writing belongs to `spec-writer`. Spec verification belongs to `verifier`. You set up the team, create tasks, spawn teammates, manage the lifecycle, AND **handle the user channel**: STUCK messages from teammates → AskUserQuestion → SendMessage the answer back. You do NOT invoke `playwright-cli` yourself, write snippet or spec files, run specs, or message-relay between teammates EXCEPT for STUCK-response (that's deliberately you relaying user input).
 - **Teammates message each other directly.** Do NOT parse driver messages and forward to author — they're already addressed to author directly. You only handle messages explicitly addressed to `team-lead`.
 - **Always release the slot.** Even if the drive returned `cannot-drive` or a teammate rejected shutdown, eventually call `forge-pool-release.sh`. Leaving a slot perpetually checked out wastes capacity.
 - **Always TeamDelete.** Don't leave team config files lying around in `~/.claude/teams/`.
@@ -308,10 +314,10 @@ If anything didn't go to plan (a teammate returned `cannot-drive`, the verifier 
 - **Snippet authoring discipline** — author only writes snippets for fresh-drive steps (no library coverage). Library grows from successful novel work; never duplicates.
 - **Spec generation that composes the library** — spec-writer receives driver's final-state summary and writes a self-contained `.spec.ts` to `<PROJECT_FORGE_ROOT>/specs/`. Invoked steps become `snippet.run()` calls; fresh-drive steps become inline code; captured values become `expect()` assertions.
 - **In-slot spec verification** — verifier runs the spec via `forge-pool-run-spec.mjs` against the still-warm slot before slot release. On pass, the spec is verified-from-fresh. On fail, verifier asks driver (selectors) or spec-writer (assertions) for clarification and iterates up to 3 times before escalating.
+- **User escalation channel** — any teammate (driver most commonly) can SendMessage you `{ type: "stuck", question, context, options? }`. You surface to the user via `AskUserQuestion`, then SendMessage the answer back. The team is genuinely collaborative with the human teammate, not fire-and-forget.
 
 ## What this skill does NOT do (yet)
 
-- **No user escalation channel for stuck-driver scenarios.** Stage 5. If the driver SendMessages you `STUCK: ...`, surface it manually and pause the team.
 - **No parallel-runs handling beyond what the pool already provides.** Stage 6 stress-tests concurrent invocations.
 
 ## Failure modes to recover from
