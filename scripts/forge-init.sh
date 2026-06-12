@@ -243,27 +243,6 @@ declare const __dirname: string
 loadEnv({ path: resolve(__dirname, '.env') })
 loadEnv({ path: resolve(__dirname, '..', '.env') })
 
-// Spec forms (run via Playwright projects):
-//
-//   composed (default) — runs forge/specs/*.spec.ts EXCEPT *.exported.spec.ts.
-//                        These are the working artifacts that import from
-//                        forge/snippets/. This is what you run during dev.
-//
-//   exported (opt-in) — runs forge/specs/*.exported.spec.ts only. These
-//                       are self-contained snapshots produced by /forge-export.
-//                       Useful for sanity-checking the inlined form before
-//                       shipping it into another test suite.
-//
-// CLI behavior:
-//   npx playwright test                                  → composed only
-//   FORGE_RUN_EXPORTED=1 npx playwright test             → both projects
-//   FORGE_RUN_EXPORTED=1 npx playwright test --project=exported  → exported only
-//
-// VS Code Playwright extension picks up both projects when FORGE_RUN_EXPORTED=1
-// is in your shell env; each project shows as a separately-runnable item in
-// the test explorer.
-const includeExported = process.env.FORGE_RUN_EXPORTED === '1'
-
 export default defineConfig({
   testDir: './specs',
   // Pin output to forge/test-results regardless of cwd so test artifacts
@@ -272,16 +251,6 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   reporter: 'list',
-  projects: [
-    {
-      name: 'composed',
-      testIgnore: '**/*.exported.spec.ts',
-    },
-    ...(includeExported ? [{
-      name: 'exported',
-      testMatch: '**/*.exported.spec.ts',
-    }] : []),
-  ],
 })
 EOF
   CREATED+=("forge/playwright.config.ts")
