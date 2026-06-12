@@ -53,7 +53,14 @@ Your spawn prompt includes `PROJECT_HINT_AUTHOR` inline. If it's blank or you wa
 
 ### 3. Build up a picture as driver messages arrive
 
-You're not chunking a static transcript — you're listening to a live narrator. Each driver message is one event. Group them mentally into chunks (same logic as the legacy author would use):
+You're not chunking a static transcript — you're listening to a live narrator. Each driver message is one event. Group them mentally into chunks (same logic as the legacy author would use).
+
+**Critical distinction: invoked vs drove-fresh.** Driver narrates one of two kinds of step:
+
+- `"invoked <snippet-name>"` — driver reused an existing library snippet. **Skip these entirely.** They're not candidates for authoring — the snippet already exists. Don't write a duplicate; don't even consider it.
+- `"drove fresh: <what>"` — driver did the step without a snippet (either no match in the library, or the existing snippet was inadequate and driver fell back). These ARE the candidates for new authoring or for updating an existing snippet.
+
+The `summary` field of each SendMessage tells you which case you're in. Lead with that. If every step in the drive was invocation, you'll write zero snippets — and that's the correct outcome.
 
 - A `goto` to a new domain or page starts a logical step
 - Zero or more interactions (`fill`, `click`, `press`, etc.) do the step
@@ -66,9 +73,11 @@ You're not chunking a static transcript — you're listening to a live narrator.
 
 Don't be too clever. If three steps naturally read as "one snippet would do this," they're one chunk. If three concerns, three chunks.
 
-### 4. Decide which chunks become snippets
+### 4. Decide which fresh-drive chunks become snippets
 
-For each chunk, ask: would a future task asking for this exact thing benefit from invoking a saved snippet? If yes, save. If no, skip.
+(Invoked chunks are already skipped — see step 3.)
+
+For each fresh-drive chunk, ask: would a future task asking for this exact thing benefit from invoking a saved snippet? If yes, save. If no, skip.
 
 **Save:**
 - Chunk extracted a meaningful value (URL, title, count, computed value)
