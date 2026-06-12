@@ -17,7 +17,7 @@ How a project structures its forge-related artifacts. Applies to any project tha
     │   ├── spec-writer.md  # consumed by forge:spec-writer
     │   └── verifier.md   # consumed by forge:verifier
     ├── snippets/         # local: working snippets (auto-authored + curated)
-    ├── specs/            # local: spec-writer output, promote to tests/ when ready
+    ├── specs/            # local: spec-writer output, copy wherever you want when ready
     ├── videos/           # local: screen recordings
     ├── .pool/            # local: pool slots (created lazily when first run claims)
     └── .transcripts/     # local: session jsonl, gitignored, debug-only
@@ -159,7 +159,7 @@ If no `forge/` is found in the tree, the skill surfaces a helpful error: "no for
 - **Maximally portable.** No tool-specific dependencies in the convention itself. Direnv users use direnv; dotenv users use dotenv; the convention doesn't care.
 - **Maximally additive.** Adding forge to an existing project means running `/forge-init` and authoring hints. No surgery on the project's other directories.
 - **Security factoring stays clean.** Hints are committed (and should be safe to commit); secrets live in slot env files which are gitignored. The user can mix plain-literal env files in dev with secret-manager-backed env files in production without forge knowing the difference.
-- **Backwards-promotion path is clean.** When a snippet or spec earns its keep, the user copies it out: snippet to a shared library, spec to `tests/`. Promotion is an explicit human action, not an automated forge step.
+- **Backwards-promotion path is clean.** When a snippet or spec earns its keep, the user copies it wherever they want — there's no enforced destination. Promotion is an explicit human action, not an automated forge step. The forge plugin doesn't dictate where promoted specs live; that's a per-project decision (often informed by the project's existing test infrastructure, if any).
 
 ## See also
 
