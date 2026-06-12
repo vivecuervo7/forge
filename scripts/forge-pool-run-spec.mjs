@@ -38,9 +38,11 @@
 //
 // After the run, if --record produced a video.webm under the project's
 // test-results/ dir, it's copied to <projectForge>/videos/ so it survives
-// Playwright's between-runs wipe of test-results. Default copied filename
-// is <spec-basename>-<YYYYMMDD-HHMMSS>.webm; --record-as <label> overrides
-// to <label>.webm (existing file is overwritten — caller-controlled name).
+// Playwright's between-runs wipe of test-results. Filename is always
+// <spec-basename>-<suffix>.webm; suffix is <YYYYMMDD-HHMMSS> by default
+// or the user-supplied label when --record-as <label> is passed. Keeps
+// the spec context attached so labels stay scoped per spec — multiple
+// specs can each have their own "before" / "after" without colliding.
 //
 // Exit codes:
 //   0   spec passed
@@ -255,17 +257,18 @@ function persistRecording() {
     const videosDir = join(projectForge, 'videos')
     mkdirSync(videosDir, { recursive: true })
 
+    // Filename is always <spec-basename>-<suffix>.webm. Suffix is the
+    // user-supplied label (--record-as) or a timestamp by default.
     // Multiple videos in a single run is rare (one test, one video) but
-    // possible. If there are multiple AND --record-as was given, only the
-    // first gets the label — the rest fall back to timestamped names to
-    // avoid silently overwriting.
+    // possible. If there are multiple AND --record-as was given, only
+    // the first gets the bare label — the rest get the label plus an
+    // index to avoid silently overwriting.
     const specBase = basename(specPath).replace(/\.spec\.[tj]s$/, '')
-    const ts = timestamp()
+    const suffix = recordAs || timestamp()
     for (let i = 0; i < videos.length; i++) {
       const src = videos[i]
-      const name = (recordAs && i === 0)
-        ? `${recordAs}.webm`
-        : `${specBase}-${ts}${videos.length > 1 ? `-${i + 1}` : ''}.webm`
+      const indexed = videos.length > 1 ? `-${i + 1}` : ''
+      const name = `${specBase}-${suffix}${indexed}.webm`
       const dest = join(videosDir, name)
       copyFileSync(src, dest)
       console.error(`forge-pool-run-spec: persisted recording → ${dest}`)
