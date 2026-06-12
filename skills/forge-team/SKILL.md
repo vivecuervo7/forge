@@ -1,6 +1,6 @@
 ---
 name: forge-team
-description: "Drive browser tasks via the forge agent team — driver runs in a per-slot chromium with per-slot env injection from the session pool, and an author teammate writes snippets while the drive is still live (mesh communication via SendMessage). Walks up from CWD to find the project's forge/ directory, loads hints, claims a pool slot, creates an agent team with named driver and author teammates, manages the team lifecycle. Spec-writer and verifier teammates land in subsequent stages."
+description: "Drive browser tasks via the forge agent team — three teammates communicating in mesh (driver, author, spec-writer). Driver runs in a per-slot chromium with per-slot env injection, scans the snippet library and invokes existing snippets where they match (driving fresh only for novel work). Author writes snippets for novel work and skips invocations. Spec-writer composes a self-contained .spec.ts from the driver's final-state summary. Walks up from CWD to find the project's forge/ directory, loads hints, claims a pool slot, creates an agent team, manages the team lifecycle. Verifier teammate lands in Stage 4."
 model: sonnet
 effort: medium
 argument-hint: "<description of the browser task to perform>"
