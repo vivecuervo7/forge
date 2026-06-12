@@ -20,7 +20,19 @@ Three files, each a complete skill-creator-format evals JSON. Designed to be run
 /skill-creator run the evals at plugins/forge/skills/forge/evals/suite-1-routing.json against /forge
 ```
 
-Repeat with `suite-2-happy-path.json` and `suite-3-skill-scripts.json`. The three suites are independent — running one doesn't depend on running another — but the recommended order is 1 → 2 → 3 because:
+Repeat with `suite-2-happy-path.json` and `suite-3-skill-scripts.json`.
+
+### Skip the without-skill baseline
+
+Skill-creator's canonical pattern spawns two subagents per case — one with the skill, one without — to measure the delta. **Don't do this for forge.** The forge evals are routing-focused: the prompts explicitly say "Read the SKILL.md at the skill path." Without a skill path, the without_skill subagent has nothing to read and every assertion fails by construction. The delta number ends up being a tautology ("having the skill is better than not having it"), not a useful signal about the skill's behavior.
+
+Spawn with_skill subagents only. The grader still produces pass/fail per case — that's the regression signal we care about.
+
+This is documented to avoid burning cycles re-deriving it. If the situation ever changes (e.g. if a future suite tests behavior that COULD plausibly happen without the skill), revisit then.
+
+### Ordering
+
+The three suites are independent — running one doesn't depend on running another — but the recommended order is 1 → 2 → 3 because:
 
 - Suite 1 doesn't execute, so it never mutates state.
 - Suite 2 is idempotent against the sandbox — it always converges to "3 snippets present" regardless of starting count.
