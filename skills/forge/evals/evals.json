@@ -3,176 +3,136 @@
   "evals": [
     {
       "id": 1,
-      "name": "init-scaffold",
+      "name": "route-init-keyword",
       "prompt": "/forge init",
-      "expected_output": "Lead detects the init route from the first word of arguments. Loads references/init.md. Invokes forge-init.sh against the working directory. The script either creates the 5 scaffolded files (fresh dir) or reports all 5 as preserved (idempotent rerun). Lead relays the script's output to the user.",
+      "expected_output": "First-word 'init' triggers the init route. Lead loads references/init.md and invokes forge-init.sh via Bash. No team-task or export reference is loaded. Lead relays the script's output to the user.",
       "files": [],
       "expectations": [
-        "References/init.md is loaded by the lead (visible as a Read tool call)",
-        "forge-init.sh is invoked via Bash",
-        "The script output mentions all five expected scaffold targets: .gitignore, README.md, playwright.config.ts, .env, hints/README.md",
-        "If the target directory already had forge/ scaffolded, all five files are reported as 'Preserved (already present)' — idempotency holds",
-        "Lead's final user-facing report includes the script's output verbatim or near-verbatim",
-        "No team-task content is loaded (init route does not pull in driver/snippet-author orchestration)"
+        "Lead loads references/init.md via Bash cat or Read (visible in tool call log)",
+        "Lead does NOT load references/team-task.md",
+        "Lead does NOT load references/export.md",
+        "Lead invokes forge-init.sh via Bash",
+        "Lead's final user-facing output includes the script's report (either created or preserved file listing)"
       ]
     },
     {
       "id": 2,
-      "name": "first-drive-authors-novel",
-      "prompt": "/forge log in then sort the inventory page by price low-to-high",
-      "expected_output": "Lead routes to drive mode (task fallthrough; no spec-authoring intent in the task). Loads references/team-task.md. Spawns 2 teammates (driver + snippet-author). Driver invokes the existing login-as-persona snippet, then drives the sort step fresh. Snippet-author writes ≥1 new snippet file capturing the sort step. Final report acknowledges the new snippet(s).",
+      "name": "route-init-natural-PENDING-PHASE0",
+      "prompt": "/forge install forge here",
+      "expected_output": "PENDING — currently fails. Natural-language phrasings like 'install forge here', 'scaffold forge', 'set up forge in this project' should route to the init scaffolder. Today they fall through to drive mode. Will pass after Phase 0 is expanded to natural-language-detect the init route.",
       "files": [],
       "expectations": [
-        "Lead declares MODE=drive in its planning output",
-        "References/team-task.md is loaded; references/init.md and references/export.md are NOT loaded",
-        "Exactly 2 Agent (subagent) calls are made: one for forge:driver and one for forge:snippet-author",
-        "No Agent call is made for forge:spec-writer or forge:spec-verifier",
-        "At least one new .ts file appears under forge/snippets/ that did not exist before the run",
-        "Each newly-written snippet has a meta block with description, args, and (where relevant) envKeys fields",
-        "Lead's final report says 'Snippet-author wrote N snippet(s)' with N ≥ 1, naming the new snippets"
+        "Lead loads references/init.md via Bash cat or Read",
+        "Lead does NOT load references/team-task.md",
+        "Lead invokes forge-init.sh via Bash"
       ]
     },
     {
       "id": 3,
-      "name": "second-drive-reuses-library",
-      "prompt": "/forge add the backpack to cart and report the badge count",
-      "expected_output": "Lead routes to drive mode. Spawns driver + snippet-author. Driver scans forge/snippets/, finds login-as-persona, add-item-to-cart, and cart-get-badge-count all match by intent, and invokes them rather than driving fresh. Snippet-author skips all chunks (all 'invoked', none 'drove fresh') and writes zero new files. Final report says 'Snippet-author wrote 0 snippets — drive's work was covered by existing library.'",
+      "name": "route-export-keyword",
+      "prompt": "/forge export add-backpack-to-cart-standard",
+      "expected_output": "First-word 'export' triggers the export route. Lead loads references/export.md and invokes forge-export-spec.mjs with --spec, --output, and --force. No team-task or init reference is loaded. Lead relays the export outcome to the user. If an export file is written, it is self-contained (no snippet imports).",
       "files": [],
       "expectations": [
-        "Lead declares MODE=drive in its planning output",
-        "Exactly 2 Agent calls: forge:driver and forge:snippet-author",
-        "No Agent call for forge:spec-writer or forge:spec-verifier",
-        "Driver's SendMessages to snippet-author include at least one 'invoked' marker (visible in the summary field)",
-        "Zero new files are written to forge/snippets/ during the run (file count before == file count after)",
-        "Lead's final report says 'Snippet-author wrote 0 snippets' or semantically equivalent (e.g. 'no new snippets — drive's work was covered by existing library')"
+        "Lead loads references/export.md via Bash cat or Read",
+        "Lead does NOT load references/team-task.md",
+        "Lead does NOT load references/init.md",
+        "forge-export-spec.mjs is invoked via Bash with --spec, --output, and --force flags",
+        "If an exported .spec.ts file was produced under <project>/forge-exports/, the file contains zero occurrences of `from '../snippets/'` (snippets are inlined, not imported)"
       ]
     },
     {
       "id": 4,
-      "name": "spec-end-to-end-recorded",
-      "prompt": "/forge spec add the backpack to cart and verify badge count is 1, record as before",
-      "expected_output": "Lead routes to spec mode (first word is 'spec'). Captures RECORD_AS=before. Loads references/team-task.md. Spawns all 4 teammates. Driver runs the task, snippet-author either invokes or authors as appropriate, spec-writer composes a .spec.ts in forge/specs/, spec-verifier runs forge-pool-run-spec.mjs with --record-as before. Spec passes from cold start. Video persists at forge/videos/<spec-basename>-before.webm. Final report includes spec path + video path.",
+      "name": "route-export-natural-PENDING-PHASE0",
+      "prompt": "/forge export the spec from the latest recording",
+      "expected_output": "PENDING — currently fails. Natural-language phrasings like 'export the spec from the latest recording', 'export the most recent spec' should route to the spec exporter. Today they fall through to drive mode. Will pass after Phase 0 is expanded to natural-language-detect the export route. The lead may use AskUserQuestion to disambiguate which spec to export before invoking the script.",
       "files": [],
       "expectations": [
-        "Lead declares MODE=spec and RECORD_AS=before in its planning",
-        "Exactly 4 Agent calls: forge:driver, forge:snippet-author, forge:spec-writer, forge:spec-verifier",
-        "A new .spec.ts file is created in forge/specs/ during the run",
-        "The new spec file contains zero occurrences of the literal strings 'secret_sauce', 'standard_user', or 'problem_user' (credentials must come from process.env)",
-        "The new spec file contains at least one import statement of the form `from '../snippets/...'` (snippets are imported, not inlined)",
-        "Spec-verifier invokes forge-pool-run-spec.mjs with both --record and --record-as before",
-        "Spec-verifier's run exits 0 (spec passes from cold start)",
-        "A video file exists at forge/videos/<spec-basename>-before.webm after the run",
-        "The video file is larger than 10000 bytes (not an empty recording)",
-        "Lead's final report includes both the spec filename and the video path"
+        "Lead loads references/export.md via Bash cat or Read",
+        "Lead does NOT load references/team-task.md",
+        "Either forge-export-spec.mjs is invoked, OR the lead calls AskUserQuestion to confirm which spec before invoking"
       ]
     },
     {
       "id": 5,
-      "name": "export-inlined",
-      "prompt": "/forge export add-backpack-to-cart-standard",
-      "expected_output": "Lead routes to export. Loads references/export.md. Invokes forge-export-spec.mjs --spec <forge>/specs/add-backpack-to-cart-standard.spec.ts --output <project>/forge-exports/add-backpack-to-cart-standard.spec.ts --force. Result is a self-contained spec that no longer imports from forge/snippets/. Final report includes the export path.",
+      "name": "mode-spec-keyword",
+      "prompt": "/forge spec add the backpack to cart and verify the badge count is 1",
+      "expected_output": "First-word 'spec' selects MODE=spec within the team-task route. Lead loads references/team-task.md and spawns all four teammates. If a .spec.ts file is produced during the run, it contains no literal credentials (must reference process.env instead). If spec-verifier runs the spec, it does so via forge-pool-run-spec.mjs.",
       "files": [],
       "expectations": [
-        "References/export.md is loaded; references/team-task.md and references/init.md are NOT loaded",
-        "forge-export-spec.mjs is invoked via Bash with --spec, --output, and --force flags",
-        "A file exists at <project-root>/forge-exports/add-backpack-to-cart-standard.spec.ts after the run",
-        "The exported file does NOT contain any `from '../snippets/'` import statements (snippet bodies are inlined)",
-        "The exported file's only external import is from '@playwright/test' (self-contained for shipping)",
-        "Lead's final report includes the absolute path of the exported file"
+        "Lead declares MODE=spec in its planning",
+        "Lead loads references/team-task.md",
+        "Lead does NOT load references/init.md or references/export.md",
+        "Exactly 4 Agent (subagent) calls are made: forge:driver, forge:snippet-author, forge:spec-writer, and forge:spec-verifier",
+        "If any new .spec.ts file is created in forge/specs/ during the run, it contains zero occurrences of the literal strings 'secret_sauce', 'standard_user', or 'problem_user'",
+        "If spec-verifier runs the spec, it invokes forge-pool-run-spec.mjs via Bash"
       ]
     },
     {
       "id": 6,
-      "name": "mode-detect-spec-natural",
+      "name": "mode-spec-natural",
       "prompt": "/forge create a spec for adding the backpack to the cart and verifying the badge count",
-      "expected_output": "Lead routes to task (first word is not 'spec', 'init', or 'export'). Phase 0a's natural-language detection picks up 'create a spec' and sets MODE=spec. Downstream behavior matches spec mode: 4 teammates spawned, spec produced and verified.",
+      "expected_output": "Natural-language signal 'create a spec for...' selects MODE=spec without the 'spec' keyword. Same downstream as case 5: 4 teammates, references/team-task.md loaded.",
       "files": [],
       "expectations": [
-        "Lead declares MODE=spec in its planning output despite the first word not being 'spec'",
-        "References/team-task.md is loaded",
+        "Lead declares MODE=spec in its planning (despite first word not being 'spec')",
+        "Lead loads references/team-task.md",
         "Exactly 4 Agent calls: forge:driver, forge:snippet-author, forge:spec-writer, forge:spec-verifier",
-        "A new .spec.ts file is created in forge/specs/",
-        "Spec-verifier runs the spec; it passes (exit 0)"
+        "If any new .spec.ts file is created in forge/specs/, it contains zero literal credential strings ('secret_sauce', 'standard_user', 'problem_user')"
       ]
     },
     {
       "id": 7,
-      "name": "mode-detect-init-natural-PENDING-PHASE0",
-      "prompt": "/forge install forge here",
-      "expected_output": "PENDING — currently fails. The desired behavior is that natural-language phrasings like 'install forge here', 'scaffold forge', 'set up forge in this project' route to the init scaffolder rather than falling into drive mode. Will pass after Phase 0 is expanded to natural-language-detect the init route.",
+      "name": "mode-drive-default",
+      "prompt": "/forge log in as standard_user and tell me what's on the inventory page",
+      "expected_output": "Bare drive task with no spec-authoring intent and no special keywords. Lead routes to task fallthrough and selects MODE=drive. Only 2 teammates spawned (driver + snippet-author). No spec written, no spec-verifier spawned.",
       "files": [],
       "expectations": [
-        "Lead detects the init route via natural language (not drive mode)",
-        "References/init.md is loaded",
-        "forge-init.sh is invoked via Bash",
-        "No team-task content (driver, snippet-author orchestration) is loaded"
+        "Lead declares MODE=drive in its planning",
+        "Lead loads references/team-task.md",
+        "Exactly 2 Agent calls: forge:driver and forge:snippet-author",
+        "No Agent call is made for forge:spec-writer or forge:spec-verifier"
       ]
     },
     {
       "id": 8,
-      "name": "mode-detect-export-natural-PENDING-PHASE0",
-      "prompt": "/forge export the spec from the latest recording",
-      "expected_output": "PENDING — currently fails. The desired behavior is that natural-language phrasings like 'export the spec from the latest recording' route to the spec exporter rather than falling into drive mode. Will pass after Phase 0 is expanded to natural-language-detect the export route. The lead may use AskUserQuestion to disambiguate which spec the user means.",
+      "name": "mode-drive-incidental-spec",
+      "prompt": "/forge add the backpack to cart. We just need this done — no spec writing or test creation needed.",
+      "expected_output": "Task contains the word 'spec' but in an explicitly negating context. Lead correctly selects MODE=drive despite the keyword appearing. Tests that natural-language detection doesn't naively keyword-match without considering intent.",
       "files": [],
       "expectations": [
-        "Lead detects the export route via natural language (not drive mode)",
-        "References/export.md is loaded",
-        "Either forge-export-spec.mjs is invoked, OR the lead uses AskUserQuestion to confirm which spec to export before invoking",
-        "No team-task content is loaded"
+        "Lead declares MODE=drive (the 'spec' mention is incidental and explicitly negated)",
+        "Lead loads references/team-task.md",
+        "Exactly 2 Agent calls: forge:driver and forge:snippet-author",
+        "No Agent call is made for forge:spec-writer or forge:spec-verifier"
       ]
     },
     {
       "id": 9,
-      "name": "mode-detect-bare-task",
-      "prompt": "/forge log in as standard_user and tell me what's on the inventory page",
-      "expected_output": "Bare drive task with no spec-authoring intent. Lead routes to task fallthrough and selects MODE=drive (default). 2 teammates spawned; no spec written.",
+      "name": "mode-drive-record-keyword",
+      "prompt": "/forge add the backpack to cart and record the badge count for me",
+      "expected_output": "Task uses 'record' colloquially ('report' / 'note down'), not as a recording-flag request. Lead correctly selects MODE=drive. The recording-label detection in Phase 0a is scoped to spec mode only, and 'record the badge count' doesn't match the spec-intent patterns. No --record flag should reach any script.",
       "files": [],
       "expectations": [
-        "Lead declares MODE=drive in its planning",
+        "Lead declares MODE=drive (the word 'record' does not elevate to spec mode)",
+        "Lead loads references/team-task.md",
         "Exactly 2 Agent calls: forge:driver and forge:snippet-author",
-        "No Agent call for forge:spec-writer or forge:spec-verifier",
-        "No new .spec.ts file appears in forge/specs/ during the run"
+        "No Agent call is made for forge:spec-writer or forge:spec-verifier",
+        "No Bash invocation contains the flags --record or --record-as"
       ]
     },
     {
       "id": 10,
-      "name": "mode-detect-incidental-spec",
-      "prompt": "/forge add the backpack to cart. We just need this done — no spec writing or test creation needed.",
-      "expected_output": "Task contains the word 'spec' but in an incidental/negating context (the user explicitly says not to write a spec). Lead correctly selects MODE=drive despite the word appearing. Tests that Phase 0a's natural-language detection doesn't naively keyword-match.",
+      "name": "record-as-label-capture",
+      "prompt": "/forge spec add the backpack to cart and verify the badge count is 1, record as before",
+      "expected_output": "Spec mode with explicit 'record as before' label. Lead captures RECORD_AS=before in its planning and threads it through to spec-verifier's spawn prompt. Spec-verifier invokes forge-pool-run-spec.mjs with --record-as before.",
       "files": [],
       "expectations": [
-        "Lead declares MODE=drive — the 'spec' mention is incidental and explicitly negated",
-        "Exactly 2 Agent calls (driver + snippet-author only)",
-        "No Agent call for forge:spec-writer or forge:spec-verifier",
-        "No new .spec.ts file appears in forge/specs/ during the run"
-      ]
-    },
-    {
-      "id": 11,
-      "name": "record-keyword-in-drive-stays-drive",
-      "prompt": "/forge add the backpack to cart and record the badge count for me",
-      "expected_output": "Task uses the word 'record' but as colloquial 'report' / 'note down', not as a recording-flag request. Lead correctly selects MODE=drive — the recording-label detection in Phase 0a only runs in spec mode, and 'record the badge count' doesn't match the spec-intent patterns. No video should be produced.",
-      "files": [],
-      "expectations": [
-        "Lead declares MODE=drive (the word 'record' does not elevate to spec)",
-        "Exactly 2 Agent calls: forge:driver and forge:snippet-author",
-        "No video file is created in forge/videos/ during the run",
-        "No .spec.ts file is created in forge/specs/ during the run"
-      ]
-    },
-    {
-      "id": 12,
-      "name": "spec-mode-default-recording-name",
-      "prompt": "/forge spec verify the cart badge increments after adding the backpack",
-      "expected_output": "Spec mode (first-word 'spec') with NO 'record as' phrase. RECORD_AS=none. Spec-verifier records with the default timestamp filename. The resulting video preserves the spec-basename prefix (regression check for the recent naming fix).",
-      "files": [],
-      "expectations": [
-        "Lead declares MODE=spec and RECORD_AS=none",
+        "Lead declares MODE=spec AND RECORD_AS=before in its planning",
+        "Lead loads references/team-task.md",
         "Exactly 4 Agent calls: forge:driver, forge:snippet-author, forge:spec-writer, forge:spec-verifier",
-        "Spec-verifier invokes forge-pool-run-spec.mjs with --record but WITHOUT --record-as",
-        "A video file exists in forge/videos/ after the run",
-        "The video filename matches the pattern <spec-basename>-YYYYMMDD-HHMMSS.webm (timestamp suffix, spec-basename prefix preserved)",
-        "The video filename does NOT start with just the timestamp — the spec-basename prefix must be present"
+        "The spec-verifier's spawn prompt includes 'RECORD_AS: before'",
+        "A Bash invocation of forge-pool-run-spec.mjs includes the flag pair '--record-as before'"
       ]
     }
   ]
