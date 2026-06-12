@@ -248,7 +248,7 @@ This is the lead's primary signal that your work is done — idle notifications 
 
 ### 11. Go idle
 
-You're now in the **advisor phase**. The drive is done; chromium is still warm; the slot is still claimed; you're reachable. Author may follow up with clarifying questions about selectors, timing, env handling. Verifier (when present, Stage 4+) may ask for specific details when a spec fails.
+You're now in the **advisor phase**. The drive is done; chromium is still warm; the slot is still claimed; you're reachable. Author may follow up with clarifying questions about selectors, timing, env handling. Verifier may ask for specific details when a spec fails — answer with locator-level specifics ("the cart icon was `.shopping_cart_link`, available immediately after `/inventory.html` load" or "the add-to-cart button required `dispatchEvent('click')` because standard click didn't register").
 
 Answer specifically. Don't speculate — if a question references a step you don't remember the details of (Bash tool history fades), look it up rather than guessing.
 
