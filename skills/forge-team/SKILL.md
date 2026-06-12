@@ -22,7 +22,17 @@ Spec mode is selected when:
 
 Otherwise → **drive mode**. The user wants the action performed; no spec artifact required.
 
-Capture as `MODE` (one of `drive` | `spec`). This decision shapes everything downstream:
+Capture as `MODE` (one of `drive` | `spec`).
+
+**In spec mode only**, also look for a recording label. The verifier always records, but by default the artifact gets a timestamped filename in `forge/videos/`. If the user wants a specific name (typical for before/after comparisons), they'll say so:
+
+- "record as 'before'" / "record this as after" / "label it AE-1775-before" → capture `RECORD_AS = before` / `after` / `AE-1775-before`
+- "record a before video" → `RECORD_AS = before` (extract the adjective)
+- No mention → `RECORD_AS = none`, verifier uses the timestamped default
+
+If the user names a label, the file lands at `forge/videos/<label>.webm` and overwrites any existing file with that name (caller-controlled — they asked for it).
+
+This decision shapes everything downstream:
 
 | Step | drive mode | spec mode |
 |---|---|---|
@@ -177,7 +187,7 @@ TaskCreate(
 
 TaskCreate(
   subject="verifier: run spec against slot, confirm it passes from cold start, record video",
-  description="Wait for spec-writer's 'spec ready' message. Run the spec via forge-pool-run-spec.mjs --spec <path> --slot <SLOT_DIR> --record. On pass: locate the generated video.webm under <FORGE_ROOT>/test-results/ and include its path in the completion ping to team-lead. On fail: SendMessage driver (selectors) or spec-writer (assertions/imports) for clarification, iterate up to 3 times, then either succeed or escalate. Mark complete when done."
+  description="Wait for spec-writer's 'spec ready' message. Run the spec via forge-pool-run-spec.mjs --spec <path> --slot <SLOT_DIR> --record (add --record-as <RECORD_AS> if RECORD_AS != none). The wrapper persists the video.webm to <FORGE_ROOT>/videos/<name>.webm — surface that path in the completion ping. On fail: SendMessage driver (selectors) or spec-writer (assertions/imports) for clarification, iterate up to 3 times, then either succeed or escalate. Mark complete when done."
 )
 # Note as VERIFIER_TASK_ID.
 ```
@@ -260,6 +270,7 @@ Agent(
 PROJECT_FORGE_ROOT: <FORGE_ROOT>
 FORGE_SLOT: <SLOT_DIR>
 PLUGIN_ROOT: ${CLAUDE_PLUGIN_ROOT}
+RECORD_AS: <RECORD_AS, or 'none' if absent>
 USER_TASK: <user's task verbatim>
 PROJECT_HINT_VERIFIER:
 <verifier.md contents from <FORGE_ROOT>/hints/verifier.md, or 'none' if missing>
@@ -362,7 +373,7 @@ Compose a tight summary. Drive mode is shorter — no spec/verifier lines.
 > Spec-writer wrote `<name>.spec.ts` composing <list of snippets> and asserting <one-liner>.
 > (or: "Spec-writer updated `<name>.spec.ts` in place" / "No new spec — existing one covers this.")
 >
-> Verifier ran `<name>.spec.ts` against `slot-<persona>` — **passed** in <duration>. Video: `<path-to-video.webm>`.
+> Verifier ran `<name>.spec.ts` against `slot-<persona>` — **passed** in <duration>. Video: `<forge>/videos/<name>.webm`.
 > (or: "Verifier ran spec, FAILED after 3 iterations — escalated. See <details>.")
 >
 > Slot released. Team cleaned up.
