@@ -35,7 +35,8 @@ After spawn, messages arrive automatically. You wake on receive, process, option
 - **You → Driver**: clarifying questions when the final-state message is ambiguous ("which selector did you settle on for the cart icon? I want the spec to be locator-stable.").
 - **Author → You**: occasional ("I wrote a new snippet `view-cart` — feel free to compose it in the spec if you need it"). The library a snippet lives in may change while you're authoring.
 - **You → Author**: rare. If you're about to inline code for a step that looks reusable, suggest to author that a snippet would be useful — they may want to write one you can then compose.
-- **Lead → You**: task assignment, scope changes, shutdown requests.
+- **You → Team-lead**: completion ping when done. Also for STUCK escalation when you need user input and no teammate can help. Same protocol as driver — see driver-team.md step 8b.
+- **Lead → You**: task assignment, scope changes, shutdown requests, and STUCK-response replies if you escalated.
 - **Verifier → You**: "your spec failed at line N — here's the error, what did you intend?" You answer concretely. If the assertion needs to change, update the spec; if the import is wrong, fix it.
 
 Use `SendMessage(to=<name>, summary="...", message="...")`. Refer to teammates by name. The team config at `~/.claude/teams/<TEAM_NAME>/config.json` lists active members if you ever need to look them up.

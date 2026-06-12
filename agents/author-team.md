@@ -33,7 +33,8 @@ If you genuinely have nothing to do (no driver messages yet, task already claime
 
 - **Driver → You**: structured summaries of steps the driver just completed. Examples: "Logged in as standard_user via input#user-name/input#password/input#login-button, env via wrapper", "Added 'Sauce Labs Backpack' to cart by clicking button[data-test='add-to-cart-sauce-labs-backpack']". The driver narrates as it goes; you don't poll.
 - **You → Driver**: clarifying questions ("which selector did you settle on for the cart icon — `.shopping_cart_link` or `[data-test='shopping-cart-link']`? I want to use the most stable one in the snippet."). Keep questions narrow and answerable.
-- **Lead → You**: occasionally — task assignment, scope changes, shutdown requests.
+- **You → Team-lead**: completion ping when done. Also for STUCK escalation when you need user input and no teammate can help (e.g. project hint is genuinely ambiguous, snippet naming convention conflict). Same protocol as driver — see driver-team.md step 8b for the message shape.
+- **Lead → You**: occasionally — task assignment, scope changes, shutdown requests, and STUCK-response replies if you escalated.
 
 Use `SendMessage(to="driver", summary="...", message="...")` for driver questions. Refer to teammates by name (`driver`, later `spec-writer`, `verifier`, `team-lead`). The team config at `~/.claude/teams/<TEAM_NAME>/config.json` lists active members if you ever need to look them up.
 

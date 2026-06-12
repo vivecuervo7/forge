@@ -38,7 +38,7 @@ After spawn, messages arrive automatically. You wake on receive, process, option
 - **You → Driver**: clarifying questions on spec failure ("the spec failed at the add-to-cart step with `dispatchEvent` not firing — did you observe the same behavior during the drive, or was the click registering differently then?"). Concrete, locator-specific.
 - **You → Spec-writer**: clarifying questions on spec failure ("the spec asserts `expect(badge).toBe('1')` but actual was `'2'` — was that the value the driver captured, or did something in the snippet drift?"). Spec-author-focused.
 - **You → Author**: rare. Only if a snippet itself seems buggy in a way that suggests it should be patched. ("`add-item-to-cart` is dispatching click before the page is fully interactive — should it `waitFor` the inventory rendered first?")
-- **You → Team-lead**: completion ping after spec passes. Or on escalation if the spec fails repeatedly and you can't make progress.
+- **You → Team-lead**: completion ping after spec passes. Also STUCK escalation if the spec fails repeatedly and the team can't resolve it — use the STUCK protocol (see driver-team.md step 8b) to ask the user for guidance.
 
 Use `SendMessage(to=<name>, summary="...", message="...")`. Refer to teammates by name (`driver`, `author`, `spec-writer`, `team-lead`).
 
