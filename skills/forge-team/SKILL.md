@@ -1,115 +1,77 @@
 ---
 name: forge-team
-description: "Drive browser tasks via the forge agent team — driver runs in a per-slot chromium with per-slot env from the session pool. Walks up from CWD to find the project's forge/ directory, loads hints, claims a pool slot (provisioning one if exhausted via the project's recipe), spawns the driver-team agent, releases on completion. Stage 2: driver-only — author/spec-writer/verifier land in later stages."
-model: haiku
+description: "Drive browser tasks via the forge agent team — driver runs in a per-slot chromium with per-slot env injection from the session pool, and an author teammate writes snippets while the drive is still live (mesh communication via SendMessage). Walks up from CWD to find the project's forge/ directory, loads hints, claims a pool slot, creates an agent team with named driver and author teammates, manages the team lifecycle. Spec-writer and verifier teammates land in subsequent stages."
+model: sonnet
 effort: medium
 argument-hint: "<description of the browser task to perform>"
-allowed-tools: Read, Skill, Bash(bash **/forge/*/scripts/*), Bash(node **/forge/*/scripts/*), Bash(direnv:*), Bash(playwright-cli:*), Bash(mkdir:*), Bash(jq:*), Bash(cat:*), Bash(echo:*), Bash(ls:*)
+allowed-tools: Read, Skill, Bash(bash **/forge/*/scripts/*), Bash(node **/forge/*/scripts/*), Bash(direnv:*), Bash(playwright-cli:*), Bash(mkdir:*), Bash(jq:*), Bash(cat:*), Bash(echo:*), Bash(ls:*), Agent, SendMessage, TeamCreate, TeamDelete, TaskCreate, TaskList, TaskGet, TaskUpdate
 ---
 
 # /forge-team
 
-The thin orchestration switchboard for the forge agent-team architecture. You walk up from the user's CWD to find their project's `forge/` directory, load the hint files, manage the session-pool slot lifecycle, spawn the driver agent with everything it needs, and clean up on return.
+You are the **team lead** for a forge agent team. You manage the team's lifecycle (session-pool slot, team creation, task coordination, shutdown, cleanup) while teammates do the actual work via mesh communication. **You do not relay content between teammates — they SendMessage each other directly.** Your job is setup, lifecycle, and the user channel.
 
-For **Stage 2** the team has exactly one role: `forge:driver-team`. The author / spec-writer / verifier agents and inter-agent messaging land in subsequent stages — for now, your job is to prove the slot lifecycle and per-slot env injection work end-to-end.
+## Prerequisite
 
-This skill is a **thin orchestrator**. The driver does the actual browser work; you just set up the right context and clean up after.
+Agent teams are gated behind `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`. If the `TeamCreate` tool isn't available in this session, surface this to the user with the remedy:
 
-If the user is asking about something that isn't a browser task, you're in the wrong skill.
+> /forge-team requires experimental agent teams. Enable by adding `"env": {"CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"}` to `~/.claude/settings.json` (or set the env var in your shell) and restart Claude Code.
 
-## Preamble (every invocation)
+Then stop.
 
-### 1. Find the project's forge root
+## Phase 1 — Discovery and setup
+
+### 1.1. Find the project's forge root
 
 ```bash
 bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-find-root.sh
 ```
 
-Walks up from PWD looking for a `forge/hints/` directory. Prints the absolute path to the project's `forge/` directory, or fails with a helpful error if none found.
+If it fails (exit non-zero), relay verbatim and stop. The user needs `/forge-init`.
 
-If it fails (exit non-zero), relay the error verbatim to the user and stop. They need to run `/forge-init` first.
+Capture as `FORGE_ROOT`.
 
-Capture the path — call it `FORGE_ROOT` for the rest of this skill (overloading the legacy meaning, but in this skill it's the project's forge dir).
-
-### 2. Load the hints
-
-Two files are mandatory for this skill to function:
+### 1.2. Load the hints
 
 ```bash
 cat <FORGE_ROOT>/hints/forge.md
 cat <FORGE_ROOT>/hints/driver.md
+cat <FORGE_ROOT>/hints/author.md
 ```
 
-Capture both contents — you'll pass them to the driver agent. If `driver.md` is missing that's fine (driver uses defaults); if `forge.md` is missing, fail with "missing forge/hints/forge.md — required to know how to set up env injection and the pool."
+Capture all three contents — you'll inline them in the spawn prompts so teammates don't need to read the files themselves.
 
-The `forge.md` hint declares:
-- **Env contract** — which env keys each slot exports (e.g. `SAUCE_USERNAME`, `SAUCE_PASSWORD`)
-- **Env loading approach** — how to wrap commands so the slot's env is loaded (typically `direnv exec <slot-dir>`)
-- **Pool location** — defaults to `<FORGE_ROOT>/.pool/`, may be overridden in the hint
-- **Provisioning recipe** — step-by-step instructions for minting a new slot when the pool is exhausted
+If `forge.md` is missing, fail with: "missing forge/hints/forge.md — required to know how to set up env injection and the pool." Other hints are optional (teammates use defaults).
 
-You'll execute the provisioning recipe yourself if the pool is exhausted — read it carefully before claiming.
+### 1.3. Determine pool location
 
-### 3. Determine the pool location
+Default `<FORGE_ROOT>/.pool/`. If `forge.md` declares an override under "Pool location", honor it. Capture as `POOL_DIR`.
 
-Default: `<FORGE_ROOT>/.pool/`. If `forge.md` declares an override under "Pool location", honor that instead. Capture as `POOL_DIR`.
-
-### 4. Initialize the pool if it doesn't exist yet
+### 1.4. Initialize the pool
 
 ```bash
 bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-pool-init.sh <POOL_DIR>
 ```
 
-Idempotent — safe to run every time. Creates the pool dir + `.lock` file if missing.
+Idempotent.
 
-## Claim phase
-
-### 5. Attempt to claim a slot
+### 1.5. Claim a slot
 
 ```bash
 bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-pool-claim.sh <POOL_DIR>
 ```
 
-Three possible outcomes:
+Three outcomes:
 
-- **Prints a slot path** (exit 0) — claim succeeded. Capture as `SLOT_DIR` and continue to the drive phase.
-- **Prints `EXHAUSTED` to stderr** (exit 1) — pool is empty or all slots are taken. Continue to provisioning (step 6).
-- **Any other error** (exit ≥2) — surface the error to the user and stop.
+- **Slot path printed (exit 0)** — capture as `SLOT_DIR`; continue to phase 2.
+- **`EXHAUSTED` (exit 1)** — execute the **Provisioning recipe** from `forge.md` (the hint enumerates exact steps: pick identifier, mkdir, write `.envrc`, write `state.json`, `direnv allow`, etc.). After provisioning, re-attempt the claim. If recipe genuinely can't satisfy a new slot, surface to user and stop.
+- **Other error (exit ≥2)** — surface and stop.
 
-### 6. Provision a new slot (only if EXHAUSTED)
-
-Read the **Provisioning recipe** section of `forge.md` (you already loaded it). The recipe is a numbered list of steps you execute in order. Typical steps:
-
-1. Pick an identifier (persona name, generated username, etc.)
-2. `mkdir -p <POOL_DIR>/slot-<id>/profile`
-3. Write `<POOL_DIR>/slot-<id>/.envrc` with the right exports per the hint's spec
-4. Write `<POOL_DIR>/slot-<id>/state.json` with `{ "checkedOutBy": null }`
-5. `direnv allow <POOL_DIR>/slot-<id>` (or whatever the project's env loader needs)
-
-Execute each step via Bash. The recipe will be specific to the project; follow it literally.
-
-If the recipe requires picking an identifier from a finite set (e.g. saucedemo's 6 personas), the recipe will tell you how to pick one not already in the pool. Check `ls <POOL_DIR>/slot-*` against the candidate list.
-
-If the recipe genuinely cannot be satisfied (e.g. all candidates already provisioned AND all checked out — pool truly exhausted), surface:
-
-> /forge-team: pool exhausted and provisioning recipe cannot satisfy a new slot (\<specific reason from the recipe\>). Wait for an existing slot to release, or expand the project's available identity space.
-
-After successfully provisioning, re-attempt the claim (step 5). It should now succeed.
-
-## Drive phase
-
-### 7. Determine the playwright-cli session name
-
-The slot's `state.json` may already have a `playwrightSessionName` field if a previous claim launched chromium. If so, reuse it (warm chromium). If not, compute a new short name and persist it:
+### 1.6. Compute or retrieve the playwright-cli session name
 
 ```bash
-# Read existing if present
 SESSION_NAME=$(jq -r '.playwrightSessionName // empty' <SLOT_DIR>/state.json)
-
-# If empty, generate one and persist
 if [ -z "$SESSION_NAME" ]; then
-  # Short name: 'ft-' + 8 hex chars of a md5 hash of the slot dir.
-  # macOS caps unix socket paths so session names must stay short (~14 chars).
   SESSION_NAME="ft-$(printf '%s' "<SLOT_DIR>" | md5 -q | cut -c1-8)"
   TMP=$(mktemp)
   jq --arg n "$SESSION_NAME" '.playwrightSessionName = $n' <SLOT_DIR>/state.json > "$TMP" && mv "$TMP" <SLOT_DIR>/state.json
@@ -118,68 +80,181 @@ fi
 
 (On Linux, replace `md5 -q` with `md5sum | cut -d' ' -f1`.)
 
-### 8. Spawn the driver-team agent
+## Phase 2 — Create the team
 
-The agent prompt is structured — leading context lines, then the user's task verbatim:
+### 2.1. Generate a team name
+
+Use `forge-<run-id>` where `<run-id>` is a short identifier — derive from `SESSION_NAME` (already short and slot-bound) plus the current timestamp's last 4 digits to avoid collisions across reclaims:
+
+```bash
+RUN_ID="${SESSION_NAME#ft-}-$(date +%s | tail -c 5)"
+TEAM_NAME="forge-${RUN_ID}"
+```
+
+### 2.2. Create the team
+
+Invoke `TeamCreate`:
 
 ```
-Agent(subagent_type="forge:driver-team",
-  prompt="FORGE_SLOT: <SLOT_DIR>
+TeamCreate(team_name="<TEAM_NAME>", description="Forge agent team for: <USER_TASK>")
+```
+
+This creates the team config at `~/.claude/teams/<TEAM_NAME>/config.json` and shared task list directory at `~/.claude/tasks/<TEAM_NAME>/`.
+
+### 2.3. Create the tasks
+
+The team has (currently) two tasks. Use `TaskCreate`:
+
+```
+TaskCreate(
+  subject="drive: <USER_TASK>",
+  description="Drive the user's browser task end-to-end in the slot at <SLOT_DIR>. Narrate meaningful steps to `author` via SendMessage as you go. Mark complete when the drive is finished; stay idle (advisor phase) until the team shuts down."
+)
+# Note the task ID returned — call it DRIVE_TASK_ID.
+
+TaskCreate(
+  subject="author snippets from drive",
+  description="Receive driver narration via SendMessage. Decide which steps are snippet-worthy. Write snippets to <FORGE_ROOT>/snippets/. Ask driver clarifying questions as needed. Mark complete when drive is done and you've authored all worthwhile snippets."
+)
+# Note as AUTHOR_TASK_ID.
+```
+
+Don't set ownership in TaskCreate — teammates claim their own tasks.
+
+## Phase 3 — Spawn the teammates
+
+### 3.1. Spawn the driver
+
+```
+Agent(
+  subagent_type="forge:driver-team",
+  team_name="<TEAM_NAME>",
+  name="driver",
+  prompt="TEAM_NAME: <TEAM_NAME>
+FORGE_SLOT: <SLOT_DIR>
 SESSION_NAME: <SESSION_NAME>
+PROJECT_FORGE_ROOT: <FORGE_ROOT>
 PROJECT_HINT_FORGE:
-<contents of forge.md, indented or fenced — pass as-is>
+<forge.md contents>
 
 PROJECT_HINT_DRIVER:
-<contents of driver.md, indented or fenced — pass as-is, or empty if missing>
+<driver.md contents, or 'none' if missing>
 
-Your task: <original user request verbatim>")
+USER_TASK: <user's task verbatim>
+
+Your task ID is <DRIVE_TASK_ID>. Claim it via TaskUpdate(owner='driver', status='in_progress'), then begin driving. SendMessage `author` with structured summaries after meaningful steps. When the drive is done, TaskUpdate status='completed' and go idle — author may have follow-up questions."
+)
 ```
 
-Wait for the driver to return.
+### 3.2. Spawn the author
 
-The driver returns one of three formats (first line determines):
+```
+Agent(
+  subagent_type="forge:author-team",
+  team_name="<TEAM_NAME>",
+  name="author",
+  prompt="TEAM_NAME: <TEAM_NAME>
+PROJECT_FORGE_ROOT: <FORGE_ROOT>
+USER_TASK: <user's task verbatim>
+PROJECT_HINT_AUTHOR:
+<author.md contents, or 'none' if missing>
 
-- `Drove: <summary>` followed by `Steps:` `Result:` and optionally `Note:` — success, continue to release.
-- `no-session: <reason>` — driver couldn't establish a playwright-cli session. Surface to user; release the slot (the chromium may be in a weird state, the next claimant will relaunch).
-- `cannot-drive: <reason>` — driver bailed. Surface to user; release the slot.
+Your task ID is <AUTHOR_TASK_ID>. Claim it via TaskUpdate(owner='author', status='in_progress'), then wait for driver messages. Process messages as they arrive; write snippets to <FORGE_ROOT>/snippets/; SendMessage `driver` with clarifying questions if needed. Mark task complete when drive is done and snippets are written."
+)
+```
 
-## Release phase
+## Phase 4 — Wait for team to finish
 
-### 9. Release the slot
+After spawning, the teammates self-coordinate. You (the lead) wait. Messages from teammates auto-deliver as new conversation turns.
+
+**What to watch for:**
+
+- **Both tasks complete (status="completed" in TaskList)** — team is done; proceed to phase 5.
+- **Messages addressed to you (`team-lead`)** — process them:
+  - `STUCK: ...` from driver → surface to user, get user response, SendMessage back to driver (Stage 5 work; if it happens in Stage 3a, just surface the question and tell the user the team is paused).
+  - Status updates / questions from teammates → answer concisely or relay relevant context.
+  - Anything you can't handle → ask the user.
+- **Idle notifications** — informational. Don't act on them unless a teammate has been idle suspiciously long with incomplete tasks (in which case nudge via SendMessage).
+
+You can check team progress periodically:
+
+```
+TaskList()
+```
+
+But don't poll aggressively. Messages will reach you when they're ready.
+
+**Bounded waiting**: if 10+ minutes pass with no progress and no messages, something's stuck. SendMessage each teammate asking for a status update.
+
+## Phase 5 — Shut down and clean up
+
+Once both tasks are `completed`:
+
+### 5.1. Request shutdown
+
+For each teammate (driver, then author):
+
+```
+SendMessage(
+  to="<teammate-name>",
+  summary="team work complete; shutdown",
+  message={"type": "shutdown_request", "reason": "team work done"}
+)
+```
+
+Wait for each to respond with `{"type": "shutdown_response", "approve": true, ...}`. If a teammate rejects with `approve: false`, surface the rejection reason to the user — they may want to keep iterating before tearing down.
+
+### 5.2. TeamDelete
+
+After all teammates have approved shutdown:
+
+```
+TeamDelete()
+```
+
+This removes the team config and task list directories.
+
+### 5.3. Release the pool slot
 
 ```bash
 bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-pool-release.sh <POOL_DIR> <SLOT_DIR>
 ```
 
-Runs the slot's optional `release.sh` hook (if present) then clears `checkedOutBy`. If the hook fails, the release script will tell you — surface that to the user as part of your final message but don't fail the whole drive (the drive itself succeeded).
+### 5.4. Report to the user
 
-### 10. Report to the user
+Compose a tight summary:
 
-Surface the driver's `Drove:` block verbatim. Add a short context line about the slot if useful:
-
-> Drove via `slot-standard_user`.
+> Drove via `slot-<persona>`.
 >
-> Drove: logged in as standard_user, navigated to inventory.
-> Steps: launch session → login → goto inventory
-> Result: on /inventory.html, six product cards visible
+> <driver's last-step summary if you have one>
+>
+> Author wrote N snippet(s):
+>   - <name1> — <description>
+>   - <name2> — <description>
+>
+> Slot released. Team cleaned up.
 
-If the driver returned `no-session` or `cannot-drive`, surface that verbatim and note the slot was released.
+If anything didn't go to plan (a teammate returned `cannot-drive`, the verifier escalated, etc.), surface that prominently — the user wants the truth, not a sanitized success report.
 
 ## Hard rules
 
-- **You are an orchestrator, not an actor.** All browser driving belongs to `forge:driver-team`. Your direct actions are: discovery, hint loading, pool setup/claim/release, agent invocation. You do NOT invoke `playwright-cli` yourself.
-- **Surface driver output verbatim.** Don't paraphrase the `Drove:` block; the user wants to see what the agent reported.
-- **Always release.** Even if the driver returned `cannot-drive` or `no-session`, release the slot back to the pool. The next claimant relaunches chromium if needed; leaving a slot perpetually checked out wastes capacity.
-- **Provisioning recipe is the source of truth for slot creation.** Don't invent fields, don't skip steps, don't add extras. Execute literally.
+- **You are an orchestrator, not an actor.** All browser driving belongs to `driver`. Snippet authoring belongs to `author`. You set up the team, create tasks, spawn teammates, manage the lifecycle, handle the user channel. You do NOT invoke `playwright-cli` yourself, write snippet files, or message-relay between teammates.
+- **Teammates message each other directly.** Do NOT parse driver messages and forward to author — they're already addressed to author directly. You only handle messages explicitly addressed to `team-lead`.
+- **Always release the slot.** Even if the drive returned `cannot-drive` or a teammate rejected shutdown, eventually call `forge-pool-release.sh`. Leaving a slot perpetually checked out wastes capacity.
+- **Always TeamDelete.** Don't leave team config files lying around in `~/.claude/teams/`.
+- **One team at a time per session.** If a previous `/forge-team` invocation didn't clean up, `TeamDelete()` first before `TeamCreate`. (Claude Code allows only one active team per lead session.)
+- **Provisioning recipe is the source of truth for slot creation.** Don't invent fields. Execute literally from the hint.
 
 ## What this skill does NOT do (yet)
 
-These land in later stages — explicitly out of scope for Stage 2:
-
-- **No snippet authoring.** The `forge:author-team` agent + its prompt arrive in Stage 3. For now, the driver's bash tool calls are the only record; nothing accretes to `forge/snippets/`.
-- **No spec writing.** Stage 4.
-- **No verifier.** Stage 4.
-- **No user escalation channel for stuck-driver scenarios.** Stage 5. If the driver gets stuck in Stage 2, it returns `cannot-drive` and the user re-invokes with refined instructions.
+- **No spec-writer teammate.** Stage 3b adds `forge:spec-writer-team`. The author-only team handles snippet authoring this stage.
+- **No verifier teammate.** Stage 4 adds `forge:verifier-team` and the in-slot advisor-phase verification loop.
+- **No user escalation channel for stuck-driver scenarios.** Stage 5. If the driver SendMessages you `STUCK: ...`, surface it manually and pause the team.
 - **No parallel-runs handling beyond what the pool already provides.** Stage 6 stress-tests concurrent invocations.
 
-That's deliberate — keep Stage 2 minimal so the foundation (discovery + pool + slot env + single agent spawn) gets validated cleanly before more moving parts arrive.
+## Failure modes to recover from
+
+- **`TeamCreate` fails because a team already exists.** Call `TeamDelete()` first, then retry. (Note: `TeamDelete` fails if active teammates exist — you may need to shut them down first via SendMessage.)
+- **`forge-pool-claim.sh` keeps returning EXHAUSTED even after provisioning.** The provisioning recipe may have a bug — look at the slot dir to confirm everything's in place. Surface to user if you can't diagnose.
+- **Driver returns `cannot-drive` before doing meaningful work.** Author has nothing to author. Mark author's task complete with note "drive failed; no work to author"; proceed to shutdown and cleanup. Don't leave author hanging.
+- **A teammate goes idle and never responds to your SendMessage.** It may have errored mid-turn. Try a follow-up nudge. If still no response, surface to user with the team's current state.
