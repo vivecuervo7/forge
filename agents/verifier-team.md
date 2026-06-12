@@ -63,8 +63,11 @@ If you receive intermediate driver-to-author or spec-writer-to-driver messages, 
 ```bash
 node ${PLUGIN_ROOT}/scripts/forge-pool-run-spec.mjs \
   --spec <PROJECT_FORGE_ROOT>/specs/<name>.spec.ts \
-  --slot <FORGE_SLOT>
+  --slot <FORGE_SLOT> \
+  --record
 ```
+
+`--record` sets `FORGE_RECORD=1` for the spawned Playwright process; the forge-scaffolded config (and any project config that honors the same env) enables `use.video = 'on'` and `use.trace = 'on'`. Video + trace land under `<PROJECT_FORGE_ROOT>/test-results/<spec-test-subdir>/`. After the run, locate the most recent `video.webm` under `test-results/` and capture its absolute path — you'll surface it in the completion ping.
 
 Don't pass `--headed` — verifier runs are headless by default (faster, no visual noise). The wrapper auto-detects the project's Playwright runner (if any) or falls back to the plugin runner.
 
@@ -84,9 +87,11 @@ Then SendMessage `team-lead`:
 SendMessage(
   to="team-lead",
   summary="spec verified",
-  message="Verifier task <id> complete. Ran <spec-path> via forge-pool-run-spec.mjs against slot <slot> — passed in <duration>. Spec is verified-from-fresh. Going idle."
+  message="Verifier task <id> complete. Ran <spec-path> via forge-pool-run-spec.mjs against slot <slot> — passed in <duration>. Spec is verified-from-fresh. Video: <absolute-path-to-video.webm>. Going idle."
 )
 ```
+
+To find the video path, `ls -t <PROJECT_FORGE_ROOT>/test-results/*/video.webm 2>/dev/null | head -1` after the run. If multiple test subdirs exist, the most recently modified is yours.
 
 Go idle. The lead handles shutdown.
 

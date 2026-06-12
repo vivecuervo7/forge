@@ -242,10 +242,11 @@ import { defineConfig } from '@playwright/test'
 import { config as loadEnv } from 'dotenv'
 import { resolve } from 'node:path'
 
-// Playwright's config loader compiles .ts files as CJS, so __dirname is
-// injected automatically. We declare it to satisfy TypeScript without
-// pulling in @types/node as a dep just for this.
+// Playwright's config loader compiles .ts files as CJS, so __dirname and
+// process are injected automatically. We declare them to satisfy
+// TypeScript without pulling in @types/node as a dep just for this.
 declare const __dirname: string
+declare const process: { env: Record<string, string | undefined> }
 
 // Load forge/.env (forge-specific overrides — wins), then <project-root>/.env
 // (baseline — fills unset keys only). Both resolved from this config's
@@ -253,14 +254,26 @@ declare const __dirname: string
 loadEnv({ path: resolve(__dirname, '.env') })
 loadEnv({ path: resolve(__dirname, '..', '.env') })
 
+// FORGE_RECORD=1 enables Playwright's video + trace capture for this run.
+// Set by `forge-pool-run-spec.mjs --record` (used by the verifier teammate
+// in spec mode). If your project has its own playwright config, opt in by
+// checking the same env var — that keeps spec-mode video recordings
+// behaving consistently regardless of which config is in effect.
+const record = process.env.FORGE_RECORD === '1'
+
 export default defineConfig({
   testDir: './specs',
   // Pin output to forge/test-results regardless of cwd so test artifacts
-  // never land in the project root (where they wouldn't be gitignored).
+  // (including recorded video.webm + trace.zip) never land in the project
+  // root (where they wouldn't be gitignored).
   outputDir: resolve(__dirname, 'test-results'),
   fullyParallel: false,
   workers: 1,
   reporter: 'list',
+  use: {
+    video: record ? 'on' : 'off',
+    trace: record ? 'on' : 'off',
+  },
 })
 EOF
   CREATED+=("forge/playwright.config.ts")
