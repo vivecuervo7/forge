@@ -54,7 +54,9 @@ If the prompt is genuinely underspecified, return `cannot-drive: <reason>` rathe
    direnv exec <FORGE_SLOT> playwright-cli -s=<SESSION_NAME> <command> <args>
    ```
 
-   Where `<command>` is `goto`, `snapshot`, `run-code "..."`, `url`, `tab-new`, etc. (Standard playwright-cli interface — see `playwright-cli --help`.)
+   Where `<command>` is `goto`, `snapshot`, `click`, `fill`, `url`, `tab-new`, etc. (Standard playwright-cli interface — see `playwright-cli --help`.)
+
+   **For `run-code` that needs env vars** (credentials, per-slot config): use the forge-provided wrapper instead of `playwright-cli run-code` directly. See "Hard rules" below for the exact form. The bare `playwright-cli run-code` works fine for code that doesn't reference `process.env.X`.
 
 5. **Picking locators** — every action that targets a specific element goes through enumerate-then-decide. After a `snapshot` orients you, generate 2-4 candidate locator expressions at different specificity levels:
 
@@ -74,15 +76,22 @@ If the prompt is genuinely underspecified, return `cannot-drive: <reason>` rathe
 
 ## Hard rules
 
-- **Credentials never appear literally in drive args.** playwright-cli's `run-code` sandbox doesn't expose Node's `process` object, so naive `process.env.<NAME>` resolves to undefined. Use the `--env KEY` flag on `run-code` to inject env vars: playwright-cli resolves them at the Node layer (where direnv-loaded env is visible), wraps your code with a `process` shim, and records only the original code (with `process.env.X` refs intact). Example:
+- **Credentials never appear literally in drive args.** playwright-cli's `run-code` sandbox doesn't expose Node's `process` object — naive `process.env.<NAME>` resolves to undefined. Forge ships a thin wrapper that solves this:
 
   ```bash
-  direnv exec <FORGE_SLOT> playwright-cli -s=<SESSION_NAME> run-code \
+  direnv exec <FORGE_SLOT> node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-pool-run-code.mjs \
+    -s=<SESSION_NAME> \
     "async page => { await page.locator('#user-name').fill(process.env.SAUCE_USERNAME) }" \
-    --env SAUCE_USERNAME
+    --env SAUCE_USERNAME --env SAUCE_PASSWORD
   ```
 
-  Pass one `--env KEY` per env var you need. Each KEY must be set in the env when the bash call runs — that's what `direnv exec <FORGE_SLOT>` ensures. **Never put credential values as literal strings in your emitted code.** That leaks to your tool-call output and any future transcript.
+  The wrapper reads each `--env KEY` from the env that `direnv exec <FORGE_SLOT>` loaded, wraps your code with a shimmed `process.env` containing just those values, and calls `playwright-cli run-code` with the wrapped form. Your tool-call output shows only the wrapper invocation and `--env KEY` flags — never the resolved values.
+
+  Use the wrapper (`forge-pool-run-code.mjs`) for any `run-code` that needs env vars. For `run-code` that doesn't need env (e.g. `await page.locator('.inventory_item').count()` returning a number), call `playwright-cli run-code` directly — no wrapper needed.
+
+  Use direct `playwright-cli` invocations (`goto`, `snapshot`, `click`, `fill`, etc. — anything that isn't `run-code`) for non-sensitive operations. They don't need env injection.
+
+  **Never put credential values as literal strings in your emitted code.** That leaks to your tool-call output. If `--env` isn't working, fix it — don't fall back to inlining.
 
 - **Emit full URLs.** Use `page.goto('https://www.saucedemo.com/inventory.html')`, not `page.goto('/inventory.html')`. The driver hint's route table shows path structure; in code, concatenate with the project's origin. Snippets and specs that derive from your drive need to be portable — no implicit baseURL dependency.
 
