@@ -21,8 +21,12 @@
 //      forge/playwright.config.ts (scaffolded by /forge-init). This is the
 //      path for sandboxes and greenfield projects with no existing test setup.
 //
-// In both paths, --slot wraps the invocation with `direnv exec <slot>` so
-// the slot's env (SAUCE_USERNAME, etc.) lands on the spec process.
+// In both paths, --slot reads <slot>/.env (dotenv format) into a dict and
+// merges it into the spawned process's env. Forge no longer requires direnv:
+// slot env comes from a plain .env file the provisioning recipe writes.
+// User direnv (whatever's in process.env when the wrapper starts) still
+// takes precedence — it's the user's personal layer for 1Password, machine-
+// specific overrides, etc.
 //
 // Usage:
 //   forge-pool-run-spec.mjs --spec <path> [--slot <slot-dir>] [--headed]
@@ -40,7 +44,8 @@
 import { spawn } from 'node:child_process'
 import { existsSync, symlinkSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join, resolve, dirname, relative } from 'node:path'
+import { dirname, join, relative, resolve } from 'node:path'
+import { loadSlotEnv, composedEnv } from './forge-slot-env.mjs'
 
 const PLUGIN_RUNNER_ROOT = join(homedir(), '.claude', '.vive-claude', 'forge', 'runner')
 const PLUGIN_PW_MARKER = join(PLUGIN_RUNNER_ROOT, 'node_modules', '@playwright', 'test')
@@ -170,13 +175,17 @@ if (projectRunner) {
 
 console.error(`forge-pool-run-spec: using ${mode} runner`)
 
-// Wrap with direnv exec if a slot is provided
-if (slot) {
-  cmdArgs = ['exec', slot, cmd, ...cmdArgs]
-  cmd = 'direnv'
-}
+// Load slot env (if --slot provided) into a plain dict, then merge with
+// process.env winning. User direnv (whatever's already in process.env when
+// the wrapper starts) takes precedence over slot values — matches the
+// design where direnv is the user's personal layer, not forge's mechanism.
+const slotEnv = loadSlotEnv(slot)
 
-const child = spawn(cmd, cmdArgs, { cwd, stdio: 'inherit' })
+const child = spawn(cmd, cmdArgs, {
+  cwd,
+  stdio: 'inherit',
+  env: composedEnv(slotEnv),
+})
 
 child.on('error', (err) => {
   if (err.code === 'ENOENT') {

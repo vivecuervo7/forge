@@ -184,6 +184,18 @@ When the snippet is later invoked, forge resolves the env vars and shims `proces
 
 Both mechanisms require the env vars to be set when the bash invocation runs. Wrap with your env-loading mechanism if needed (e.g. `direnv exec ~/project ...`).
 
+### Env layering (agent-team architecture)
+
+The newer `/forge-team` skill and its wrapper scripts (`forge-pool-*.mjs`) speak **dotenv** end-to-end. No direnv requirement on the machine. Three layers, last-set wins:
+
+1. **`<project-root>/.env`** — baseline values everyone in the project shares. Loaded by the scaffolded `forge/playwright.config.ts` via the `dotenv` package. Used by VS Code's Playwright extension, direct `npx playwright test`, and the forge wrappers when invoked without `--slot`.
+2. **`forge/.env`** *(optional)* — forge-specific overrides. Same loading path as #1 but read first so it wins. Useful when forge specs need different values (baseURL, timeouts, fixtures) than the rest of the project without polluting project-wide config.
+3. **`<slot>/.env`** — per-persona override for parallel slot runs. Read by the forge wrappers (`forge-pool-run-spec.mjs`, `forge-pool-run-code.mjs`, `forge-pool-invoke-snippet.mjs`) when invoked with `--slot <slot-dir>`, then injected as spawn env above the dotenv-loaded baseline.
+
+The user's shell env sits on top of all three. If you already use **direnv** (e.g. for 1Password integration — `export OP_TOKEN="$(op read 'op://Personal/Forge/token')"` in your `.envrc`), it composes naturally: direnv loads into your shell env, which is `process.env` when the forge wrapper starts, which wins over all three dotenv layers (because dotenv defaults to non-override). The [`direnv` VS Code extension](https://marketplace.visualstudio.com/items?itemName=mkhl.direnv) bridges shell direnv into the editor's process model so the VS Code Playwright extension picks up the same env.
+
+Caveat: if your machine direnv redeclares a key that's part of slot identity (e.g. `SAUCE_USERNAME` in a saucedemo project), parallel slot semantics break — all parallel runs see your value. Keep machine direnv scoped to keys that *aren't* part of slot identity (API tokens, dev URLs, 1Password injections — not personas).
+
 ## Wrapping forge for project-specific use
 
 Forge is domain-agnostic; project-specific knowledge belongs in a wrapper plugin. To wrap:
