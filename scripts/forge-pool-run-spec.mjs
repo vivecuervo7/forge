@@ -29,12 +29,18 @@
 // specific overrides, etc.
 //
 // Usage:
-//   forge-pool-run-spec.mjs --spec <path> [--slot <slot-dir>] [--headed] [--record]
+//   forge-pool-run-spec.mjs --spec <path> [--slot <slot-dir>] [--headed] [--record] [--record-as <label>]
 //
 // --record sets FORGE_RECORD=1 in the spawn env. The forge-scaffolded
 // playwright.config.ts honors this by enabling `use.video = 'on'` and
 // `use.trace = 'on'`; projects with their own config can opt in by
 // checking the same env var. With no opt-in, --record is a no-op.
+//
+// After the run, if --record produced a video.webm under the project's
+// test-results/ dir, it's copied to <projectForge>/videos/ so it survives
+// Playwright's between-runs wipe of test-results. Default copied filename
+// is <spec-basename>-<YYYYMMDD-HHMMSS>.webm; --record-as <label> overrides
+// to <label>.webm (existing file is overwritten — caller-controlled name).
 //
 // Exit codes:
 //   0   spec passed
@@ -47,9 +53,9 @@
 //       (project hasn't been /forge-init'd, or the config was deleted)
 
 import { spawn } from 'node:child_process'
-import { existsSync, symlinkSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync, symlinkSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { dirname, join, relative, resolve } from 'node:path'
+import { basename, dirname, join, relative, resolve } from 'node:path'
 import { loadSlotEnv, composedEnv } from './forge-slot-env.mjs'
 
 const PLUGIN_RUNNER_ROOT = join(homedir(), '.claude', '.vive-claude', 'forge', 'runner')
@@ -66,6 +72,7 @@ let specPath = null
 let slot = null
 let headed = false
 let record = false
+let recordAs = null
 
 for (let i = 0; i < argv.length; i++) {
   const arg = argv[i]
@@ -79,6 +86,10 @@ for (let i = 0; i < argv.length; i++) {
     headed = true
   } else if (arg === '--record') {
     record = true
+  } else if (arg === '--record-as') {
+    if (i + 1 >= argv.length) die('--record-as requires a label')
+    recordAs = argv[++i]
+    record = true  // --record-as implies --record
   } else {
     die(`unknown arg: ${arg}`)
   }
@@ -195,6 +206,10 @@ const slotEnv = loadSlotEnv(slot)
 const baseEnv = composedEnv(slotEnv)
 const finalEnv = record ? { FORGE_RECORD: '1', ...baseEnv } : baseEnv
 
+// Note the start time so we can find videos produced by THIS run (and
+// ignore stale artifacts from earlier runs).
+const runStartedAt = Date.now()
+
 const child = spawn(cmd, cmdArgs, {
   cwd,
   stdio: 'inherit',
@@ -208,4 +223,94 @@ child.on('error', (err) => {
   die(`spawn error: ${err.message}`, 5)
 })
 
-child.on('exit', (code) => process.exit(code ?? 1))
+child.on('exit', (code) => {
+  // Recording persistence: copy any video.webm produced under
+  // <projectForge>/test-results to <projectForge>/videos/ before exit.
+  // Done before process.exit so the artifact survives even if the run
+  // itself failed (a failure recording is often more useful than a
+  // passing one for debugging).
+  if (record) {
+    persistRecording().catch((err) => {
+      console.error(`forge-pool-run-spec: recording persistence failed: ${err.message}`)
+    })
+  }
+  process.exit(code ?? 1)
+})
+
+function persistRecording() {
+  return new Promise((resolve) => {
+    const testResults = join(projectForge, 'test-results')
+    if (!existsSync(testResults)) {
+      resolve()
+      return
+    }
+
+    // Walk test-results for *.webm files newer than runStartedAt.
+    const videos = findFilesNewerThan(testResults, /\.webm$/, runStartedAt)
+    if (videos.length === 0) {
+      resolve()
+      return
+    }
+
+    const videosDir = join(projectForge, 'videos')
+    mkdirSync(videosDir, { recursive: true })
+
+    // Multiple videos in a single run is rare (one test, one video) but
+    // possible. If there are multiple AND --record-as was given, only the
+    // first gets the label — the rest fall back to timestamped names to
+    // avoid silently overwriting.
+    const specBase = basename(specPath).replace(/\.spec\.[tj]s$/, '')
+    const ts = timestamp()
+    for (let i = 0; i < videos.length; i++) {
+      const src = videos[i]
+      const name = (recordAs && i === 0)
+        ? `${recordAs}.webm`
+        : `${specBase}-${ts}${videos.length > 1 ? `-${i + 1}` : ''}.webm`
+      const dest = join(videosDir, name)
+      copyFileSync(src, dest)
+      console.error(`forge-pool-run-spec: persisted recording → ${dest}`)
+    }
+    resolve()
+  })
+}
+
+function findFilesNewerThan(dir, pattern, sinceMs) {
+  const results = []
+  function walk(d) {
+    let entries
+    try {
+      entries = readdirSync(d, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const e of entries) {
+      const p = join(d, e.name)
+      if (e.isDirectory()) {
+        walk(p)
+      } else if (pattern.test(e.name)) {
+        try {
+          const st = statSync(p)
+          if (st.mtimeMs >= sinceMs) results.push(p)
+        } catch {
+          // skip unreadable files
+        }
+      }
+    }
+  }
+  walk(dir)
+  return results
+}
+
+function timestamp() {
+  const d = new Date()
+  const pad = (n) => String(n).padStart(2, '0')
+  return (
+    d.getFullYear().toString() +
+    pad(d.getMonth() + 1) +
+    pad(d.getDate()) +
+    '-' +
+    pad(d.getHours()) +
+    pad(d.getMinutes()) +
+    pad(d.getSeconds())
+  )
+}
