@@ -197,23 +197,35 @@ Then `TaskUpdate(taskId=<id>, status="completed")` (the task as defined is done,
 
 ### 9. Final-state message to `spec-writer` (when present)
 
-When the drive is complete, send `spec-writer` a final-state message summarizing the entire drive. This is their primary input — they may or may not have been listening to your narration to author.
+When the drive is complete, send `spec-writer` a final-state message summarizing the entire drive. This is their primary input — they may or may not have been listening to your narration to author. Include enough for them to write a self-contained `.spec.ts` without re-asking you (though they may follow up if needed).
 
 ```
 SendMessage(
   to="spec-writer",
   summary="drive complete: <one-line>",
-  message="Full drive picture:
-1. <step 1 summary>
-2. <step 2 summary>
-...
-Final result: <what was captured / asserted>
-Env keys used: <comma-separated list>
+  message="Full drive picture for spec authoring:
+
+Steps (in order, marked invoked-vs-fresh):
+1. invoked login-as-persona({}) → landed on /inventory.html
+2. invoked add-item-to-cart({'item': 'sauce-labs-backpack'}) → button changed to Remove, badge appeared
+3. invoked cart-get-badge-count({}) → returned \"1\"
+
+(For fresh-drive steps, include selectors used and the exact action sequence — spec-writer needs to reproduce them.)
+
+Final assertion-worthy values:
+- cart badge count = \"1\"
+
+Env keys the spec will need: SAUCE_USERNAME, SAUCE_PASSWORD.
+
+Pass/fail signal for this task: cart badge equals expected count after add-to-cart.
+
 Notable observations: <anything spec-writer should know — quirks, timing-sensitive steps, persona-specific behavior>"
 )
 ```
 
-If no `spec-writer` is on the team (Stage 3a — author-only team), skip this step.
+The invoked-vs-fresh distinction lets spec-writer compose existing snippets directly (imports + `.run()` calls) for the invoked steps, and write fresh code for the rest. Captured values feed `expect()` assertions.
+
+If no `spec-writer` is on the team (Stage 3a/3b — driver+author only), skip this step.
 
 ### 10. Mark the drive task complete and signal the lead
 
