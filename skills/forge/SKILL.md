@@ -21,17 +21,46 @@ Look at the first word of `$ARGUMENTS` (case-insensitive). The dispatch table:
 | `export` | inline a composed spec for shipping | `references/export.md` | spec name + optional `--output <path>` |
 | `run` | re-run a verified spec, optionally recording | `references/run.md` | spec name / `last` / `latest`, plus optional `record as <label>` |
 | `spec` | spec mode — drive + write spec + verify | `references/team-task.md` (with `MODE=spec`) | the actual task description |
-| *(anything else)* | drive mode — driver + snippet-author do the task | `references/team-task.md` (with `MODE=drive`) | the full args = task description |
+| *(anything else)* | (see natural-language signals below; default fallback is the task route) | `references/team-task.md` (with `MODE=drive`) | the full args = task description |
 
-Strip the route keyword (if present) from the args before passing the remainder downstream. Examples:
+### Natural-language route signals (when first word doesn't match)
+
+When the first word isn't a route keyword, check the full args for these natural-language phrasings before falling through to the task route. The phrase has to genuinely express the route's intent — a single keyword in passing isn't enough.
+
+**Init route** — an init-verb combined with `forge` as the object:
+
+- "install forge here" / "install forge in this project"
+- "scaffold forge" / "scaffold forge here" / "scaffold the forge directory"
+- "set up forge" / "set up forge in this project"
+- "initialise forge" / "initialize forge"
+
+**Export route** — an export-verb combined with a spec reference:
+
+- "ship this spec" / "ship the spec for the team" / "ship that spec"
+- "inline this spec" / "inline the snippets in <name>"
+- "export the spec from the latest recording" *(also matches the first-word `export` keyword — the NL pattern is redundant-safe)*
+
+If a natural-language signal matches, set the route accordingly and pass the full args (no keyword stripping; the reference handles parsing them).
+
+If neither first-word nor natural-language matches, the route stays task and Phase 0a applies.
+
+Counter-examples that should NOT match:
+
+- "log in and ship the package to checkout" — "ship" appears but not paired with `spec`
+- "install the user via this API" — "install" appears but not paired with `forge`
+- "spec the backpack feature out for me" — colloquial "spec" with no authoring intent (Phase 0a's spec-mode detection would also reject this)
+
+### Examples
 
 - `/forge init` → route=init, args=""
 - `/forge init ~/my-project` → route=init, args="~/my-project"
+- `/forge install forge here` → route=init (via NL signal), args="install forge here"
 - `/forge export add-backpack-to-cart-standard` → route=export, args="add-backpack-to-cart-standard"
+- `/forge ship this spec for the team` → route=export (via NL signal), args="ship this spec for the team"
 - `/forge run last spec, record as before` → route=run, args="last spec, record as before", RECORD_AS=before
 - `/forge spec AE-1775 add a backpack` → route=spec, args="AE-1775 add a backpack", MODE=spec
 - `/forge add the backpack to cart` → route=task, args="add the backpack to cart", MODE=drive
-- `/forge create a spec for adding the backpack` → route=task, args="create a spec for adding the backpack", but **natural-language signals select spec mode** anyway (see below)
+- `/forge create a spec for adding the backpack` → route=task, args="create a spec for adding the backpack", MODE=spec (via Phase 0a natural-language signal)
 
 ## Phase 0a — Mode detection (task/spec route only)
 
