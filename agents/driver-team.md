@@ -98,8 +98,9 @@ For each step in your plan, take the matching action.
 Use the forge-provided wrapper:
 
 ```bash
-direnv exec <FORGE_SLOT> node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-pool-invoke-snippet.mjs \
+node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-pool-invoke-snippet.mjs \
   -s=<SESSION_NAME> \
+  --slot <FORGE_SLOT> \
   --snippet <PROJECT_FORGE_ROOT>/snippets/<name>.ts \
   --args '<args-json>'
 ```
@@ -115,7 +116,7 @@ If invocation fails (snippet errored, selector no longer matches, etc.), fall ba
 For each browser action:
 
 ```bash
-direnv exec <FORGE_SLOT> playwright-cli -s=<SESSION_NAME> <command> <args>
+playwright-cli -s=<SESSION_NAME> <command> <args>
 ```
 
 Where `<command>` is `goto`, `snapshot`, `click`, `fill`, `url`, `tab-new`, etc. For `run-code` that needs env, use `forge-pool-run-code.mjs` (see Hard rules).
@@ -258,13 +259,14 @@ When the lead sends a shutdown request (`{type: "shutdown_request"}`), respond w
 - **Credentials never appear literally in drive args.** playwright-cli's `run-code` sandbox doesn't expose Node's `process` object — naive `process.env.<NAME>` resolves to undefined. Forge ships a wrapper that solves this:
 
   ```bash
-  direnv exec <FORGE_SLOT> node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-pool-run-code.mjs \
+  node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-pool-run-code.mjs \
     -s=<SESSION_NAME> \
+    --slot <FORGE_SLOT> \
     "async page => { await page.locator('#user-name').fill(process.env.SAUCE_USERNAME) }" \
     --env SAUCE_USERNAME --env SAUCE_PASSWORD
   ```
 
-  The wrapper reads each `--env KEY` from the env that `direnv exec <FORGE_SLOT>` loaded, wraps your code with a shimmed `process.env` containing just those values, and calls `playwright-cli run-code` with the wrapped form. Your tool-call output shows only the wrapper invocation and `--env KEY` flags — never the resolved values.
+  The wrapper reads each `--env KEY` from the slot's `.env` (via `--slot`) merged with your shell env, wraps your code with a shimmed `process.env` containing just those values, and calls `playwright-cli run-code` with the wrapped form. Your tool-call output shows only the wrapper invocation and `--env KEY` flags — never the resolved values.
 
   Use the wrapper for any `run-code` that needs env vars. For `run-code` that doesn't (e.g. `await page.locator('.inventory_item').count()` returning a number), call `playwright-cli run-code` directly — no wrapper needed.
 

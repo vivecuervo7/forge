@@ -42,22 +42,23 @@ if ! command -v playwright-cli >/dev/null 2>&1; then
 fi
 
 # Runner workspace: a minimal Playwright project used by `forge-spec.mjs run`
-# to execute generated specs without requiring a host project setup. Bootstrap
-# the package.json + config on first run, then install @playwright/test if
-# node_modules is missing. Browsers (~/Library/Caches/ms-playwright/) are
-# shared with playwright-cli, so no extra download is needed in the common case.
-if [ ! -f "$ROOT/runner/package.json" ]; then
-  cat > "$ROOT/runner/package.json" <<'EOF'
+# to execute generated specs without requiring a host project setup. The
+# package.json is plugin-owned (see its own description) — we overwrite on
+# every bootstrap so dep additions/version bumps land on existing installs
+# without users needing to manually clean their runner. Browsers
+# (~/Library/Caches/ms-playwright/) are shared with playwright-cli, so no
+# extra download is needed in the common case.
+cat > "$ROOT/runner/package.json" <<'EOF'
 {
   "name": "forge-spec-runner",
   "private": true,
   "description": "Forge-managed Playwright workspace for running generated specs. Not for editing — forge-bootstrap.sh maintains this directory.",
   "dependencies": {
-    "@playwright/test": "^1.49.0"
+    "@playwright/test": "^1.49.0",
+    "dotenv": "^16.4.0"
   }
 }
 EOF
-fi
 
 if [ ! -f "$ROOT/runner/playwright.config.ts" ]; then
   cat > "$ROOT/runner/playwright.config.ts" <<'EOF'
@@ -76,9 +77,20 @@ export default defineConfig({
 EOF
 fi
 
-# Install runner dependencies on first use (idempotent on subsequent calls).
-if [ ! -d "$ROOT/runner/node_modules/@playwright/test" ]; then
-  echo "forge: installing @playwright/test into $ROOT/runner/ (first-time, ~30s)…" >&2
+# Install runner dependencies. Re-runs `npm install` if ANY declared dep is
+# missing — not just @playwright/test — so version bumps and new deps (e.g.
+# dotenv added later for ad-hoc spec-run env loading) land on existing
+# installs.
+NEEDS_INSTALL=0
+for dep in @playwright/test dotenv; do
+  if [ ! -d "$ROOT/runner/node_modules/$dep" ]; then
+    NEEDS_INSTALL=1
+    break
+  fi
+done
+
+if [ "$NEEDS_INSTALL" -eq 1 ]; then
+  echo "forge: installing/updating plugin runner deps in $ROOT/runner/ (~30s on first run)…" >&2
   (cd "$ROOT/runner" && npm install --silent --no-audit --no-fund --no-progress) >&2 || {
     echo "forge: npm install failed in $ROOT/runner/ — generated specs will be unrunnable until this is fixed" >&2
   }

@@ -200,6 +200,23 @@ if [ ! -e "$PW_CONFIG" ]; then
 // detect and prefer that config; this file is then unused and can stay
 // as-is.
 //
+// Env loading (highest-precedence wins, last writer when non-override):
+//
+//   1. Process env at config-load time — your shell env, including anything
+//      direnv (or another loader) put there. Always wins.
+//   2. Slot env from `<slot>/.env` — injected by the forge wrapper scripts
+//      via spawn when invoked with --slot. Already in process.env by the
+//      time this config loads.
+//   3. `forge/.env` — optional, for forge-specific overrides (e.g. different
+//      baseURL or timeout for forge specs only, without touching project-
+//      wide config). Loaded first below so it wins over project root .env.
+//   4. `<project-root>/.env` — project baseline. Lowest precedence; only
+//      fills in keys nothing above already set.
+//
+// dotenv's `override: false` default means values already in process.env
+// are preserved — so #1 and #2 take precedence over #3 and #4 automatically.
+// The keys you need are declared in your project's forge/hints/forge.md.
+//
 // Customize this when you DO want forge specs to use a config but don't
 // want a project-wide one. Common additions:
 //   - globalSetup: './global-setup.ts'      // e.g. clear DB before tests
@@ -210,6 +227,19 @@ if [ ! -e "$PW_CONFIG" ]; then
 //
 // Committed to the repo so teammates pick up the same fallback config.
 import { defineConfig } from '@playwright/test'
+import { config as loadEnv } from 'dotenv'
+import { resolve } from 'node:path'
+
+// Playwright's config loader compiles .ts files as CJS, so __dirname is
+// injected automatically. We declare it to satisfy TypeScript without
+// pulling in @types/node as a dep just for this.
+declare const __dirname: string
+
+// Load forge/.env first (forge-specific overrides), then project root .env
+// (baseline). dotenv non-override means forge/.env wins over project/.env
+// for any key they both define.
+loadEnv({ path: resolve(__dirname, '.env') })
+loadEnv({ path: resolve(__dirname, '..', '.env') })
 
 export default defineConfig({
   testDir: './specs',

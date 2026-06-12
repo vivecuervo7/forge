@@ -6,9 +6,10 @@
 // `run(page, args)` function. This script:
 //
 //   1. Dynamically imports the snippet (Node 24 strips TS types natively).
-//   2. Reads `meta.envKeys`; if any are declared, resolves them from this
-//      process's env (where direnv exec <slot> loaded them) and builds a
-//      process shim — same mechanism as forge-pool-run-code.mjs.
+//   2. Reads `meta.envKeys`; if any are declared, resolves them from the
+//      slot's .env file (when --slot is given) merged with this process's
+//      env. process.env wins, so user shell direnv layers on top of slot
+//      values cleanly. Same mechanism as forge-pool-run-code.mjs.
 //   3. Composes the wrapped run-code body:
 //        async page => {
 //          const process = { env: {...} };  // only when envKeys declared
@@ -24,7 +25,7 @@
 // playwright-cli, never in this script's stdout.
 //
 // Usage:
-//   forge-pool-invoke-snippet.mjs -s=<session> --snippet <path> [--args '<json>']
+//   forge-pool-invoke-snippet.mjs -s=<session> --snippet <path> [--args '<json>'] [--slot <dir>]
 //
 // Exit codes:
 //   0   success — playwright-cli output forwarded verbatim
@@ -36,6 +37,7 @@
 
 import { spawnSync } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
+import { loadSlotEnv } from './forge-slot-env.mjs'
 
 function die(msg, code = 2) {
   console.error('forge-pool-invoke-snippet:', msg)
@@ -47,6 +49,7 @@ const argv = process.argv.slice(2)
 let session = null
 let snippetPath = null
 let argsJson = '{}'
+let slot = null
 
 for (let i = 0; i < argv.length; i++) {
   const arg = argv[i]
@@ -61,6 +64,9 @@ for (let i = 0; i < argv.length; i++) {
   } else if (arg === '--args') {
     if (i + 1 >= argv.length) die('--args requires JSON')
     argsJson = argv[++i]
+  } else if (arg === '--slot') {
+    if (i + 1 >= argv.length) die('--slot requires a path')
+    slot = argv[++i]
   } else {
     die(`unknown arg: ${arg}`)
   }
@@ -90,21 +96,25 @@ if (typeof mod.run !== 'function') {
   die(`snippet at ${snippetPath} does not export a run(page, args) function`)
 }
 
-// Resolve declared envKeys from this process's env. The caller (driver agent)
-// must have wrapped this invocation with the project's env loader (typically
-// `direnv exec <slot-dir>`) so the keys are present.
+// Resolve declared envKeys from slot .env (if --slot given) merged with
+// process.env (which includes anything the user's shell direnv loaded).
+// process.env wins, so user direnv overrides slot.
+const slotEnv = loadSlotEnv(slot)
+const combinedEnv = { ...slotEnv, ...process.env }
+
 let processShim = ''
 if (Array.isArray(meta.envKeys) && meta.envKeys.length > 0) {
   const envObj = {}
   for (const key of meta.envKeys) {
-    if (process.env[key] === undefined) {
+    if (combinedEnv[key] === undefined) {
       die(
-        `snippet declares envKeys including "${key}" but it's not set in this process. ` +
-        `Wrap the invocation with the project's env loader (e.g. \`direnv exec <slot-dir> ...\`).`,
+        `snippet declares envKeys including "${key}" but it's not resolvable ` +
+        `from slot .env (${slot || '<no --slot>'}) or process env. Add it to ` +
+        `<slot>/.env, your project root .env, or your shell environment.`,
         3
       )
     }
-    envObj[key] = process.env[key]
+    envObj[key] = combinedEnv[key]
   }
   processShim = `const process = { env: ${JSON.stringify(envObj)} };\n`
 }
