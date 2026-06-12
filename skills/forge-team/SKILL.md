@@ -225,11 +225,11 @@ After spawning, the teammates self-coordinate. You (the lead) wait. Messages fro
 
 - **Completion pings from all four teammates** — this is your primary signal that the team is done. Driver, author, spec-writer, and verifier each SendMessage `team-lead` with a brief `task <id> complete` summary after marking their task `completed` via TaskUpdate. When you've received ALL FOUR pings, proceed to phase 5. Note: the natural order is driver/author → spec-writer → verifier (verifier waits for spec-writer's spec; spec-writer waits for driver's final-state).
 - **Messages addressed to you (`team-lead`)** — process them:
-  - **STUCK from any teammate** (driver most commonly) — message body is `{ type: "stuck", question, context, options? }`. Surface to the user via `AskUserQuestion`:
-    - Build the question from the teammate's `question` field.
-    - If `options` is provided, map each option to an AskUserQuestion option (use option.label as the label, option.value carries the value you'll relay). AskUserQuestion always also allows "Other" for free-form answers.
-    - If no `options`, ask the question open-ended — the user types their answer via "Other".
-    - When the user responds, SendMessage the originating teammate with `{ type: "stuck_response", answer: <chosen value or free-form text> }`. They'll wake on receive, apply the answer, and continue.
+  - **STUCK from any teammate** (driver most commonly) — message is plain text with `STUCK` as the first line, then sections `QUESTION:`, `CONTEXT:`, and optionally `OPTIONS:` (each option as `- <label> | value: <value>`). Surface to the user via `AskUserQuestion`:
+    - Build the question from the teammate's `QUESTION:` section.
+    - If `OPTIONS:` is present, parse each `- <label> | value: <value>` line and map to an AskUserQuestion option (use the label as the AskUserQuestion option label, remember the value for the relay step). AskUserQuestion always also allows "Other" for free-form answers.
+    - If no `OPTIONS:` section, ask the question open-ended — the user types their answer via "Other".
+    - When the user responds, SendMessage the originating teammate with summary `stuck_response` and a plain-text body like `stuck_response — answer: <chosen-value-or-free-text>`. They'll wake on receive, parse out the answer, and continue. (Don't send a JSON-object body — SendMessage's `message` field accepts only strings.)
     - The team is effectively paused while you wait for the user — don't try to do anything else. Once you relay the response, they resume on their own.
   - **`cannot-drive` from driver** — terminal failure. Surface to user as part of the final report; proceed to phase 5 cleanup (team's done).
   - **Status updates / questions from teammates** — answer concisely or relay relevant context.
