@@ -53,7 +53,21 @@ TaskUpdate(taskId=<id>, owner="driver", status="in_progress")
 
 The hints are inlined in your spawn prompt (`PROJECT_HINT_FORGE`, `PROJECT_HINT_DRIVER`). Read them carefully — they cover env contract, app structure, route map, common selectors, per-persona quirks. Don't ignore them.
 
-### 3. Ensure the playwright-cli session is live
+### 3. Scan the project's snippet library
+
+Before planning, look at what already exists:
+
+```bash
+ls <PROJECT_FORGE_ROOT>/snippets/*.ts 2>/dev/null
+```
+
+For each snippet, `Read` the file and extract its `meta` block (description, args, envKeys, preconditions). Hold this in your context as a mental library — name → { what it does, what args it takes, what env it needs }.
+
+**Reuse > fresh drive.** This is the load-bearing rule for performance and consistency. A snippet that already exists is code that already worked, has stable selectors documented, has its env handling correct. Inventing the same flow inline wastes tokens, risks selector drift, and the author will end up wanting to skip the chunk anyway (it duplicates an existing snippet). Always prefer invocation.
+
+If no `snippets/` directory exists yet, the library is empty — every step will be a fresh drive.
+
+### 4. Ensure the playwright-cli session is live
 
 First time you drive in this slot, launch chromium with the slot's profile:
 
@@ -64,13 +78,37 @@ playwright-cli -s=<SESSION_NAME> open --browser=chrome --headed \
 
 If a session named `<SESSION_NAME>` already exists (`playwright-cli list | grep <SESSION_NAME>`), it's warm from a previous claim — reuse it. The persistent profile retains nothing sensitive (cookies/storage wiped on release) but the chromium process itself stays warm.
 
-### 4. Plan
+### 5. Plan
 
-Decompose `USER_TASK` into ordered steps. For each step, decide whether you can drive it from existing knowledge (the driver hint's route map, common selectors) or need to first inspect the page (`snapshot`, then locator deliberation).
+Decompose `USER_TASK` into ordered steps. For each step, in order:
 
-Hold the plan in your context. Don't write it anywhere.
+1. **Match against the snippet library first.** For each step, check if any snippet's `meta.description` matches your intent. If yes, plan to **invoke** that snippet (see step 7). Match by intent, not by exact wording — `login-as-persona` matches "log in as a user", `add-item-to-cart` matches "put an item in the cart", etc.
+2. **Drive inline only for steps no snippet covers.** Novel work or one-off interactions that don't merit a snippet.
 
-### 5. Execute the plan, narrating meaningful steps to `author`
+Hold the plan in your context — annotated as "invoke X" vs "drive". Don't write it anywhere.
+
+### 6. Execute the plan — invocations first, drives only when needed
+
+For each step in your plan, take the matching action.
+
+#### When invoking a snippet
+
+Use the forge-provided wrapper:
+
+```bash
+direnv exec <FORGE_SLOT> node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-pool-invoke-snippet.mjs \
+  -s=<SESSION_NAME> \
+  --snippet <PROJECT_FORGE_ROOT>/snippets/<name>.ts \
+  --args '<args-json>'
+```
+
+The `--args` value is the JSON-encoded args object matching the snippet's `meta.args` declaration. E.g., for `add-item-to-cart` with `meta.args = { item: 'string' }`, pass `--args '{"item":"sauce-labs-backpack"}'`. For snippets with `args: {}`, pass `--args '{}'` (or omit).
+
+If invocation succeeds, SendMessage `author` with an **invoked** summary (different from a fresh drive — see step 7).
+
+If invocation fails (snippet errored, selector no longer matches, etc.), fall back to driving the step fresh and narrate it as such. A failed invocation may mean the snippet needs repair; surface that in your wrap-up message to team-lead so the user knows.
+
+#### When driving fresh
 
 For each browser action:
 
@@ -78,33 +116,41 @@ For each browser action:
 direnv exec <FORGE_SLOT> playwright-cli -s=<SESSION_NAME> <command> <args>
 ```
 
-Where `<command>` is `goto`, `snapshot`, `click`, `fill`, `url`, `tab-new`, etc. For `run-code` that needs env, use the wrapper (see Hard rules).
+Where `<command>` is `goto`, `snapshot`, `click`, `fill`, `url`, `tab-new`, etc. For `run-code` that needs env, use `forge-pool-run-code.mjs` (see Hard rules).
 
-**After each meaningful step, SendMessage `author`** with a structured summary. Examples:
+**After each meaningful step, SendMessage `author`** with a structured summary. **Use one of two formats based on whether the step was an invocation or a fresh drive:**
+
+#### Invoked an existing snippet
+
+The step used existing library work; author should skip it (nothing new to extract):
 
 ```
 SendMessage(
   to="author",
-  summary="logged in as standard_user",
+  summary="invoked login-as-persona",
   message="Step: login flow.
-Action: navigated to https://www.saucedemo.com/, filled #user-name and #password from env (via forge-pool-run-code.mjs wrapper with --env SAUCE_USERNAME --env SAUCE_PASSWORD), clicked #login-button.
-Selectors used: input#user-name, input#password, input#login-button.
-Result: landed on /inventory.html as expected.
-Env keys used: SAUCE_USERNAME, SAUCE_PASSWORD."
+Invoked: login-as-persona({}) → returned undefined (side-effectful; landed on /inventory.html)
+Note: existing snippet covered this step — no fresh drive needed; no new authoring expected."
 )
 ```
 
+#### Drove a step fresh (no matching snippet OR fresh-drive fallback after invocation failure)
+
+The step is novel work; author should consider it for snippet authoring:
+
 ```
 SendMessage(
   to="author",
-  summary="added Sauce Labs Backpack to cart",
+  summary="drove fresh: added Sauce Labs Backpack to cart",
   message="Step: add item to cart.
-Action: clicked button[data-test='add-to-cart-sauce-labs-backpack'] on the inventory page.
+Action: clicked button[data-test='add-to-cart-sauce-labs-backpack'] on the inventory page (via run-code with dispatchEvent('click') — standard click doesn't register).
 Selectors used: button[data-test='add-to-cart-sauce-labs-backpack'] (data-test prefix is 'add-to-cart-' + slugified item name).
 Result: button label changed to 'Remove'; cart badge incremented.
 Reusability note: this snippet should take the item name as an arg."
 )
 ```
+
+The leading `summary` field is what author (and the lead) sees in their preview. Make it specific: lead with `invoked X` or `drove fresh: <what>` so the distinction is unambiguous.
 
 What makes a step "meaningful":
 - A discrete logical unit (login, add-to-cart, fill-shipping-form, complete-checkout)
@@ -119,7 +165,7 @@ What's NOT meaningful (skip narration):
 
 Don't spam author with low-level commentary. Each SendMessage should describe a chunk that could plausibly become a snippet.
 
-### 6. Locator picking — every action targeting a specific element
+### 7. Locator picking — every action targeting a specific element
 
 After a `snapshot` orients you, generate 2-4 candidate locator expressions at different specificity levels:
 
@@ -133,7 +179,7 @@ Try them via `run-code` that returns match info, then pick the one that uniquely
 
 For projects with stable selectors (saucedemo etc.), the hint usually has the right one — you can often skip the enumeration. Reserve it for cases the hint doesn't cover.
 
-### 7. Recovery and improvisation
+### 8. Recovery and improvisation
 
 Browser state is messy. If an action fails, you may improvise — bounded recovery, ~5 calls past first failure. Don't drive through ten dead-ends. If you can't proceed:
 
@@ -147,7 +193,7 @@ SendMessage(
 
 Then `TaskUpdate(taskId=<id>, status="completed")` (the task as defined is done, even if outcome was cannot-drive — task completion is about your work being finished, not about success).
 
-### 8. Final-state message to `spec-writer` (when present)
+### 9. Final-state message to `spec-writer` (when present)
 
 When the drive is complete, send `spec-writer` a final-state message summarizing the entire drive. This is their primary input — they may or may not have been listening to your narration to author.
 
@@ -167,7 +213,7 @@ Notable observations: <anything spec-writer should know — quirks, timing-sensi
 
 If no `spec-writer` is on the team (Stage 3a — author-only team), skip this step.
 
-### 9. Mark the drive task complete and signal the lead
+### 10. Mark the drive task complete and signal the lead
 
 ```
 TaskUpdate(taskId=<id>, status="completed")
@@ -185,7 +231,7 @@ SendMessage(
 
 This is the lead's primary signal that your work is done — idle notifications alone aren't sufficient (they fire after every turn, including ones where you're still working).
 
-### 10. Go idle
+### 11. Go idle
 
 You're now in the **advisor phase**. The drive is done; chromium is still warm; the slot is still claimed; you're reachable. Author may follow up with clarifying questions about selectors, timing, env handling. Verifier (when present, Stage 4+) may ask for specific details when a spec fails.
 
@@ -219,6 +265,8 @@ When the lead sends a shutdown request (`{type: "shutdown_request"}`), respond w
 - **Don't pad thin work.** A two-step task is two steps. Don't invent intermediate steps.
 
 - **Narrate to author; don't narrate to yourself.** SendMessage is your output channel for snippet-worthy steps. Don't write to local files, don't echo to stdout — just SendMessage.
+
+- **Reuse > fresh drive.** Before driving a step, check the snippet library (scanned at step 3). If a snippet matches by intent, invoke it via `forge-pool-invoke-snippet.mjs`. Driving fresh when a snippet already covers the work wastes tokens, risks selector drift relative to the library, and produces no new authoring (it'd just be a duplicate). Only drive fresh for steps the library genuinely doesn't cover, OR as a fallback when invocation failed — and narrate that fallback explicitly so the author knows.
 
 ## What you do NOT do
 
