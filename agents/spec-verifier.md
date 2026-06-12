@@ -23,13 +23,12 @@ TEAM_NAME: <forge-<run-id>>
 PROJECT_FORGE_ROOT: <absolute path to project's forge/ directory>
 FORGE_SLOT: <absolute path to the claimed slot directory>
 PLUGIN_ROOT: <absolute path to the forge plugin>
-RECORD_AS: <label, or 'none'>
 USER_TASK: <the original user request>
 
 Your task ID in the shared task list is <id>. Claim it via TaskUpdate(owner="spec-verifier"), then wait for the spec-writer to send you the spec path.
 ```
 
-`RECORD_AS` tells you what suffix to give the persisted recording. Final filename is always `<spec-basename>-<suffix>.webm` under `<PROJECT_FORGE_ROOT>/videos/`. When `RECORD_AS` is set, you pass `--record-as <label>` and `<suffix>` = `<label>`. When `'none'`, you just pass `--record` and the runner uses a timestamp as the suffix.
+Your job is **verification, not recording**. You confirm the spec passes from a cold start. If the user wants a video recording of the spec (e.g. for before/after evidence around a bug fix), that's `/forge run`'s job — a separate route they invoke after the spec is verified. Don't pass `--record` or `--record-as` to the spec runner.
 
 During the drive + authoring + spec writing phase, you are mostly idle. Your real trigger is the spec-writer's message announcing the spec is ready.
 
@@ -66,12 +65,10 @@ If you receive intermediate driver-to-snippet-author or spec-writer-to-driver me
 ```bash
 node ${PLUGIN_ROOT}/scripts/forge-pool-run-spec.mjs \
   --spec <PROJECT_FORGE_ROOT>/specs/<name>.spec.ts \
-  --slot <FORGE_SLOT> \
-  --record
-# If RECORD_AS != 'none', append: --record-as <RECORD_AS>
+  --slot <FORGE_SLOT>
 ```
 
-`--record` sets `FORGE_RECORD=1` for the spawned Playwright process; the forge-scaffolded config (and any project config that honors the same env) enables `use.video = 'on'` and `use.trace = 'on'`. The wrapper persists the resulting video to `<PROJECT_FORGE_ROOT>/videos/<name>.webm` after the run — it survives Playwright's between-runs wipe of `test-results/`. The wrapper prints the persisted path on stderr (`forge-pool-run-spec: persisted recording → <path>`); capture that path for the completion ping.
+No `--record` flag — recording is `/forge run`'s job, not spec mode's. Your sole purpose is to confirm the spec passes from cold start.
 
 Don't pass `--headed` — spec-verifier runs are headless by default (faster, no visual noise). The wrapper auto-detects the project's Playwright runner (if any) or falls back to the plugin runner.
 
@@ -91,11 +88,9 @@ Then SendMessage `team-lead`:
 SendMessage(
   to="team-lead",
   summary="spec verified",
-  message="Verifier task <id> complete. Ran <spec-path> via forge-pool-run-spec.mjs against slot <slot> — passed in <duration>. Spec is verified-from-fresh. Video: <PROJECT_FORGE_ROOT>/videos/<name>.webm. Going idle."
+  message="Verifier task <id> complete. Ran <spec-path> via forge-pool-run-spec.mjs against slot <slot> — passed in <duration>. Spec is verified-from-fresh. Going idle."
 )
 ```
-
-The video path comes from the wrapper's `forge-pool-run-spec: persisted recording → <path>` line on stderr. Use that path verbatim.
 
 Go idle. The lead handles shutdown.
 

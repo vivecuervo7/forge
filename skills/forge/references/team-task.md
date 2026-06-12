@@ -3,8 +3,9 @@
 This reference is loaded by `/forge`'s router for **task** and **spec** routes. The router has already:
 
 - Decided `MODE` (one of `drive` | `spec`)
-- Decided `RECORD_AS` (a label string, or `none`)
 - Stripped any leading `spec` keyword from the task description
+
+Recording is **not** handled by this reference. Spec mode produces a verified spec; recording (for evidence) lives under the separate `/forge run` route. If the user's task includes a recording label phrase like "record as before" in spec mode, ignore the recording portion and surface a note in the final report pointing them at `/forge run` for that workflow.
 
 Below is the full lifecycle for running an agent team against the project's slot pool. You are the **team lead**: you manage the team's lifecycle (session-pool slot, team creation, task coordination, shutdown, cleanup) while teammates do the actual work via mesh communication. **You do not relay content between teammates — they SendMessage each other directly.** Your job is setup, lifecycle, and the user channel.
 
@@ -160,8 +161,8 @@ TaskCreate(
 # Note as SPEC_WRITER_TASK_ID.
 
 TaskCreate(
-  subject="spec-verifier: run spec against slot, confirm it passes from cold start, record video",
-  description="Wait for spec-writer's 'spec ready' message. Run the spec via forge-pool-run-spec.mjs --spec <path> --slot <SLOT_DIR> --record (add --record-as <RECORD_AS> if RECORD_AS != none). The wrapper persists the video.webm to <FORGE_ROOT>/videos/<name>.webm — surface that path in the completion ping. On fail: SendMessage driver (selectors) or spec-writer (assertions/imports) for clarification, iterate up to 3 times, then either succeed or escalate. Mark complete when done."
+  subject="spec-verifier: run spec against slot, confirm it passes from cold start",
+  description="Wait for spec-writer's 'spec ready' message. Run the spec via forge-pool-run-spec.mjs --spec <path> --slot <SLOT_DIR> (no --record — recording is a separate concern handled by /forge run). On pass: ping team-lead with verified-from-fresh status. On fail: SendMessage driver (selectors) or spec-writer (assertions/imports) for clarification, iterate up to 3 times, then either succeed or escalate. Mark complete when done."
 )
 # Note as SPEC_VERIFIER_TASK_ID.
 ```
@@ -242,12 +243,11 @@ Agent(
 PROJECT_FORGE_ROOT: <FORGE_ROOT>
 FORGE_SLOT: <SLOT_DIR>
 PLUGIN_ROOT: ${CLAUDE_PLUGIN_ROOT}
-RECORD_AS: <RECORD_AS, or 'none' if absent>
 USER_TASK: <user's task verbatim>
 PROJECT_HINT_SPEC_VERIFIER:
 <spec-verifier.md contents from <FORGE_ROOT>/hints/spec-verifier.md, or 'none' if missing>
 
-Your task ID is <SPEC_VERIFIER_TASK_ID>. Claim it via TaskUpdate(owner='spec-verifier', status='in_progress'). Wait for spec-writer's 'spec ready' message. Run the spec via forge-pool-run-spec.mjs --spec <path> --slot <FORGE_SLOT>. On pass, ping team-lead with verified-from-fresh status. On fail, ask driver (selectors) or spec-writer (assertions) for clarification, iterate up to 3 times, then succeed or escalate."
+Your task ID is <SPEC_VERIFIER_TASK_ID>. Claim it via TaskUpdate(owner='spec-verifier', status='in_progress'). Wait for spec-writer's 'spec ready' message. Run the spec via forge-pool-run-spec.mjs --spec <path> --slot <FORGE_SLOT> (no --record — recording is /forge run's job, not spec mode's). On pass, ping team-lead with verified-from-fresh status. On fail, ask driver (selectors) or spec-writer (assertions) for clarification, iterate up to 3 times, then succeed or escalate."
 )
 ```
 
@@ -343,10 +343,12 @@ Compose a tight summary. Drive mode is shorter — no spec/spec-verifier lines.
 > Spec-writer wrote `<name>.spec.ts` composing <list of snippets> and asserting <one-liner>.
 > (or: "Spec-writer updated `<name>.spec.ts` in place" / "No new spec — existing one covers this.")
 >
-> Spec-verifier ran `<name>.spec.ts` against `slot-<persona>` — **passed** in <duration>. Video: `<forge>/videos/<name>.webm`.
+> Spec-verifier ran `<name>.spec.ts` against `slot-<persona>` — **passed** in <duration>.
 > (or: "Spec-verifier ran spec, FAILED after 3 iterations — escalated. See <details>.")
 >
 > Slot released. Team cleaned up.
+>
+> To record this spec for evidence (e.g. before/after a bug fix), run `/forge run <name>, record as <label>`.
 
 If anything didn't go to plan (a teammate returned `cannot-drive`, the spec-verifier escalated, snippet invocation failed mid-drive, etc.), surface that prominently — the user wants the truth, not a sanitized success report.
 
