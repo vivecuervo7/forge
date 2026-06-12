@@ -35,8 +35,8 @@ Once a project is forge-init'd (below), the plugin lazy-installs its Playwright 
 |---|---|
 | `/forge <task>` | **Drive mode.** Driver + snippet-author. Does the task end-to-end, accretes reusable snippets from novel work. Fastest path. |
 | `/forge spec <task>` | **Spec mode.** Adds spec-writer + spec-verifier. Composes a self-contained `.spec.ts`, runs it from a cold start, records video. |
-| `/forge-init` | Scaffolds the `forge/` directory convention into the current project. Idempotent. |
-| `/forge-export <spec-name>` | Exports a composed spec to a self-contained inlined form, suitable for shipping into another test suite. |
+| `/forge init` | Scaffolds the `forge/` directory convention into the current project. Idempotent. |
+| `/forge export <spec-name>` | Exports a composed spec to a self-contained inlined form, suitable for shipping into another test suite. |
 
 Spec mode also fires on natural-language signals — "create a spec for AE-1775", "write a spec that…", "capture as a spec". Plain `/forge <task>` is the unambiguous drive case.
 

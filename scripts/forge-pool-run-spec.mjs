@@ -19,7 +19,7 @@
 //      that runner's node_modules
 //      into the project's forge/ dir so the spec's `import '@playwright/test'`
 //      resolves, then run from forge/ using the project-committed config at
-//      forge/playwright.config.ts (scaffolded by /forge-init). This is the
+//      forge/playwright.config.ts (scaffolded by /forge init). This is the
 //      path for sandboxes and greenfield projects with no existing test setup.
 //
 // In both paths, --slot reads <slot>/.env (dotenv format) into a dict and
@@ -53,7 +53,7 @@
 //   4   spec file not found
 //   5   spawn error (command missing, etc.)
 //   6   plugin fallback selected but forge/playwright.config.ts missing
-//       (project hasn't been /forge-init'd, or the config was deleted)
+//       (project hasn't been /forge init'd, or the config was deleted)
 
 import { spawn, spawnSync } from 'node:child_process'
 import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
@@ -168,15 +168,15 @@ if (projectRunner) {
   if (!existsSync(projNodeModules)) {
     symlinkSync(join(PLUGIN_RUNNER_ROOT, 'node_modules'), projNodeModules)
   }
-  // The fallback playwright.config.ts is scaffolded by /forge-init (committed
+  // The fallback playwright.config.ts is scaffolded by /forge init (committed
   // to the project's forge/ dir). If it's missing, the project hasn't been
-  // /forge-init'd — surface a clear error rather than silently writing one
+  // /forge init'd — surface a clear error rather than silently writing one
   // (which would diverge from the convention).
   const fallbackConfig = join(projectForge, 'playwright.config.ts')
   if (!existsSync(fallbackConfig)) {
     die(
       `no project runner found above ${projectForge}, and the plugin-fallback ` +
-      `config at ${fallbackConfig} doesn't exist. Run \`/forge-init\` in the ` +
+      `config at ${fallbackConfig} doesn't exist. Run \`/forge init\` in the ` +
       `project root to scaffold the fallback config (or create a root-level ` +
       `playwright.config.ts with your project's own runner setup).`,
       6

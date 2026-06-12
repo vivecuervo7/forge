@@ -53,7 +53,7 @@ Everything else under `forge/` is **local working state** by default. Snippets, 
 !hints/**
 
 # The hints/ README.md is scaffold-only — local guidance for authoring hints,
-# not project-specific knowledge. Each user gets a fresh copy from /forge-init.
+# not project-specific knowledge. Each user gets a fresh copy from /forge init.
 hints/README.md
 ```
 
@@ -151,13 +151,13 @@ Single-repo projects put `forge/` directly in the repo. Wrapper-style projects p
 
 The `/forge` skill (and future `/forge`) finds the project's forge root by walking up from the current working directory, looking for a `forge/` directory. First one found wins. Same pattern as git looking for `.git/`, npm looking for `node_modules/`. Run forge from anywhere in the project tree and it locates the right context automatically.
 
-If no `forge/` is found in the tree, the skill surfaces a helpful error: "no forge/ directory found — run `/forge-init` to scaffold one in the current directory."
+If no `forge/` is found in the tree, the skill surfaces a helpful error: "no forge/ directory found — run `/forge init` to scaffold one in the current directory."
 
 ## Why this shape
 
 - **Maximally simple for the user.** One committed directory (`hints/`). One self-documenting policy file. Five hint files at most.
 - **Maximally portable.** No tool-specific dependencies in the convention itself. Direnv users use direnv; dotenv users use dotenv; the convention doesn't care.
-- **Maximally additive.** Adding forge to an existing project means running `/forge-init` and authoring hints. No surgery on the project's other directories.
+- **Maximally additive.** Adding forge to an existing project means running `/forge init` and authoring hints. No surgery on the project's other directories.
 - **Security factoring stays clean.** Hints are committed (and should be safe to commit); secrets live in slot env files which are gitignored. The user can mix plain-literal env files in dev with secret-manager-backed env files in production without forge knowing the difference.
 - **Backwards-promotion path is clean.** When a snippet or spec earns its keep, the user copies it wherever they want — there's no enforced destination. Promotion is an explicit human action, not an automated forge step. The forge plugin doesn't dictate where promoted specs live; that's a per-project decision (often informed by the project's existing test infrastructure, if any).
 
