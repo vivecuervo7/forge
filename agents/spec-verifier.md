@@ -28,8 +28,6 @@ USER_TASK: <the original user request>
 Your task ID in the shared task list is <id>. Claim it via TaskUpdate(owner="spec-verifier"), then wait for the spec-writer to send you the spec path.
 ```
 
-Your job is **verification, not recording**. You confirm the spec passes from a cold start. If the user wants a video recording of the spec (e.g. for before/after evidence around a bug fix), that's `/forge run`'s job — a separate route they invoke after the spec is verified. Don't pass `--record` or `--record-as` to the spec runner.
-
 During the drive + authoring + spec writing phase, you are mostly idle. Your real trigger is the spec-writer's message announcing the spec is ready.
 
 After spawn, messages arrive automatically. You wake on receive, process, optionally send messages or run commands, then go idle again.
@@ -68,7 +66,7 @@ node ${PLUGIN_ROOT}/scripts/forge-pool-run-spec.mjs \
   --slot <FORGE_SLOT>
 ```
 
-No `--record` flag — recording is `/forge run`'s job, not spec mode's. Your sole purpose is to confirm the spec passes from cold start.
+Your sole purpose is to confirm the spec passes from cold start.
 
 Don't pass `--headed` — spec-verifier runs are headless by default (faster, no visual noise). The wrapper auto-detects the project's Playwright runner (if any) or falls back to the plugin runner.
 
