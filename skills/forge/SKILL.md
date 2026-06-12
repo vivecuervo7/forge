@@ -1,9 +1,9 @@
 ---
 name: forge
-description: "Browser-automation agent team for Claude Code. Four routes under one skill: `/forge <task>` (drive mode — driver + snippet-author do the task end-to-end), `/forge spec <task>` (spec mode — also produces a verified Playwright spec with video recording), `/forge init` (scaffold the forge/ directory convention in CWD), `/forge export <name>` (inline a composed spec for shipping outside forge/). Walks up from CWD to find the project's forge/ directory, dispatches to a route-specific reference for the rest of the work."
+description: "Browser-automation agent team for Claude Code. Five routes under one skill: `/forge <task>` (drive mode — driver + snippet-author do the task end-to-end), `/forge spec <task>` (spec mode — also produces a verified Playwright spec), `/forge run <spec>` (re-run a verified spec, optionally recording a video for evidence), `/forge init` (scaffold the forge/ directory convention in CWD), `/forge export <name>` (inline a composed spec for shipping outside forge/). Walks up from CWD to find the project's forge/ directory, dispatches to a route-specific reference for the rest of the work."
 model: sonnet
 effort: medium
-argument-hint: "[spec|init|export] <args>"
+argument-hint: "[spec|run|init|export] <args>"
 allowed-tools: Read, Glob, Skill, AskUserQuestion, Bash(bash **/forge/*/scripts/*), Bash(node **/forge/*/scripts/*), Bash(direnv:*), Bash(playwright-cli:*), Bash(mkdir:*), Bash(jq:*), Bash(cat:*), Bash(echo:*), Bash(ls:*), Agent, SendMessage, TeamCreate, TeamDelete, TaskCreate, TaskList, TaskGet, TaskUpdate
 ---
 
@@ -19,7 +19,8 @@ Look at the first word of `$ARGUMENTS` (case-insensitive). The dispatch table:
 |---|---|---|---|
 | `init` | scaffold a forge/ directory | `references/init.md` | optional target dir |
 | `export` | inline a composed spec for shipping | `references/export.md` | spec name + optional `--output <path>` |
-| `spec` | spec mode — drive + write spec + verify + record | `references/team-task.md` (with `MODE=spec`) | the actual task description |
+| `run` | re-run a verified spec, optionally recording | `references/run.md` | spec name / `last` / `latest`, plus optional `record as <label>` |
+| `spec` | spec mode — drive + write spec + verify | `references/team-task.md` (with `MODE=spec`) | the actual task description |
 | *(anything else)* | drive mode — driver + snippet-author do the task | `references/team-task.md` (with `MODE=drive`) | the full args = task description |
 
 Strip the route keyword (if present) from the args before passing the remainder downstream. Examples:
@@ -27,13 +28,14 @@ Strip the route keyword (if present) from the args before passing the remainder 
 - `/forge init` → route=init, args=""
 - `/forge init ~/my-project` → route=init, args="~/my-project"
 - `/forge export add-backpack-to-cart-standard` → route=export, args="add-backpack-to-cart-standard"
+- `/forge run last spec, record as before` → route=run, args="last spec, record as before", RECORD_AS=before
 - `/forge spec AE-1775 add a backpack` → route=spec, args="AE-1775 add a backpack", MODE=spec
 - `/forge add the backpack to cart` → route=task, args="add the backpack to cart", MODE=drive
 - `/forge create a spec for adding the backpack` → route=task, args="create a spec for adding the backpack", but **natural-language signals select spec mode** anyway (see below)
 
-## Phase 0a — Mode + label detection (task/spec route only)
+## Phase 0a — Mode detection (task/spec route only)
 
-For task and spec routes, you also need to set `MODE` and optionally `RECORD_AS` before loading the reference. Skip this section for init/export.
+For task and spec routes, you also need to set `MODE` before loading the reference. Skip this section for init / export / run.
 
 **MODE selection** — spec mode is selected when:
 
@@ -42,13 +44,19 @@ For task and spec routes, you also need to set `MODE` and optionally `RECORD_AS`
 
 Otherwise → **drive mode**. The user wants the action performed; no spec artifact required. If intent is ambiguous, default to drive — spec creation is an explicit opt-in.
 
-**RECORD_AS** — in spec mode only, look for a recording label in the task:
+Spec mode does **not** record video — the verifier just confirms the spec passes from cold start. Recording is a separate concern handled by `/forge run` (below).
+
+## Phase 0b — Recording label detection (run route only)
+
+For the run route, look for a recording label in the args:
 
 - "record as 'before'" / "record this as after" / "label it before-fix" → capture `RECORD_AS = before` / `after` / `before-fix`
 - "record a before video" → `RECORD_AS = before` (extract the adjective)
-- No mention → `RECORD_AS = none`
+- No mention → `RECORD_AS = none` — the run is verification-only, no video produced
 
 The persisted recording filename is always `<spec-basename>-<suffix>.webm` under `forge/videos/`. Suffix is the user-supplied label or a timestamp default. Spec context stays attached so multiple specs can each have their own "before" without colliding. Existing files with the same name are overwritten — caller-controlled.
+
+Recording lives under `/forge run` (not spec mode) because recordings are evidence — the same verified spec might be run twice (before and after a bug fix) to produce paired videos. Tying recording to the spec-authoring run would force re-authoring whenever you wanted fresh evidence.
 
 ## Phase 1 — Load the route's reference
 
@@ -59,17 +67,19 @@ cat ${CLAUDE_PLUGIN_ROOT}/skills/forge/references/<reference>.md
 ```
 
 Where `<reference>` is one of:
-- `team-task.md` (for task/spec routes — carries `MODE` and `RECORD_AS` into its instructions)
+- `team-task.md` (for task/spec routes — carries `MODE` into its instructions)
 - `init.md` (for init route)
 - `export.md` (for export route)
+- `run.md` (for run route — carries `RECORD_AS` into its instructions)
 
 Then **follow the instructions in the loaded reference**. The reference is the authoritative body for that route; this SKILL.md just got you to the right one.
 
 When passing context into the reference's work, include the captured route-specific values:
 
-- For team-task: `MODE`, `RECORD_AS`, and the task description (args with route keyword stripped).
+- For team-task: `MODE` and the task description (args with route keyword stripped).
 - For init: optional target directory.
 - For export: spec name + optional `--output <path>` override.
+- For run: spec reference (explicit name / `last` / `latest` / unspecified) + `RECORD_AS`.
 
 ## Hard rules
 
@@ -80,10 +90,11 @@ When passing context into the reference's work, include the captured route-speci
 
 ## What this skill DOES do
 
-Four routes unified under `/forge`:
+Five routes unified under `/forge`:
 
 - **Drive mode** (`/forge <task>`) — default. Spawns driver + snippet-author teammates. Driver scans the snippet library and invokes matching snippets; snippet-author writes snippets for novel work. Fastest path; no spec artifact.
-- **Spec mode** (`/forge spec <task>` or natural-language signals) — adds spec-writer + spec-verifier. Composes a self-contained `.spec.ts`, runs it from cold start against the still-warm slot, records video.
+- **Spec mode** (`/forge spec <task>` or natural-language signals) — adds spec-writer + spec-verifier. Composes a self-contained `.spec.ts`, runs it from cold start against the still-warm slot to verify it passes. No video recorded — recording is a separate concern, see `/forge run`.
+- **Run** (`/forge run <spec-name | last | latest>`) — re-runs an existing verified spec via `forge-pool-run-spec.mjs`. Optional `record as <label>` produces a video at `forge/videos/<spec>-<label>.webm`. Useful for paired before/after evidence around a fix.
 - **Init** (`/forge init [target-dir]`) — scaffolds the forge/ directory convention. Idempotent.
 - **Export** (`/forge export <spec-name>`) — inlines a composed spec for shipping outside forge/.
 
