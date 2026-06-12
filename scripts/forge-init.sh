@@ -37,22 +37,22 @@ mkdir -p "$FORGE_DIR" "$HINTS_DIR"
 GITIGNORE="$FORGE_DIR/.gitignore"
 if [ ! -e "$GITIGNORE" ]; then
   cat > "$GITIGNORE" <<'EOF'
-# By default, everything in this directory is local to your machine.
-# The only tracked content is what you explicitly author in hints/ —
-# project-specific knowledge (env contract, provisioning recipes, etc.)
-# that every contributor needs.
+# This file is itself gitignored (matched by the `*` blanket below, with
+# no allowlist exception for `.gitignore`) so the forge/ directory has
+# ZERO tracked files by default. /forge-init scaffolds this file locally;
+# every teammate runs /forge-init after clone to get their own copy.
 #
-# Everything else — README.md, playwright.config.ts, .env, snippets,
-# specs, videos, pool state, transcripts, test-results — is regenerated
-# by /forge-init or accreted as you use forge. Each teammate gets a
-# fresh local copy by running /forge-init after clone.
+# The only tracked content in forge/ is what you explicitly author in
+# hints/ — project-specific knowledge (env contract, provisioning recipes,
+# app structure) every contributor needs. Everything else (README.md,
+# playwright.config.ts, .env, snippets, specs, videos, pool state,
+# transcripts, test-results) is scaffolded or accreted locally.
 #
 # If your project has additional artifacts that should be shared (e.g.
 # specific snippets you've curated and want everyone to use), add a
 # `!path/` line below.
 
 *
-!.gitignore
 !hints/
 !hints/**
 
