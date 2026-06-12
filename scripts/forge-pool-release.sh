@@ -73,8 +73,27 @@ fi
 
 NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
-# Run project release hook (if present and executable) before clearing
-# the checkout. The hook gets the slot dir as its single argument.
+# Best-effort storage wipe on the current page of the slot's chromium session
+# (if a session is named in state.json AND it's currently live). Clears
+# cookies, localStorage, and sessionStorage for the page's current origin
+# so the next claim doesn't inherit cart contents, auth tokens, etc. that
+# survive cookie-clear alone.
+#
+# This is "best effort" — if the chromium is on about:blank or the session
+# isn't alive, the clears are no-ops. Projects with multi-origin state
+# should add their own per-slot release.sh hook to handle the full picture.
+SESSION_NAME=$(jq -r '.playwrightSessionName // empty' "$STATE_FILE" 2>/dev/null || true)
+if [ -n "$SESSION_NAME" ] && command -v playwright-cli >/dev/null 2>&1; then
+  if playwright-cli list 2>/dev/null | grep -q "$SESSION_NAME"; then
+    playwright-cli -s="$SESSION_NAME" cookie-clear >/dev/null 2>&1 || true
+    playwright-cli -s="$SESSION_NAME" localstorage-clear >/dev/null 2>&1 || true
+    playwright-cli -s="$SESSION_NAME" sessionstorage-clear >/dev/null 2>&1 || true
+  fi
+fi
+
+# Run project release hook (if present and executable) for cleanup the
+# pool can't handle generically (multi-origin state, server-side logout,
+# database resets, etc.). The hook gets the slot dir as its single argument.
 RELEASE_HOOK="$SLOT_DIR/release.sh"
 if [ -x "$RELEASE_HOOK" ]; then
   if ! "$RELEASE_HOOK" "$SLOT_DIR"; then

@@ -167,11 +167,23 @@ Notable observations: <anything spec-writer should know — quirks, timing-sensi
 
 If no `spec-writer` is on the team (Stage 3a — author-only team), skip this step.
 
-### 9. Mark the drive task complete
+### 9. Mark the drive task complete and signal the lead
 
 ```
 TaskUpdate(taskId=<id>, status="completed")
 ```
+
+Then SendMessage `team-lead` with a brief completion signal so the lead knows the drive phase is done and can begin coordinating shutdown when appropriate:
+
+```
+SendMessage(
+  to="team-lead",
+  summary="drive task complete",
+  message="Drive task <id> complete. <one-line summary of what was accomplished + final result>. Going idle for advisor-phase follow-up from author/spec-writer/verifier."
+)
+```
+
+This is the lead's primary signal that your work is done — idle notifications alone aren't sufficient (they fire after every turn, including ones where you're still working).
 
 ### 10. Go idle
 
