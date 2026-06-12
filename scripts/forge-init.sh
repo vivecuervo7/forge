@@ -54,6 +54,7 @@ if [ ! -e "$GITIGNORE" ]; then
 !README.md
 !hints/
 !hints/**
+!playwright.config.ts
 
 # The hints/ README.md is scaffold-only — local guidance for authoring hints,
 # not project-specific knowledge. Each user gets a fresh copy from /forge-init.
@@ -183,6 +184,43 @@ EOF
   CREATED+=("forge/hints/README.md")
 else
   SKIPPED+=("forge/hints/README.md")
+fi
+
+# forge/playwright.config.ts — committed, fallback config for forge specs
+# when the project doesn't have a root-level Playwright runner.
+PW_CONFIG="$FORGE_DIR/playwright.config.ts"
+if [ ! -e "$PW_CONFIG" ]; then
+  cat > "$PW_CONFIG" <<'EOF'
+// Fallback Playwright config for forge specs in this project.
+//
+// Read by forge-pool-run-spec.mjs (and by Stage 4's verifier) when the
+// project has no root-level playwright.config.{ts,js,mjs}. If your project
+// has its own runner — e.g. e2e-tests/playwright.config.ts with custom
+// fixtures, globalSetup, baseURL, etc. — forge-pool-run-spec.mjs will
+// detect and prefer that config; this file is then unused and can stay
+// as-is.
+//
+// Customize this when you DO want forge specs to use a config but don't
+// want a project-wide one. Common additions:
+//   - globalSetup: './global-setup.ts'      // e.g. clear DB before tests
+//   - globalTeardown: './global-teardown.ts'
+//   - use.baseURL: 'https://your.app/'
+//   - reporter: [['list'], ['html']]
+//   - timeout: 60_000
+//
+// Committed to the repo so teammates pick up the same fallback config.
+import { defineConfig } from '@playwright/test'
+
+export default defineConfig({
+  testDir: './specs',
+  fullyParallel: false,
+  workers: 1,
+  reporter: 'list',
+})
+EOF
+  CREATED+=("forge/playwright.config.ts")
+else
+  SKIPPED+=("forge/playwright.config.ts")
 fi
 
 # Report
