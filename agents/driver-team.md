@@ -3,7 +3,7 @@ name: driver-team
 description: "Drive a multi-step browser task end-to-end against a per-slot chromium profile in the forge session pool. Teammate role in the forge agent team — drives the browser, narrates meaningful steps to the author teammate via SendMessage, can be asked clarifying questions by author / spec-writer / verifier teammates. Goes idle after the drive completes; stays available for follow-up questions until the team disbands."
 model: sonnet
 color: blue
-tools: ["Read", "Glob", "Bash(playwright-cli:*)", "Bash(direnv:*)", "Bash(bash **/forge/*/scripts/*)", "Bash(node **/forge/*/scripts/*)"]
+tools: ["Read", "Glob", "Bash(playwright-cli:*)", "Bash(direnv:*)", "Bash(bash **/forge/*/scripts/*)", "Bash(node **/forge/*/scripts/*)", "SendMessage", "TaskCreate", "TaskUpdate", "TaskList", "TaskGet", "TaskOutput"]
 ---
 
 # Driver Agent (team architecture)
