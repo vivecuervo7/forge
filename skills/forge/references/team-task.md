@@ -39,16 +39,16 @@ Capture as `FORGE_ROOT`.
 ### 1.2. Load the hints
 
 ```bash
-cat <FORGE_ROOT>/hints/forge.md
-cat <FORGE_ROOT>/hints/driver.md
-cat <FORGE_ROOT>/hints/snippet-author.md
-cat <FORGE_ROOT>/hints/spec-writer.md 2>/dev/null || echo "(no spec-writer.md — using defaults)"
-cat <FORGE_ROOT>/hints/spec-verifier.md 2>/dev/null || echo "(no spec-verifier.md — using defaults)"
+cat <FORGE_ROOT>/hints/forge.md          2>/dev/null || echo ""
+cat <FORGE_ROOT>/hints/driver.md         2>/dev/null || echo ""
+cat <FORGE_ROOT>/hints/snippet-author.md 2>/dev/null || echo ""
+cat <FORGE_ROOT>/hints/spec-writer.md    2>/dev/null || echo ""
+cat <FORGE_ROOT>/hints/spec-verifier.md  2>/dev/null || echo ""
 ```
 
-Capture all five contents — you'll inline them in the spawn prompts so teammates don't need to read the files themselves.
+Capture each. Inline whatever you got in the spawn prompts so teammates don't need to read the files themselves. Empty string is fine — teammates fall back to their defaults.
 
-If `forge.md` is missing, fail with: "missing forge/hints/forge.md — required to know how to set up env injection and the pool." Other hints are optional (teammates use defaults).
+All five hints are optional. A bare `/forge init` scaffold (no hint files authored) drives correctly; hints exist purely to encode project-specific knowledge that the agents can't derive from the app itself.
 
 ### 1.3. Determine pool location
 
@@ -71,7 +71,15 @@ bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-pool-claim.sh <POOL_DIR>
 Three outcomes:
 
 - **Slot path printed (exit 0)** — capture as `SLOT_DIR`; continue to phase 2.
-- **`EXHAUSTED` (exit 1)** — execute the **Provisioning recipe** from `forge.md` (the hint enumerates exact steps: pick identifier, mkdir, write `.envrc`, write `state.json`, `direnv allow`, etc.). After provisioning, re-attempt the claim. If recipe genuinely can't satisfy a new slot, surface to user and stop.
+- **`EXHAUSTED` (exit 1)** — mint a new slot, then re-attempt the claim. If `forge.md` declares a project-specific **Provisioning recipe** (persona enumeration, env contract, custom slot naming), follow it literally. If no recipe is declared (or no `forge.md` exists), fall back to the default recipe:
+
+  1. Pick the next slot identifier: `slot-<N>` where `<N>` is the lowest positive integer not already present in `<POOL_DIR>/slot-*`.
+  2. `mkdir -p <POOL_DIR>/slot-<N>/profile`
+  3. `: > <POOL_DIR>/slot-<N>/.env` (empty file — placeholder for any env the project wants to add later)
+  4. Write `<POOL_DIR>/slot-<N>/state.json`: `{ "checkedOutBy": null }`
+  5. Re-attempt the claim.
+
+  The default recipe is sufficient for sites that don't need credentials. For authenticated sites, the user is expected to author a project-specific recipe in `forge.md` that enumerates the personas and their per-slot `.env` contents.
 - **Other error (exit ≥2)** — surface and stop.
 
 ### 1.5b. Apply setup instructions
