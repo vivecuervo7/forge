@@ -71,7 +71,7 @@ bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-pool-claim.sh <POOL_DIR>
 Three outcomes:
 
 - **Slot path printed (exit 0)** — capture as `SLOT_DIR`; continue to phase 2.
-- **`EXHAUSTED` (exit 1)** — mint a new slot, then re-attempt the claim. If `forge.md` declares a project-specific **Provisioning recipe** (persona enumeration, env contract, custom slot naming), follow it literally. If no recipe is declared (or no `forge.md` exists), fall back to the default recipe:
+- **`EXHAUSTED` (exit 1)** — mint a new slot, then re-attempt the claim. If `forge.md` describes how to add another test account (under any heading — common phrasings: "test accounts available", "adding another test account to the rotation", "provisioning recipe", "personas") follow those instructions literally: pick an identifier not yet in the pool, create `<POOL_DIR>/slot-<id>/profile/`, write `<POOL_DIR>/slot-<id>/.env` with whatever env keys the hint specifies, write `<POOL_DIR>/slot-<id>/state.json` as `{ "checkedOutBy": null }`. If no such guidance is in `forge.md` (or no `forge.md` exists), fall back to the default:
 
   1. Pick the next slot identifier: `slot-<N>` where `<N>` is the lowest positive integer not already present in `<POOL_DIR>/slot-*`.
   2. `mkdir -p <POOL_DIR>/slot-<N>/profile`
@@ -79,7 +79,7 @@ Three outcomes:
   4. Write `<POOL_DIR>/slot-<N>/state.json`: `{ "checkedOutBy": null }`
   5. Re-attempt the claim.
 
-  The default recipe is sufficient for sites that don't need credentials. For authenticated sites, the user is expected to author a project-specific recipe in `forge.md` that enumerates the personas and their per-slot `.env` contents.
+  The default is sufficient for sites that don't need credentials. For authenticated sites, the project's `forge.md` is expected to describe what each test account's env contents look like.
 - **Other error (exit ≥2)** — surface and stop.
 
 ### 1.5b. Apply setup instructions
