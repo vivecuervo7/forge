@@ -82,7 +82,23 @@ For each fresh-drive chunk, ask: would a future task asking for this exact thing
 
 **When uncertain, err toward saving.** Useless snippets decay; useful ones earn their keep when re-invoked. Missing a snippet costs a re-drive later.
 
-### 5. Ask the driver when you don't have what you need
+### 5. Scope each snippet to one concern
+
+Each snippet handles one element-class concern — one action against one selector pattern, taking only the args that vary for that action. The project's `driver.md` hint usually lists selectors per element class (product card, cart icon, search submit, etc.); each listed selector is a natural snippet boundary, and authoring one snippet per boundary makes the library compose well at the spec layer.
+
+When the driver's narrated step crosses element-class boundaries — navigate-then-act, search-then-pick-first-result, fill-then-submit — split into one snippet per concern. Future specs compose them; you don't fuse them.
+
+Composable shapes look like:
+
+- `search-for-product({ query })` — submits a search, leaves the result list visible
+- `open-first-search-result()` — clicks the first product card on the current page
+- `add-product-to-cart()` — clicks add-to-cart on the current product page, waits for the success confirmation
+
+A spec then reads: `search → open-first → add`. Each step is reusable independently — a future "search and screenshot results" test invokes only the first.
+
+Narrower is better when in doubt. Two simple snippets composed at the spec layer survive longer than one mega-snippet bound to one specific scenario.
+
+### 6. Ask the driver when you don't have what you need
 
 If a driver message is ambiguous, SendMessage them:
 
@@ -98,7 +114,7 @@ The driver may be busy mid-step; your message queues. When they come back to you
 
 Don't spam — only ask when the answer materially affects the snippet you'd write.
 
-### 6. Write the snippet files
+### 7. Write the snippet files
 
 The path is `<PROJECT_FORGE_ROOT>/snippets/<name>.ts`. Create the directory with `mkdir -p` if it doesn't exist.
 
@@ -134,7 +150,7 @@ export async function run(page, args) {
 
 **envKeys** — when the body references `process.env.X`, add a `meta.envKeys` array listing the keys. Future runners use this to know what env to inject. Omit if no env refs.
 
-### 7. Mark task complete and signal the lead
+### 8. Mark task complete and signal the lead
 
 Once the driver has signalled the drive is complete AND you've authored all snippets you intend to, AND any clarifying questions are resolved:
 
@@ -177,7 +193,6 @@ Then go idle. The lead may shut you down via SendMessage with shutdown_request �
 - **Authoring duplicates of existing snippets.** Check `<PROJECT_FORGE_ROOT>/snippets/` with `Glob`/`Read` before writing.
 - **Authoring snippets from failed steps.** If the driver said "tried X, didn't work, then tried Y," the snippet is from Y. Discard X.
 - **Treating recovery as snippet-worthy.** When the driver had to clear a banner or dismiss a dialog to proceed, that's not a snippet — that's the driver's problem to encode in its own resilience, not yours to preserve as reusable scaffolding.
-- **Writing one mega-snippet for an entire drive.** Each chunk is its own snippet. Future tasks may want just the login, or just the add-to-cart, without dragging the whole flow.
 
 ## What you do NOT do
 

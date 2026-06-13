@@ -1,15 +1,23 @@
-#!/usr/bin/env bash
+#! /usr/bin/env bash
 # forge-pool-release.sh — release a previously-claimed slot back to the pool.
 #
-# Sets state.json's checkedOutBy to null and updates lastReleased. That's
-# the entire job: pure bookkeeping under the pool lock.
+# Two jobs:
+#   1. Close the slot's live playwright-cli session (if any) so the
+#      chromium processes don't leak across runs. The session name is
+#      stored in state.json as `playwrightSessionName`; we read it,
+#      call `playwright-cli -s=<name> close`, and treat failure as
+#      non-fatal — the bookkeeping in step 2 still has to happen even
+#      if the session is already gone or the close errors.
+#   2. Set state.json's checkedOutBy to null and update lastReleased.
+#      Pure bookkeeping under the pool lock.
 #
-# Cleanup responsibilities are split elsewhere:
-#   - Client-side scrub (cookies, localStorage, sessionStorage on the
+# Cleanup responsibilities not covered here:
+#   - Profile-state scrub (cookies, localStorage, sessionStorage on the
 #     chromium profile) fires at CLAIM time via forge-pool-reset.sh,
-#     invoked by the /forge skill lead during phase 1.5b — not by this
-#     script. Reliable across crashed runs and "I know better" persona
-#     overrides; no live session to coordinate with.
+#     invoked by the /forge skill lead during phase 1.5b. Runs while the
+#     session is offline (we just closed it above, or it crashed
+#     previously) so file deletes don't race with chromium holding
+#     SQLite locks.
 #   - Project-specific teardown (server-side state, logout endpoints,
 #     account resets, etc.) is governed by the `## Teardown after each
 #     run` section in forge/hints/forge.md — interpreted by the lead as
@@ -17,7 +25,9 @@
 #     script is invoked.
 #
 # Locking: re-execs itself under the platform's lock tool (flock on
-# Linux, lockf on macOS) to serialize claim/release operations.
+# Linux, lockf on macOS) to serialize claim/release operations. The
+# session close happens BEFORE the lock acquisition so we don't hold the
+# pool lock while a (potentially slow) playwright-cli close runs.
 #
 # Usage:
 #   forge-pool-release.sh <pool-dir> <slot-dir>
@@ -59,6 +69,18 @@ if ! command -v jq >/dev/null 2>&1; then
   exit 4
 fi
 
+# Close the slot's live playwright-cli session (if any) before taking the
+# pool lock. Best-effort: a missing session, a non-installed playwright-cli,
+# or a close error are all non-fatal — the bookkeeping below still runs so
+# the slot is freed for the next claim. The chromium-leak situation we're
+# preventing is the live case (driver opened a session, finished its work,
+# but never told playwright-cli to close it). A crashed-run remnant gets
+# the same treatment: try to close, ignore errors, move on.
+SESSION_NAME=$(jq -r '.playwrightSessionName // empty' "$STATE_FILE" 2>/dev/null || true)
+if [ -n "$SESSION_NAME" ] && command -v playwright-cli >/dev/null 2>&1; then
+  playwright-cli -s="$SESSION_NAME" close >/dev/null 2>&1 || true
+fi
+
 # Re-exec under a platform lock tool if not already locked.
 if [ -z "${FORGE_POOL_LOCKED:-}" ]; then
   if command -v flock >/dev/null 2>&1; then
@@ -74,8 +96,6 @@ if [ -z "${FORGE_POOL_LOCKED:-}" ]; then
 fi
 
 NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-
-# Cleanup happens elsewhere — see the header comment for the split.
 
 TMP=$(mktemp)
 jq --arg ts "$NOW" \

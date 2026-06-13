@@ -167,8 +167,8 @@ TaskCreate(
 # Note as SPEC_WRITER_TASK_ID.
 
 TaskCreate(
-  subject="spec-verifier: run spec against slot, confirm it passes from cold start",
-  description="Wait for spec-writer's 'spec ready' message. Run the spec via forge-pool-run-spec.mjs --spec <path> --slot <SLOT_DIR>. On pass: ping team-lead with verified-from-fresh status. On fail: SendMessage driver (selectors) or spec-writer (assertions/imports) for clarification, iterate up to 3 times, then either succeed or escalate. Mark complete when done."
+  subject="spec-verifier: run spec slot-independently, confirm it passes from cold start",
+  description="Wait for spec-writer's 'spec ready' message. Run the spec via `forge-pool-run-spec.mjs --spec <path>` — WITHOUT --slot. The verifier mirrors how the spec will be run downstream (CI / `playwright test` directly): env from forge/.env + project .env, fresh browser context, no slot env injection. On pass: ping team-lead with verified-from-fresh status. On fail: SendMessage driver (selectors) or spec-writer (assertions/imports) for clarification, iterate up to 3 times, then either succeed or escalate. Mark complete when done."
 )
 # Note as SPEC_VERIFIER_TASK_ID.
 ```
@@ -247,13 +247,12 @@ Agent(
   name="spec-verifier",
   prompt="TEAM_NAME: <TEAM_NAME>
 PROJECT_FORGE_ROOT: <FORGE_ROOT>
-FORGE_SLOT: <SLOT_DIR>
 PLUGIN_ROOT: ${CLAUDE_PLUGIN_ROOT}
 USER_TASK: <user's task verbatim>
 PROJECT_HINT_SPEC_VERIFIER:
 <spec-verifier.md contents from <FORGE_ROOT>/hints/spec-verifier.md, or 'none' if missing>
 
-Your task ID is <SPEC_VERIFIER_TASK_ID>. Claim it via TaskUpdate(owner='spec-verifier', status='in_progress'). Wait for spec-writer's 'spec ready' message. Run the spec via forge-pool-run-spec.mjs --spec <path> --slot <FORGE_SLOT>. On pass, ping team-lead with verified-from-fresh status. On fail, ask driver (selectors) or spec-writer (assertions) for clarification, iterate up to 3 times, then succeed or escalate."
+Your task ID is <SPEC_VERIFIER_TASK_ID>. Claim it via TaskUpdate(owner='spec-verifier', status='in_progress'). Wait for spec-writer's 'spec ready' message. Run the spec via `forge-pool-run-spec.mjs --spec <path>` — **without** --slot. The verifier runs the spec the way Playwright itself would, using forge/.env + project .env, no slot env injection. On pass, ping team-lead with verified-from-fresh status. On fail, ask driver (selectors) or spec-writer (assertions) for clarification, iterate up to 3 times, then succeed or escalate."
 )
 ```
 
@@ -274,11 +273,31 @@ After spawning, the teammates self-coordinate. You (the lead) wait. Messages fro
   - **`cannot-drive` from driver** — terminal failure. Surface to user as part of the final report; proceed to phase 5 cleanup (team's done).
   - **Status updates / questions from teammates** — answer concisely or relay relevant context.
   - **Anything you can't handle** — ask the user.
-- **Idle notifications** — informational only. They fire after every turn including ones where the teammate is still working. Treat the explicit `task <id> complete` SendMessage as the authoritative signal — not idle notifications.
+- **Idle notifications** — informational only. They fire after every turn including ones where the teammate is still working. Treat the explicit `task <id> complete` SendMessage as the authoritative signal — not idle notifications. The idle-notification stall watchdog below handles the case where a teammate finishes work but forgets to ping.
 
 > **Note on `TaskList()`:** calling `TaskList` from the lead session does NOT surface team tasks reliably — completed tasks often report as `No tasks found`. Treat lead-pings as authoritative; don't gate phase 5 on TaskList status.
 
-**Bounded waiting**: if 10+ minutes pass without all completion pings AND no other messages from teammates, something's stuck. SendMessage each teammate asking for a status update. If they don't respond, the team may need manual recovery — surface to user.
+### 4.1. Idle-notification stall watchdog
+
+A teammate that has finished its work but forgotten to ping `team-lead` will appear as a stream of idle notifications with no completion summary. Don't wait indefinitely — apply this heuristic:
+
+For each teammate you're still expecting a completion ping from, keep a mental counter of consecutive idle notifications received from them with no progress. A notification *with* a peer-DM summary (e.g. `[to driver] confirm cart selector`) counts as progress and resets the counter; a notification with no summary, or only the bare `idleReason: available`, increments it.
+
+When the counter reaches 3 for a given teammate, nudge them once:
+
+```
+SendMessage(
+  to="<teammate-name>",
+  summary="status check",
+  message="Other teammates have reported work complete. What's your status — done? If your work is finished, please mark your task complete via TaskUpdate and SendMessage team-lead with a completion summary so we can proceed to shutdown."
+)
+```
+
+If they respond with a completion summary, treat it as the missing ping and proceed.
+
+If 2 more idle notifications arrive after the nudge with no response, the teammate is genuinely stuck or has exited without a clean shutdown. Inspect whatever artifacts exist on disk (`ls <FORGE_ROOT>/snippets/` for snippet-author, `ls <FORGE_ROOT>/specs/` for spec-writer), surface the state to the user, and proceed with force-cleanup: skip the shutdown_request for the stalled teammate, call `TeamDelete()` (which may fail if the teammate process is still attached — in that case `rm -rf ~/.claude/teams/<TEAM_NAME> ~/.claude/tasks/<TEAM_NAME>` removes the directories directly), and continue to phase 5.3 to release the slot.
+
+**Bounded waiting**: independently of the per-teammate watchdog, if 10+ minutes pass overall without all expected completion pings AND no STUCK / cannot-drive escalations, surface to user and prepare for force-cleanup.
 
 ## Phase 5 — Shut down and clean up
 
@@ -296,7 +315,7 @@ SendMessage(
 )
 ```
 
-Wait for each to respond with `{"type": "shutdown_response", "approve": true, ...}`. If a teammate rejects with `approve: false`, surface the rejection reason to the user — they may want to keep iterating before tearing down.
+Wait for each to respond with `{"type": "shutdown_response", "approve": true, ...}`. The response includes a `paneId` field (e.g. `"%105"`) when the backend is tmux — capture these for the pane-cleanup step below. If a teammate rejects with `approve: false`, surface the rejection reason to the user — they may want to keep iterating before tearing down.
 
 ### 5.2. TeamDelete
 
@@ -307,6 +326,16 @@ TeamDelete()
 ```
 
 This removes the team config and task list directories.
+
+### 5.2a. Kill the leftover tmux panes
+
+The Claude sessions exit cleanly on shutdown_approved, but tmux keeps each pane open with the shell underneath and the agent-set title still applied. To a user looking at their tmux window, it appears the agents "survived" shutdown. Clean them up using the `paneId` values captured from each `shutdown_response`:
+
+```bash
+tmux kill-pane -t <paneId>
+```
+
+Run this once per spawned teammate. Best-effort: if a pane is already gone (user closed it manually, tmux server restarted, etc.) the command exits non-zero and that's fine — `tmux kill-pane` failures should not block the rest of cleanup. Skip this step if the backend wasn't tmux (no `paneId` in the shutdown responses).
 
 ### 5.2b. Apply teardown instructions
 
