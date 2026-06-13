@@ -82,6 +82,22 @@ if [ ${#SKIPPED[@]} -gt 0 ]; then
     echo "    = $f"
   done
 fi
+
+# Ensure a Playwright runner is ready for spec runs. If the project has its
+# own playwright.config + @playwright/test, this is a no-op; otherwise it
+# installs the plugin-shipped runner so the first spec verification doesn't
+# pay the ~30s install cost mid-run. Non-fatal if it fails — the user can
+# still author hints and drive in drive-mode; the install will retry the
+# first time --spec actually needs it.
+if command -v node >/dev/null 2>&1; then
+  if ! node "$SCRIPT_DIR/forge-ensure-runner.mjs" "$FORGE_DIR" 2>&1; then
+    echo "forge-init: runner pre-install failed (non-fatal — will retry on first --spec use)."
+  fi
+else
+  echo "forge-init: node not available; skipping runner pre-install."
+  echo "  (If you intend to run specs, install node so the runner can be bootstrapped.)"
+fi
+
 echo ""
 echo "Next: author hint files in $HINTS_DIR/ to describe your project's"
 echo "env contract, provisioning recipe, and any project-specific conventions."

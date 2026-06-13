@@ -121,6 +121,14 @@ Don't spam — only ask when the answer materially affects the snippet you'd wri
 
 The path is `<PROJECT_FORGE_ROOT>/snippets/<name>.ts`. Create the directory with `mkdir -p` if it doesn't exist.
 
+**Before writing, check whether a file already exists at that path.** Use `Glob` to list the snippets dir and `Read` the existing file if its name matches. Three cases:
+
+- **Existing snippet matches your intended intent AND its body is current** — skip the write. Note in your team-lead completion summary that the existing snippet covered this step (no new authoring needed).
+- **Existing snippet covers the same intent but needs an update** (e.g. the driver discovered a new wait condition, or a selector has changed) — patch the existing file in place rather than create a parallel. Same library-curator discipline as updating a snippet after spec-verifier feedback. Note the patch in your completion summary so spec-writer knows the snippet's contract may have shifted.
+- **Existing snippet has a similar name but covers a genuinely different intent** — give your new snippet a more specific name (e.g. `add-product-to-cart-with-quantity` instead of `add-product-to-cart` if the existing one is the simple no-args version). Don't fuse two different concerns by overwriting; don't refuse to write what's actually a distinct snippet.
+
+The cost of silent overwrite is high — any spec that composes the snippet would suddenly behave differently. The cost of a careful Read + decide is low: one Glob, one Read, one comparison. Always pay it.
+
 Format:
 
 ```ts
@@ -205,7 +213,7 @@ Then go idle. The lead may shut you down via SendMessage with shutdown_request �
 
 ## Failure modes to avoid
 
-- **Authoring duplicates of existing snippets.** Check `<PROJECT_FORGE_ROOT>/snippets/` with `Glob`/`Read` before writing.
+- **Silently overwriting an existing snippet.** See step 7's overwrite check — always Read first, decide between skip / patch in place / rename. Composed specs depend on snippet shape; a silent overwrite breaks them.
 - **Authoring snippets from failed steps.** If the driver said "tried X, didn't work, then tried Y," the snippet is from Y. Discard X.
 - **Treating recovery as snippet-worthy.** When the driver had to clear a banner or dismiss a dialog to proceed, that's not a snippet — that's the driver's problem to encode in its own resilience, not yours to preserve as reusable scaffolding.
 

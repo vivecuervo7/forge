@@ -55,14 +55,17 @@
 //   6   plugin fallback selected but forge/playwright.config.ts missing
 //       (project hasn't been /forge init'd, or the config was deleted)
 
-import { spawn, spawnSync } from 'node:child_process'
-import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
+import { spawn } from 'node:child_process'
+import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, symlinkSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, dirname, join, relative, resolve } from 'node:path'
 import { loadSlotEnv, composedEnv } from './forge-slot-env.mjs'
-
-const PLUGIN_RUNNER_ROOT = join(homedir(), '.claude', '.vive-claude', 'forge', 'runner')
-const PLUGIN_PW_MARKER = join(PLUGIN_RUNNER_ROOT, 'node_modules', '@playwright', 'test')
+import {
+  PLUGIN_RUNNER_ROOT,
+  PLUGIN_PW_MARKER,
+  findProjectRunner,
+  ensurePluginRunner,
+} from './forge-ensure-runner.mjs'
 
 function die(msg, code = 2) {
   console.error('forge-pool-run-spec:', msg)
@@ -113,25 +116,10 @@ if (!existsSync(join(projectForge, 'hints'))) {
   )
 }
 
-// Walk up from the project's forge/ dir, looking for a Playwright runner:
-//   - playwright.config.{ts,js,mjs} at the same level
-//   - node_modules/@playwright/test at the same or any ancestor level
-// We require BOTH config + dependency at the same root.
-function findProjectRunner(startDir) {
-  let dir = startDir
-  for (let i = 0; i < 8; i++) {  // bounded — don't walk to fs root
-    const configCandidates = ['playwright.config.ts', 'playwright.config.js', 'playwright.config.mjs']
-    const config = configCandidates.map(n => join(dir, n)).find(p => existsSync(p))
-    const hasDep = existsSync(join(dir, 'node_modules', '@playwright', 'test'))
-    if (config && hasDep) {
-      return { rootDir: dir, configPath: config }
-    }
-    const parent = dirname(dir)
-    if (parent === dir) break  // hit fs root
-    dir = parent
-  }
-  return null
-}
+// findProjectRunner + ensurePluginRunner are shared with forge-init.sh via
+// forge-ensure-runner.mjs (imported above). /forge init pre-installs the
+// plugin runner if no project runner is detected, so the path below where
+// we'd install it lazily is now a fallback rather than the primary trigger.
 
 // Start the search at the project's parent dir — playwright.config typically
 // lives at the project root, one level above forge/.
@@ -157,7 +145,11 @@ if (projectRunner) {
 } else {
   // Path 2: plugin-shipped fallback
   if (!existsSync(PLUGIN_PW_MARKER)) {
-    ensurePluginRunner()
+    try {
+      ensurePluginRunner()
+    } catch (err) {
+      die(err.message, 3)
+    }
   }
   mode = `plugin (${PLUGIN_RUNNER_ROOT})`
   // Symlink plugin runner's node_modules into project's forge/ so resolution
@@ -316,46 +308,6 @@ function findFilesNewerThan(dir, pattern, sinceMs) {
   }
   walk(dir)
   return results
-}
-
-function ensurePluginRunner() {
-  // Lazy-install the plugin-shipped Playwright runner the first time a spec
-  // needs it. Idempotent — re-runs npm install if any declared dep is missing,
-  // so dep additions/version bumps land on existing installs.
-  mkdirSync(PLUGIN_RUNNER_ROOT, { recursive: true })
-
-  const pkgPath = join(PLUGIN_RUNNER_ROOT, 'package.json')
-  const pkgContent = JSON.stringify({
-    name: 'forge-spec-runner',
-    private: true,
-    description: 'Forge-managed Playwright workspace for running generated specs. Maintained by forge-pool-run-spec.mjs.',
-    dependencies: {
-      '@playwright/test': '^1.49.0',
-      dotenv: '^16.4.0',
-    },
-  }, null, 2) + '\n'
-  // Overwrite on every install attempt so version bumps land deterministically.
-  writeFileSync(pkgPath, pkgContent)
-
-  console.error(`forge-pool-run-spec: installing plugin runner deps in ${PLUGIN_RUNNER_ROOT}/ (~30s on first run)…`)
-  const result = spawnSync('npm', ['install', '--silent', '--no-audit', '--no-fund', '--no-progress'], {
-    cwd: PLUGIN_RUNNER_ROOT,
-    stdio: ['ignore', 'inherit', 'inherit'],
-  })
-  if (result.status !== 0) {
-    die(
-      `npm install failed in ${PLUGIN_RUNNER_ROOT}/ (exit ${result.status}). ` +
-      `Investigate and re-run.`,
-      3
-    )
-  }
-  if (!existsSync(PLUGIN_PW_MARKER)) {
-    die(
-      `npm install completed but @playwright/test still missing at ` +
-      `${PLUGIN_PW_MARKER}. This shouldn't happen — check the runner dir.`,
-      3
-    )
-  }
 }
 
 function timestamp() {
