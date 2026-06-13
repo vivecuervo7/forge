@@ -34,13 +34,13 @@ The default mode just does the thing you asked for. Spec mode is opt-in for when
 
    This creates `forge/` with a `hints/` directory, a fallback Playwright config, and a self-documenting `.gitignore`.
 
-4. **Author `forge/hints/forge.md`** — the only required hint. At a minimum it declares the env contract (which env keys each pool slot needs) and a provisioning recipe (how to mint a new slot). See `forge/hints/README.md` after scaffolding for guidance.
-
-5. **Drive a task:**
+4. **Drive a task:**
 
    ```
-   /forge log in and add the backpack to the cart
+   /forge add the backpack to the cart
    ```
+
+   That's enough to start. For an unauthenticated site, the scaffold alone is sufficient — forge mints a default slot and goes. For sites with auth or other project-specific behaviour, author hint files in `forge/hints/` (see `forge/hints/README.md` for guidance). All five hints are optional and additive: write only what you need.
 
 The plugin lazy-installs its Playwright runner under `~/.claude/.vive-claude/forge/runner/` on first spec run.
 
@@ -103,7 +103,9 @@ Dashed edges fire only in spec mode. Drive mode runs the top two agents (driver 
 
 ## Pool + slot model
 
-Forge owns a per-project pool of chromium "slots." Each slot is persona-bound (e.g. `slot-standard_user`, `slot-problem_user`) with its own profile dir and `.env` for credentials. Claims are serialized by a file lock; two concurrent `/forge` invocations grab different slots and run in parallel.
+Forge owns a per-project pool of chromium "slots" — each slot is an isolated chromium profile with its own `.env`. Claims are serialized by a file lock; two concurrent `/forge` invocations grab different slots and run in parallel.
+
+The default slot is identity-free (`slot-1` / `slot-2` / …) with an empty `.env` — enough for any unauthenticated site. Projects with auth declare a persona-bound provisioning recipe in `forge.md` (e.g. `slot-standard_user`, `slot-problem_user`) that puts the right credentials in each slot's `.env`.
 
 At claim time, the lead invokes a filesystem-level scrub of cookies + localStorage + sessionStorage on the slot's profile — covers the universally-biting class without depending on the previous chromium session being alive. Project-specific cleanup (database resets, account churn, third-party state) is hint-driven (see below).
 
@@ -119,7 +121,11 @@ At claim time, the lead invokes a filesystem-level scrub of cookies + localStora
 | `spec-writer.md` | `forge:spec-writer` (spec naming, imports) |
 | `spec-verifier.md` | `forge:spec-verifier` (verification conventions) |
 
-All are optional. The minimum to be operational is `forge.md` with an env contract + provisioning recipe.
+**All hints are optional.** Forge drives correctly against the bare scaffold — the defaults cover unauthenticated sites with no special setup. Author hint files only to encode project-specific knowledge the agents can't discover on their own:
+
+- **`forge.md`** — usually the first one worth writing if your site has auth, a custom provisioning recipe, or pre-/post-run state needs.
+- **`driver.md`** — worth writing once you've watched a few drives and noticed the driver enumerating selectors the docs could've handed it.
+- **The other three** — write only if the project-default behaviour collides with what you want.
 
 ### Setup / teardown
 
