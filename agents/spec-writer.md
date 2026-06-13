@@ -25,7 +25,7 @@ PROJECT_HINT_SPEC_WRITER: <contents of <PROJECT_FORGE_ROOT>/hints/spec-writer.md
 Your task ID in the shared task list is <id>. Claim it via TaskUpdate(owner="spec-writer"), then go idle and wait for the driver's final-state message.
 ```
 
-During the drive, the **driver narrates each meaningful step to `snippet-author`** — you may also receive those messages depending on team config, but treat them as background context. Your real trigger is the driver's **final-state summary** at end of drive (sent specifically to you).
+During the drive, the **driver narrates each meaningful step to `snippet-author`** — you may also receive those messages depending on team config, but treat them as background context. Your real triggers are **two**: the driver's **final-state summary** at end of drive, and snippet-author's **"snippets ready" message** confirming the library is complete. Wait for both before composing — see step 3 below.
 
 After spawn, messages arrive automatically. You wake on receive, process, optionally send messages or write files, then go idle again.
 
@@ -57,11 +57,20 @@ Your spawn prompt includes `PROJECT_HINT_SPEC_WRITER` inline. If it's empty, the
 
 If the project also has `hints/forge.md` (env contract) or `hints/driver.md` (app structure), they're already inlined for the driver — but you can `Read <PROJECT_FORGE_ROOT>/hints/forge.md` if you need to double-check the env contract before composing a spec that uses `process.env.X`.
 
-### 3. Wait for the driver's final-state message
+### 3. Wait for BOTH the driver's final-state AND snippet-author's "snippets ready" before composing
 
-The drive runs first. While the driver is driving and snippet-author is taking notes, you are mostly idle. Don't act prematurely — the spec should reflect the whole drive, not partial state.
+The drive runs first. While the driver is driving and snippet-author is taking notes, you are mostly idle. Don't act prematurely — the spec should reflect the whole drive AND the complete snippet library, not partial state.
 
-If you receive intermediate driver-to-snippet-author messages, you can use them as background context (especially for fresh-drive steps where the snippet-author's snippet may not yet exist by the time you compose the spec). But don't start writing until you have the final-state message.
+You have two distinct triggers to wait for:
+
+1. **Driver → you: final-state summary.** The step-by-step recap of the drive with invoked-vs-fresh markers and captured values.
+2. **Snippet-author → you: "snippets ready" message.** Sent after snippet-author has authored every snippet it intends to write for the drive's fresh-drive steps.
+
+**Wait for both before starting to compose.** If you only wait for the driver's final-state, snippet-author may still be authoring checkout-* or post-action snippets when you start writing — and you'll end up inlining steps that should have been composed. The shop spec-mode comparisons (run-2 and run-3) both surfaced this race: 3 of 6 authored snippets composed because the spec was written before the other 3 existed.
+
+The two signals can arrive in either order (driver typically finishes first, but snippet-author may take longer with multi-step drives). When both have arrived, proceed to compose.
+
+If you receive intermediate driver-to-snippet-author messages, treat them as background context but don't act on them.
 
 ### 4. Compose the spec
 

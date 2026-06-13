@@ -56,7 +56,7 @@
 //       (project hasn't been /forge init'd, or the config was deleted)
 
 import { spawn, spawnSync } from 'node:child_process'
-import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, dirname, join, relative, resolve } from 'node:path'
 import { loadSlotEnv, composedEnv } from './forge-slot-env.mjs'
@@ -232,6 +232,24 @@ child.on('exit', (code) => {
       console.error(`forge-pool-run-spec: recording persistence failed: ${err.message}`)
     })
   }
+
+  // Clean up test-results/ on success. Playwright's working directory
+  // contains video.webm (already copied to forge/videos/ above), trace
+  // artifacts (only present on failure per playwright config's
+  // retain-on-failure setting), and other Playwright internals — none
+  // of which the user asked for. On failure, leave it intact so the
+  // trace + any other diagnostic artifacts survive for debugging.
+  if (code === 0) {
+    const testResults = join(projectForge, 'test-results')
+    if (existsSync(testResults)) {
+      try {
+        rmSync(testResults, { recursive: true, force: true })
+      } catch (err) {
+        console.error(`forge-pool-run-spec: test-results cleanup failed: ${err.message}`)
+      }
+    }
+  }
+
   process.exit(code ?? 1)
 })
 

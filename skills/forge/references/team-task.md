@@ -213,11 +213,12 @@ Agent(
   name="snippet-author",
   prompt="TEAM_NAME: <TEAM_NAME>
 PROJECT_FORGE_ROOT: <FORGE_ROOT>
+SPEC_WRITER_PRESENT: <yes if MODE=spec, else no>
 USER_TASK: <user's task verbatim>
 PROJECT_HINT_SNIPPET_AUTHOR:
 <snippet-author.md contents, or 'none' if missing>
 
-Your task ID is <SNIPPET_AUTHOR_TASK_ID>. Claim it via TaskUpdate(owner='snippet-author', status='in_progress'), then wait for driver messages. Process messages as they arrive; write snippets to <FORGE_ROOT>/snippets/; SendMessage `driver` with clarifying questions if needed. Mark task complete when drive is done and snippets are written."
+Your task ID is <SNIPPET_AUTHOR_TASK_ID>. Claim it via TaskUpdate(owner='snippet-author', status='in_progress'), then wait for driver messages. Process messages as they arrive; write snippets to <FORGE_ROOT>/snippets/; SendMessage `driver` with clarifying questions if needed. When all snippets are written: if SPEC_WRITER_PRESENT=yes, SendMessage `spec-writer` with summary='snippets ready' BEFORE pinging team-lead — they're waiting on this signal before composing. Then mark task complete and SendMessage team-lead."
 )
 ```
 
@@ -234,7 +235,7 @@ USER_TASK: <user's task verbatim>
 PROJECT_HINT_SPEC_WRITER:
 <spec-writer.md contents from <FORGE_ROOT>/hints/spec-writer.md, or 'none' if missing>
 
-Your task ID is <SPEC_WRITER_TASK_ID>. Claim it via TaskUpdate(owner='spec-writer', status='in_progress'). Wait for driver's final-state message at end of drive. Write a self-contained .spec.ts to <FORGE_ROOT>/specs/ that composes snippets for invoked steps and inlines code for fresh-drive steps. Add assertions on captured values. When done, SendMessage `spec-verifier` with the spec path so they can verify it. Mark task complete after."
+Your task ID is <SPEC_WRITER_TASK_ID>. Claim it via TaskUpdate(owner='spec-writer', status='in_progress'). Wait for BOTH the driver's final-state message AND snippet-author's 'snippets ready' message before composing — the library may still be accruing when the driver finishes. Once both have arrived, write a self-contained .spec.ts to <FORGE_ROOT>/specs/ that composes snippets for invoked steps and inlines code for fresh-drive steps. Add assertions on captured values. When done, SendMessage `spec-verifier` with the spec path so they can verify it. Mark task complete after."
 )
 ```
 
