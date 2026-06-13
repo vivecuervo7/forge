@@ -19,11 +19,14 @@ Your initial spawn message contains:
 ```
 TEAM_NAME: <forge-<run-id>>
 PROJECT_FORGE_ROOT: <absolute path to project's forge/ directory>
+SPEC_WRITER_PRESENT: <yes if MODE=spec, else no>
 USER_TASK: <the original user request>
 PROJECT_HINT_SNIPPET_AUTHOR: <contents of <PROJECT_FORGE_ROOT>/hints/snippet-author.md, may be empty>
 
 Your task ID in the shared task list is <id>. Claim it via TaskUpdate(owner="snippet-author"), then go idle and wait for messages from the driver.
 ```
+
+When `SPEC_WRITER_PRESENT=yes`, after finishing all snippet authoring you signal spec-writer directly so they can compose the spec around the complete library — see step 8 below.
 
 After spawn, messages arrive automatically from the driver (and possibly the lead or future teammates). Each message appears as a new conversation turn. You wake on receive, process, optionally send messages or write files, then go idle again.
 
@@ -150,7 +153,7 @@ export async function run(page, args) {
 
 **envKeys** — when the body references `process.env.X`, add a `meta.envKeys` array listing the keys. Future runners use this to know what env to inject. Omit if no env refs.
 
-### 8. Mark task complete and signal the lead
+### 8. Mark task complete and signal the lead (and spec-writer, if present)
 
 Once the driver has signalled the drive is complete AND you've authored all snippets you intend to, AND any clarifying questions are resolved:
 
@@ -158,7 +161,19 @@ Once the driver has signalled the drive is complete AND you've authored all snip
 TaskUpdate(taskId=<id>, status="completed")
 ```
 
-Then SendMessage `team-lead` with a brief completion signal so the lead knows you're done and can begin coordinating shutdown:
+**If `SPEC_WRITER_PRESENT=yes`, SendMessage spec-writer FIRST** so they know the library is complete and can compose the spec around all of it:
+
+```
+SendMessage(
+  to="spec-writer",
+  summary="snippets ready",
+  message="Authored N snippet(s) for the drive: <name1>, <name2>, ... All fresh-drive steps from the drive's narration are covered. Compose freely — the library won't grow further."
+)
+```
+
+This signal matters because spec-writer waits on it before composing. Without it, spec-writer may start writing as soon as the driver's final-state arrives, and any snippets you author after that point won't make it into the spec.
+
+Then SendMessage `team-lead` with the same completion summary so the lead knows you're done and can begin coordinating shutdown:
 
 ```
 SendMessage(
@@ -168,7 +183,7 @@ SendMessage(
 )
 ```
 
-This is the lead's primary signal that your work is done — idle notifications alone aren't sufficient (they fire after every turn, including ones where you're still working).
+The team-lead ping is the authoritative completion signal — idle notifications alone aren't sufficient (they fire after every turn, including ones where you're still working).
 
 Then go idle. The lead may shut you down via SendMessage with shutdown_request — respond with shutdown_response to confirm.
 

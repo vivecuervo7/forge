@@ -50,24 +50,31 @@ declare const process: { env: Record<string, string | undefined> }
 loadEnv({ path: resolve(__dirname, '.env') })
 loadEnv({ path: resolve(__dirname, '..', '.env') })
 
-// FORGE_RECORD=1 enables Playwright's video + trace capture for this run.
-// Set by `forge-pool-run-spec.mjs --record` (used by `/forge run … record as
+// FORGE_RECORD=1 enables Playwright's video capture for this run. Set by
+// `forge-pool-run-spec.mjs --record` (used by `/forge run … record as
 // <label>` for paired before/after evidence). If your project has its own
 // playwright config, opt in by checking the same env var — that keeps
 // recordings behaving consistently regardless of which config is in effect.
+//
+// Trace is intentionally `retain-on-failure` rather than always-on: traces
+// are heavy (HAR + screenshots + action timeline) and the --record use case
+// is "video evidence of a passing flow," not "debugger artifact." Failures
+// still get a trace so you can diagnose them; passing runs get a clean
+// video-only artifact.
 const record = process.env.FORGE_RECORD === '1'
 
 export default defineConfig({
   testDir: './specs',
   // Pin output to forge/test-results regardless of cwd so test artifacts
-  // (including recorded video.webm + trace.zip) never land in the project
-  // root (where they wouldn't be gitignored).
+  // never land in the project root (where they wouldn't be gitignored).
+  // forge-pool-run-spec.mjs cleans this directory after extracting the
+  // video to forge/videos/, so nothing lingers between runs.
   outputDir: resolve(__dirname, 'test-results'),
   fullyParallel: false,
   workers: 1,
   reporter: 'list',
   use: {
     video: record ? 'on' : 'off',
-    trace: record ? 'on' : 'off',
+    trace: record ? 'retain-on-failure' : 'off',
   },
 })
