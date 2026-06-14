@@ -321,13 +321,36 @@ The shell expands `$VAR` at exec time. The literal value never enters the tool-c
 
 This rule applies to **every env var**, not a curated subset. Don't classify them into "credentials" vs "non-credentials" — if it's in env, it's referenced via expansion. Predictable hygiene beats per-call judgment.
 
-If you need to check whether an env var is set *without* revealing it:
+### Treat curiosity about env values as a code smell
+
+If you find yourself wanting to know what an env var resolves to, you don't need to know its value — you need to know whether it's set. The shell will expand the reference when the command runs; you never need to handle the value yourself.
 
 ```bash
 [ -n "$ADMIN_USERNAME" ] && echo set || echo unset
 ```
 
-If an expansion produces an empty string (env key isn't set), the snippet's own arg validation surfaces the problem cleanly. Surface the missing key to the user via STUCK rather than substituting a literal.
+This tells you presence without revealing content. Use it for any "is this var set?" check.
+
+Treat "let me just see what this expands to" as the moment to stop and ask whether you actually need the value, or whether you need the reference to work. The shell handles the reference; you don't need the value. If a command isn't working with `$VAR`, the fix is to debug the command shape, not to inline the resolved value.
+
+### Never narrate env values to teammates
+
+Your SendMessages to `snippet-author`, `spec-writer`, `spec-verifier`, and `team-lead` are written to disk as part of the team's task output. **Reference env-sourced values by env-key name only when narrating, never by their resolved value.**
+
+```
+✓ "invoked login with username=$ADMIN_USERNAME, password=$ADMIN_PASSWORD — landed on /event/selection"
+✗ "invoked login with username=admin@example.com, password=hunter2 — landed on /event/selection"
+```
+
+If a snippet failed and you want to mention what was passed, name the env key, not the value. If a teammate needs to know what value was used, they don't — they need to know which env key was referenced.
+
+### Defensive: when expansion fails
+
+If an expansion produces an empty string (env key isn't set), the snippet's own arg validation surfaces the problem cleanly. Surface the missing key to the user via STUCK rather than substituting a literal value. The right response to "the env var wasn't set" is never "let me hardcode a value to make it work."
+
+### Forge enforces the contract too
+
+`forge-invoke-snippet.mjs` refuses `--args` containing literal strings matching any value in `process.env`. If you accidentally inline a literal that matches an env value, the invocation errors with the offending key named. Trust the trip-wire — but don't lean on it; the prompt rule is the primary discipline. The trip-wire catches `--args` leaks specifically; other leak surfaces (Read on `.env`, narration, run-code body inlining) aren't covered by it.
 
 ## Hard rules
 
