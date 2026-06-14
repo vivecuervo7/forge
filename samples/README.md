@@ -17,13 +17,14 @@ Each sample directory is shaped like a `forge/` directory post-`/forge init`. Th
 - `README.md` — meta-documentation explaining why this sample is the exemplar it claims to be.
 - `.env.example` (shop only) — the env keys the account-table references.
 
-What's **not** committed (gitignored, populated by `/forge` invocations):
+What's **not** committed (gitignored, populated automatically when you run forge):
 
 - `snippets/` — produced by `forge:snippet-author` during drives.
 - `specs/` — produced by `forge:spec-writer` during spec-mode runs.
-- `videos/`, `node_modules/`, `package.json`, etc. — local working state.
+- `node_modules/` + `package.json` — Playwright runner deps. Forge lazy-installs them on first invocation (~30s, one-time per sample).
+- `videos/`, `test-results/`, `.env` — local working state and your filled-in credentials.
 
-The snippets and specs are deliberately absent from the committed repo. **They're the result of running forge against the target** — and the value of seeing them in the samples comes from them being real forge output, not hand-edited approximations. When you run `/forge` against one of these targets (or a similar app in your own project), you'll get the artifacts that justify why the hint set produced them.
+No manual `npm install` is needed. The snippets and specs are deliberately absent from the committed repo too — **they're the result of running forge against the target**, and the value of seeing them in a sample comes from them being real forge output rather than hand-edited approximations. When you run `/forge` against one of these targets (or a similar app in your own project), you'll get the artifacts that justify why the hint set produced them.
 
 ## How to use these samples for your own project
 
