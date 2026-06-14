@@ -153,15 +153,15 @@ export async function run(page, args) {
 
   await page.goto(`${baseURL}/login`);
   await page.locator('input#user-name').fill(username);
-  // ... etc — all credentials and config come from args
+  // ... etc — all env-sourced values + config come from args, never process.env
 }
 ```
 
-**Name** — lowercase kebab-case, intent-level, specific. `login` not `login-as-admin` (snippets are persona-agnostic — the persona lives in the caller's args). `add-item-to-cart` not `add`.
+**Name** — lowercase kebab-case, intent-level, specific. `login` not `login-as-admin` (snippets are account-agnostic — the account/credentials live in the caller's args). `add-item-to-cart` not `add`.
 
 **Description** — one sentence, written so a future reader scanning a snippet listing knows whether to use it.
 
-**args** — declare the parameter shape (with type hints in JSDoc-ish comments). The body destructures from args. **All env-sourced values MUST come in as args — never read `process.env` from inside a snippet.** The caller (driver in drive mode, spec body in spec mode) decides where each value comes from and passes it in. This keeps snippets persona-agnostic and reusable across env-management schemes.
+**args** — declare the parameter shape (with type hints in JSDoc-ish comments). The body destructures from args. **All env-sourced values MUST come in as args — never read `process.env` from inside a snippet.** The caller (driver in drive mode, spec body in spec mode) decides where each value comes from and passes it in. This keeps snippets account-agnostic and reusable across env-management schemes.
 
 For non-sensitive defaults (baseURL, timeouts), inline a hardcoded fallback in the args destructure (`baseURL = 'https://...'`). Callers can still override by passing a value; the default keeps the snippet usable without one. The rule is uniform: snippets never touch `process.env` — whatever the body needs, it gets through args.
 

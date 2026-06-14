@@ -16,17 +16,19 @@
 //   2. Otherwise, lazy-install at <forgeRoot>/ so the first spec or snippet
 //      invocation doesn't pay the npm-install cost mid-run. Carries
 //      esbuild (snippet bundling), @playwright/test (spec running), and
-//      dotenv (env loading) plus the small helper deps used by pool +
-//      invoke + spec-run scripts (execa, mri, proper-lockfile,
-//      write-file-atomic, tree-kill, find-process).
+//      dotenv (available if the project opts in via its playwright config)
+//      plus the small helper deps used by the invoke + spec-run scripts
+//      (execa, mri, proper-lockfile, write-file-atomic, tree-kill,
+//      find-process).
 //
 // Exposed for callers:
 //   - forge-init.mjs invokes the CLI form at end of scaffold so the cost
 //     surfaces at a discoverable moment.
-//   - forge-pool-run-spec.mjs imports `ensureRunnerReady` for the just-in-time
+//   - forge-run-spec.mjs imports `ensureRunnerReady` for the just-in-time
 //     path on first spec verification.
-//   - forge-pool-invoke-snippet.mjs imports `ensureBundlerAvailable` to make
-//     sure esbuild is installed before bundling.
+//   - forge-invoke-snippet.mjs imports `ensureRunnerDeps` (via the
+//     `ensureBundlerAvailable` alias) to make sure esbuild is installed
+//     before bundling.
 //
 // Usage (CLI):
 //   forge-ensure-runner.mjs <project-forge-dir>
@@ -121,7 +123,7 @@ export function ensurePluginRunner(forgeRoot) {
 //
 // Used independently of project-runner detection: even projects with their
 // own Playwright need forge/node_modules for plugin-side deps (execa, mri,
-// proper-lockfile, etc.) used by the pool, invoke, and spec-run scripts.
+// proper-lockfile, etc.) used by the invoke and spec-run scripts.
 //
 // Triggers a full install if the sentinel is missing. First call per project
 // pays the ~30s cost; subsequent calls are free.
@@ -138,7 +140,7 @@ export function ensureRunnerDeps(forgeRoot) {
 // Backward-compat alias — kept until all callers migrate.
 export const ensureBundlerAvailable = ensureRunnerDeps
 
-// Load a runner-installed dep from the plugin script side. Used by pool +
+// Load a runner-installed dep from the plugin script side. Used by the
 // invoke + spec-run scripts to import packages they need (execa, mri,
 // proper-lockfile, etc.) from the project's forge/ install.
 //

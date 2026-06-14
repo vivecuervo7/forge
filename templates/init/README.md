@@ -2,15 +2,14 @@
 
 This directory holds forge artifacts for this project.
 
-Only `hints/` is committed. Everything else (snippets, specs, videos, pool
-state, transcripts) is local to your machine — see `.gitignore` for the
-policy.
+Only `hints/` is committed. Everything else (snippets, specs, videos,
+transcripts, test results) is local to your machine — see `.gitignore`
+for the policy.
 
 Hints are project-specific knowledge that every contributor needs: env
 contract, provisioning recipes, app structure, conventions. See
 `hints/README.md` (your local copy, gitignored) for guidance on authoring
-them, or the full convention doc in the the source at
-`docs/project-conventions.md`.
+them.
 
 ## Quick reference
 

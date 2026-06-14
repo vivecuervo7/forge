@@ -6,7 +6,7 @@ This reference is loaded by `/forge`'s router for the **init** route. The router
 
 ## What this route does
 
-Scaffolds the canonical `forge/` directory layout into a project. Run this once at the start of using forge against any new project; it sets up the directory structure described in `docs/project-conventions.md`.
+Scaffolds the canonical `forge/` directory layout into a project. Run this once at the start of using forge against any new project; it sets up the directory structure and writes the hint-authoring guidance the user will need.
 
 ## What gets created
 
@@ -54,7 +54,6 @@ forge-init: scaffolded /path/to/project/forge
     + forge/.gitignore
     + forge/README.md
     + forge/playwright.config.ts
-    + forge/.env
     + forge/hints/README.md
 
 Next: author hint files in /path/to/project/forge/hints/ to describe your project's

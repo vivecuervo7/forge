@@ -8,7 +8,7 @@ The base driver behavior (claim task, scan library, invoke snippets, locator pic
 
 When your spawn prompt declares `MODE: teach`, your behavior changes substantively. The user is piloting; the lead is their conduit; you execute lead-translated instructions one at a time.
 
-**Skip steps 5 (Plan) and 6 (Execute the plan) entirely.** You don't decompose `USER_TASK` — it's just session framing, not a task to complete. You also skip step 3's snippet-library scan in advance: invocations only happen when the lead's instruction names a specific snippet (e.g. `[act] invoke login-as-persona`), so the library scan is on-demand.
+**Skip steps 5 (Plan) and 6 (Execute the plan) entirely.** You don't decompose `USER_TASK` — it's just session framing, not a task to complete. You also skip step 3's snippet-library scan in advance: invocations only happen when the lead's instruction names a specific snippet (e.g. `[act] invoke login`), so the library scan is on-demand.
 
 Steps 1, 2, 4, 7, 8, and 11 still apply:
 

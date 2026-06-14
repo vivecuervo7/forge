@@ -96,7 +96,3 @@ Paste this into Claude (or your AI of choice) at the start of a project session.
 >
 > Use plain language, not configuration syntax. If something isn't documented and isn't obvious from the code, note the gap rather than guessing. Skip `snippet-author.md`, `spec-writer.md`, and `spec-verifier.md` unless you spot a clear project-specific deviation worth recording — the agent defaults usually cover those.
 
-## See also
-
-- `docs/project-conventions.md` — full convention details and rationale.
-- `docs/where-it-works.md` — field report covering where forge works well and where the hint mechanism's leverage actually shows up.

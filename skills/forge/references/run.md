@@ -10,7 +10,7 @@ Re-runs an existing verified spec via `forge-run-spec.mjs`. No team is spawned �
 
 Optionally records a video (when `RECORD_AS` is set) at `forge/videos/<spec-basename>-<RECORD_AS>.webm`. The recording is evidence — typically used in a before/after workflow where the same spec is run twice against different code states.
 
-The script uses Playwright's ephemeral browser context. Env values come from whatever's already in `process.env` at invocation time — the user's shell env (direnv, manual exports, etc.) plus anything the project's `forge/playwright.config.ts` chose to load. To use a different persona, the user overrides via shell env before invoking, e.g. `SAUCE_USERNAME=problem_user /forge run last spec, record as problem-flow`.
+The script uses Playwright's ephemeral browser context. Env values come from whatever's already in `process.env` at invocation time — the user's shell env (direnv, manual exports, etc.) plus anything the project's `forge/playwright.config.ts` chose to load. To use a different test account, the user overrides via shell env before invoking, e.g. `SAUCE_USERNAME=problem_user /forge run last spec, record as problem-flow`.
 
 ## Phase 1 — Discovery
 

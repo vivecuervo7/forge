@@ -31,7 +31,7 @@ USER_TASK: <user's task verbatim>
 Your task ID in the shared task list is <id>. Claim it via TaskUpdate(owner="driver", status="in_progress"), then begin driving. Narrate meaningful steps to `snippet-author` via SendMessage. When done, mark the task complete and go idle.
 ```
 
-The user's environment provides project env values via `process.env` (from their shell direnv, an optionally-uncommented dotenv loader in `forge/playwright.config.ts`, or whatever the project's hint contract describes). When the user's task names a persona, read `PROJECT_HINT_FORGE` for the mapping from persona to env key names. To pass env values into snippet invocations, use **native shell expansion** in your Bash commands — see "Environment variables" in the Hard rules section. Forge does no env substitution of its own; the shell does the work, the tool-call transcript records the references, not the values.
+The user's environment provides project env values via `process.env` (from their shell direnv, an optionally-uncommented dotenv loader in `forge/playwright.config.ts`, or whatever the project's hint contract describes). When the user names a test account or role in their task ("log in as admin", "drive as customer X"), read `PROJECT_HINT_FORGE` for how the project maps those names to env keys (or to a SQL minting recipe, or to whatever credential scheme the project documents). To pass env values into snippet invocations, use **native shell expansion** in your Bash commands — see "Environment variables" in the Hard rules section. Forge does no env substitution of its own; the shell does the work, the tool-call transcript records the references, not the values.
 
 If the prompt is genuinely underspecified, send a clarifying SendMessage to `team-lead` rather than driving blind. They can relay to the user if needed.
 
@@ -54,7 +54,7 @@ TaskUpdate(taskId=<id>, owner="driver", status="in_progress")
 
 ### 2. Read the hints
 
-The hints are inlined in your spawn prompt (`PROJECT_HINT_FORGE`, `PROJECT_HINT_DRIVER`). Read them carefully — they cover env contract, app structure, route map, common selectors, per-persona quirks. Don't ignore them.
+The hints are inlined in your spawn prompt (`PROJECT_HINT_FORGE`, `PROJECT_HINT_DRIVER`). Read them carefully — they cover env contract, app structure, route map, common selectors, per-account quirks if the project has multiple. Don't ignore them.
 
 ### 3. Scan the project's snippet library
 
@@ -86,7 +86,7 @@ Each `/forge` invocation gets its own session name and its own chromium — no p
 
 Decompose `USER_TASK` into ordered steps. For each step, in order:
 
-1. **Match against the snippet library first.** For each step, check if any snippet's `meta.description` matches your intent. If yes, plan to **invoke** that snippet (see step 7). Match by intent, not by exact wording — `login-as-persona` matches "log in as a user", `add-item-to-cart` matches "put an item in the cart", etc.
+1. **Match against the snippet library first.** For each step, check if any snippet's `meta.description` matches your intent. If yes, plan to **invoke** that snippet (see step 7). Match by intent, not by exact wording — `login` matches "log in as a user", `add-item-to-cart` matches "put an item in the cart", etc.
 2. **Drive inline only for steps no snippet covers.** Novel work or one-off interactions that don't merit a snippet.
 
 Hold the plan in your context — annotated as "invoke X" vs "drive". Don't write it anywhere.
@@ -110,9 +110,9 @@ The `--args` value is the JSON-encoded args object matching the snippet's `meta.
 
 **For args sourced from env vars: use native shell expansion** (`$ADMIN_USERNAME`) inside the `--args` JSON. The shell expands the reference at exec time; the tool-call transcript records the unexpanded reference. Forge itself does no env handling. See "Environment variables" in the Hard rules section for the full rule and examples.
 
-For **persona resolution**: when the user's task names a persona ("log in as admin"), read `PROJECT_HINT_FORGE` for the project's persona table. It maps persona names to env key names (or describes other credential-acquisition recipes — SQL minting, vault calls, etc.). Reference those env keys via shell expansion when invoking the snippet.
+For **account / role resolution**: when the user's task names a test account or role ("log in as admin", "as a customer"), read `PROJECT_HINT_FORGE` for how the project describes its accounts. The hint may map names to env key names, document a SQL minting recipe, point at a vault, or describe some other scheme. Whatever it says, follow it. Reference any env keys via shell expansion when invoking the snippet.
 
-If `PROJECT_HINT_FORGE` doesn't declare personas and the user names one, STUCK to the team-lead — the project hasn't documented the persona; the user needs to either add it to the hint or rephrase.
+If `PROJECT_HINT_FORGE` doesn't document accounts and the user names one, STUCK to the team-lead — the project hasn't documented this account; the user needs to either add it to the hint or rephrase.
 
 If invocation succeeds, SendMessage `snippet-author` with an **invoked** summary (different from a fresh drive — see step 7).
 
@@ -191,7 +191,7 @@ SendMessage(
   message="Full drive picture for spec authoring:
 
 Steps (in order, marked invoked-vs-fresh):
-1. invoked login-as-persona({}) → landed on /inventory.html
+1. invoked login({}) → landed on /inventory.html
 2. invoked add-item-to-cart({'item': 'sauce-labs-backpack'}) → button changed to Remove, badge appeared
 3. invoked cart-get-badge-count({}) → returned \"1\"
 
@@ -204,7 +204,7 @@ Env keys the spec will need: SAUCE_USERNAME, SAUCE_PASSWORD.
 
 Pass/fail signal for this task: cart badge equals expected count after add-to-cart.
 
-Notable observations: <anything spec-writer should know — quirks, timing-sensitive steps, persona-specific behavior>"
+Notable observations: <anything spec-writer should know — quirks, timing-sensitive steps, account-specific behavior>"
 )
 ```
 
@@ -248,7 +248,7 @@ Between your completion ping and going idle, send the lead a `proposals` message
 - **Recurring framework quirks** that aren't already in `driver.md` (MuiCollapse, Kendo widgets, RBD-style drag, dynamic IDs with special chars, etc.). If you needed a workaround in multiple places, the underlying pattern is hint-worthy.
 - **Selectors that worked when documented ones failed.** If `driver.md` lists a selector and it didn't match, or you discovered a better selector through iteration, flag it.
 - **Routes navigated** that aren't in `driver.md`'s route map.
-- **Env vars referenced by the persona table but not actually populated.** If you needed to expand `$ADMIN_USERNAME` and it expanded empty (or to "unset" if you used a non-revealing check), that's a signal that `forge.md`'s env contract advertises a key the user hasn't set up.
+- **Env vars referenced by the account hints but not actually populated.** If you needed to expand `$ADMIN_USERNAME` and it expanded empty (or to "unset" if you used a non-revealing check), that's a signal that `forge.md`'s env contract advertises a key the user hasn't set up.
 - **App-shape observations** on first encounter — only if `driver.md` is empty or skeletal. Otherwise this is documentation, not a proposal.
 
 ### Heuristics for proposal-worthiness

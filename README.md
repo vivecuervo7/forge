@@ -124,9 +124,9 @@ Dashed edges fire only in spec mode. Drive mode runs the top two agents (driver 
 
 Each `/forge` invocation is stateless: launch a fresh chromium with an ephemeral profile, run the user's task, close the chromium at the end. No pool, no persistent slot directories, no claim/release lifecycle, no profile to scrub. Clean state every time, by design.
 
-**Personas and credentials are a project concern**, not forge's. Projects with multiple test accounts document them in `forge/hints/forge.md` — a plain-prose persona table that the driver reads at session start ("admin uses ADMIN_USERNAME / ADMIN_PASSWORD," "user1 uses USER1_USERNAME / USER1_PASSWORD," "fresh users are minted via this SQL"). When the user names a persona ("log in as admin"), the driver references the corresponding env keys via **native shell expansion** (`$ADMIN_USERNAME`) at the Bash boundary. The shell expands the reference at exec time; the tool-call transcript records the unexpanded `$VAR`, never the value. Forge does no env handling of its own — the rule applies uniformly to every env var (not just credentials).
+Forge doesn't model accounts, roles, or test users — anything multi-user is a project concern. If a project has multiple test accounts, it documents them in `forge/hints/forge.md` in whatever shape fits (an account list, a role table, a SQL minting recipe, a vault-lookup script). The driver reads the hint and follows what it says. Forge's only role is to make the hint reachable; the project owns the conventions.
 
-For parallel runs against the same project: use different personas — two `/forge` sessions, one as `admin`, one as `user1`, work in parallel as long as the project's backend isn't single-session-per-user for the same account. The single-session-per-user constraint (if it exists) is documented in `forge.md` and is the user's responsibility to respect.
+For parallel runs against the same project, the constraint is whatever the project's backend imposes (single-session-per-user is common). The project documents that constraint in `forge.md`; the user respects it. Forge doesn't enforce or detect anything here.
 
 ## Hints
 
@@ -134,7 +134,7 @@ For parallel runs against the same project: use different personas — two `/for
 
 | File | Read by |
 |---|---|
-| `forge.md` | The skill + driver (env contract, personas, setup, teardown) |
+| `forge.md` | The skill + driver (env contract, app-level setup, teardown, any project-specific account/role conventions) |
 | `driver.md` | `forge:driver` (app structure, selector inventory, gotchas) |
 | `snippet-author.md` | `forge:snippet-author` (project-specific snippet conventions) |
 | `spec-writer.md` | `forge:spec-writer` (spec naming, imports) |
@@ -190,7 +190,7 @@ The default scrub fires unless the hint says not to. `## Teardown after each run
 ├── package.json            # gitignored — forge-managed runner manifest
 ├── playwright.config.ts    # gitignored — scaffolded fallback runner config
 ├── .gitignore              # gitignored — self-ignores; only hints/ tracked
-└── README.md               # gitignored — scaffold, points at conventions doc
+└── README.md               # gitignored — scaffold, explains the layout
 ```
 
 Only `hints/` is tracked. Everything else is local per-machine. `forge-init` regenerates the rest from convention. See the scaffold's inline comments for adapting to projects with their own Playwright runner.
@@ -201,7 +201,7 @@ Forge does no env handling on its own. Whatever's in `process.env` at run time i
 
 The one rule forge does enforce, via the driver's prompt: **env values are referenced, never inlined**. The driver uses native shell expansion (`$ADMIN_USERNAME`) inside its Bash commands; the shell expands at exec time; the tool-call transcript records the unexpanded reference, not the value. This applies uniformly to every env var — no credential/non-credential distinction. Predictable hygiene beats per-call judgment.
 
-For multi-persona projects, document the persona → env-key mapping in `forge/hints/forge.md` (e.g. "admin → `$ADMIN_USERNAME` / `$ADMIN_PASSWORD`, user → `$USER_USERNAME` / `$USER_PASSWORD`"). The driver reads the hint and references the keys; nothing else needs to change in forge.
+For projects with multiple test accounts, document the mapping however your project thinks about it in `forge/hints/forge.md` — naming convention (admin → `$ADMIN_USERNAME` / `$ADMIN_PASSWORD`, user → `$USER_USERNAME` / `$USER_PASSWORD`), provisioning recipe, or whatever fits. The driver reads the hint and follows its instructions. Forge takes no opinion on the structure.
 
 ## Use cases
 
