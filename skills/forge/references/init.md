@@ -28,7 +28,7 @@ Everything else under `forge/` (snippets, specs, videos, the pool, transcripts) 
 Run the scaffold script with the target directory. Empty args defaults to PWD:
 
 ```bash
-bash <PLUGIN_ROOT>/scripts/forge-init.sh "$ARGUMENTS"
+node <PLUGIN_ROOT>/scripts/forge-init.mjs "$ARGUMENTS"
 ```
 
 Where `$ARGUMENTS` is the route-stripped remainder (possibly empty).

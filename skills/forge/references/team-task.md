@@ -32,7 +32,7 @@ Then stop.
 ### 1.1. Find the project's forge root
 
 ```bash
-bash <PLUGIN_ROOT>/scripts/forge-find-root.sh
+node <PLUGIN_ROOT>/scripts/forge-find-root.mjs
 ```
 
 If it fails (exit non-zero), relay verbatim and stop. The user needs `/forge init`.
@@ -60,7 +60,7 @@ Default `<FORGE_ROOT>/.pool/`. If `forge.md` declares an override under "Pool lo
 ### 1.4. Initialize the pool
 
 ```bash
-bash <PLUGIN_ROOT>/scripts/forge-pool-init.sh <POOL_DIR>
+node <PLUGIN_ROOT>/scripts/forge-pool-init.mjs <POOL_DIR>
 ```
 
 Idempotent.
@@ -68,12 +68,20 @@ Idempotent.
 ### 1.5. Claim a slot
 
 ```bash
-bash <PLUGIN_ROOT>/scripts/forge-pool-claim.sh <POOL_DIR>
+node <PLUGIN_ROOT>/scripts/forge-pool-claim.mjs <POOL_DIR>
 ```
 
 Three outcomes:
 
-- **Slot path printed (exit 0)** — capture as `SLOT_DIR`; continue to phase 2.
+- **Two key:value lines printed to stdout (exit 0):**
+
+  ```
+  slotDir: /absolute/path/to/slot
+  sessionName: ft-abc12345
+  ```
+
+  Capture both — `SLOT_DIR` and `SESSION_NAME` — and continue to phase 2. The session name is computed once per slot from a hash of the slot path and persists in `state.json`; subsequent claims reuse it so chromium stays warm across claims.
+
 - **`EXHAUSTED` (exit 1)** — mint a new slot, then re-attempt the claim. If `forge.md` describes how to add another test account (under any heading — common phrasings: "test accounts available", "adding another test account to the rotation", "provisioning recipe", "personas") follow those instructions literally: pick an identifier not yet in the pool, create `<POOL_DIR>/slot-<id>/profile/`, write `<POOL_DIR>/slot-<id>/.env` with whatever env keys the hint specifies, write `<POOL_DIR>/slot-<id>/state.json` as `{ "checkedOutBy": null }`. If no such guidance is in `forge.md` (or no `forge.md` exists), fall back to the default:
 
   1. Pick the next slot identifier: `slot-<N>` where `<N>` is the lowest positive integer not already present in `<POOL_DIR>/slot-*`.
@@ -94,7 +102,7 @@ Before handing the slot to the team, reset its state per the project's policy. Y
 2. **Decide whether the default scrub applies.** The default is: invoke
 
    ```bash
-   bash <PLUGIN_ROOT>/scripts/forge-pool-reset.sh <SLOT_DIR>
+   node <PLUGIN_ROOT>/scripts/forge-pool-reset.mjs <SLOT_DIR>
    ```
 
    which deletes cookies + localStorage + sessionStorage from the slot's chromium profile (the universally-biting class — cart state, stale auth, etc.). Run it **unless** the hint clearly tells you not to (e.g. "don't reset any state between runs," "runs share state intentionally"). If there's no section at all, run the default.
@@ -107,19 +115,6 @@ Before handing the slot to the team, reset its state per the project's policy. Y
    ```
 
 4. If the hint's instructions fail (SQL error, endpoint timeout, etc.), surface to the user and stop — don't proceed with a half-initialized slot.
-
-### 1.6. Compute or retrieve the playwright-cli session name
-
-```bash
-SESSION_NAME=$(jq -r '.playwrightSessionName // empty' <SLOT_DIR>/state.json)
-if [ -z "$SESSION_NAME" ]; then
-  SESSION_NAME="ft-$(printf '%s' "<SLOT_DIR>" | md5 -q | cut -c1-8)"
-  TMP=$(mktemp)
-  jq --arg n "$SESSION_NAME" '.playwrightSessionName = $n' <SLOT_DIR>/state.json > "$TMP" && mv "$TMP" <SLOT_DIR>/state.json
-fi
-```
-
-(On Linux, replace `md5 -q` with `md5sum | cut -d' ' -f1`.)
 
 ## Phase 2 — Create the team
 
@@ -379,7 +374,7 @@ If the hint has no teardown section, skip this phase entirely.
 ### 5.3. Release the pool slot
 
 ```bash
-bash <PLUGIN_ROOT>/scripts/forge-pool-release.sh <POOL_DIR> <SLOT_DIR>
+node <PLUGIN_ROOT>/scripts/forge-pool-release.mjs <POOL_DIR> <SLOT_DIR>
 ```
 
 ### 5.4. Report to the user
@@ -428,7 +423,7 @@ If anything didn't go to plan (a teammate returned `cannot-drive`, the spec-veri
 
 - **You are an orchestrator, not an actor.** All browser driving belongs to `driver`. Snippet authoring belongs to `snippet-author`. Spec writing belongs to `spec-writer`. Spec verification belongs to `spec-verifier`. You set up the team, create tasks, spawn teammates, manage the lifecycle, AND **handle the user channel**: STUCK messages from teammates → AskUserQuestion → SendMessage the answer back. You do NOT invoke `playwright-cli` yourself, write snippet or spec files, run specs, or message-relay between teammates EXCEPT for STUCK-response (that's deliberately you relaying user input).
 - **Teammates message each other directly.** Don't parse driver messages and forward to snippet-author — they're already addressed to snippet-author directly. You only handle messages explicitly addressed to `team-lead`.
-- **Always release the slot.** Even if the drive returned `cannot-drive` or a teammate rejected shutdown, eventually call `forge-pool-release.sh`. Leaving a slot perpetually checked out wastes capacity.
+- **Always release the slot.** Even if the drive returned `cannot-drive` or a teammate rejected shutdown, eventually call `forge-pool-release.mjs`. Leaving a slot perpetually checked out wastes capacity.
 - **Always TeamDelete.** Don't leave team config files lying around in `~/.claude/teams/`.
 - **One team at a time per session.** If a previous `/forge` invocation didn't clean up, `TeamDelete()` first before `TeamCreate`. (Claude Code allows only one active team per lead session.)
 - **Provisioning recipe is the source of truth for slot creation.** Execute literally from the hint — don't invent fields.
@@ -436,6 +431,6 @@ If anything didn't go to plan (a teammate returned `cannot-drive`, the spec-veri
 ## Failure modes to recover from
 
 - **`TeamCreate` fails because a team already exists.** Call `TeamDelete()` first, then retry. (Note: `TeamDelete` fails if active teammates exist — you may need to shut them down first via SendMessage.)
-- **`forge-pool-claim.sh` keeps returning EXHAUSTED even after provisioning.** The provisioning recipe may have a bug — look at the slot dir to confirm everything's in place. Surface to user if you can't diagnose.
+- **`forge-pool-claim.mjs` keeps returning EXHAUSTED even after provisioning.** The provisioning recipe may have a bug — look at the slot dir to confirm everything's in place. Surface to user if you can't diagnose.
 - **Driver returns `cannot-drive` before doing meaningful work.** Snippet-author has nothing to author. Mark snippet-author's task complete with note "drive failed; no work to author"; proceed to shutdown and cleanup.
 - **A teammate goes idle and never responds to your SendMessage.** It may have errored mid-turn. Try a follow-up nudge. If still no response, surface to user with the team's current state.

@@ -57,8 +57,9 @@
 
 import { spawnSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
 import { loadSlotEnv } from './forge-slot-env.mjs'
-import { ensureBundlerAvailable, PLUGIN_ESBUILD_BIN } from './forge-ensure-runner.mjs'
+import { ensureBundlerAvailable, esbuildBinFor } from './forge-ensure-runner.mjs'
 
 function die(msg, code = 2) {
   console.error('forge-pool-invoke-snippet:', msg)
@@ -151,9 +152,13 @@ for (const key of envKeys) {
   }
 }
 
-// Ensure esbuild is installed. First call pays ~30s; subsequent calls are free.
+// Derive the project's forge root from the snippet path: <forge>/snippets/<name>.ts.
+const forgeRoot = dirname(dirname(resolve(snippetPath)))
+
+// Ensure esbuild is installed for this project. First call pays ~30s;
+// subsequent calls are free.
 try {
-  ensureBundlerAvailable()
+  ensureBundlerAvailable(forgeRoot)
 } catch (e) {
   die(`bundler unavailable: ${e.message || e}`, 2)
 }
@@ -163,7 +168,7 @@ try {
 //   - Cross-snippet relative imports inlined (--bundle)
 //   - Playwright stays external (won't try to resolve @playwright/test for
 //     snippets that import it for types — though most snippets don't)
-const transpile = spawnSync(PLUGIN_ESBUILD_BIN, [
+const transpile = spawnSync(esbuildBinFor(forgeRoot), [
   snippetPath,
   '--platform=node',
   '--format=esm',

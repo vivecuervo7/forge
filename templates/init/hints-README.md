@@ -76,6 +76,26 @@ If you don't have deviations, don't write the file. Defaults apply.
 
 If you're asking Claude (or another AI) to generate hints for a codebase, point it at this file and at the app itself. The guidance above is the same for human and AI authors: lead with the selector inventory in `driver.md`, declare env contracts in `forge.md`, skip the smaller hint files unless you have specific deviations from the agent defaults. A good AI-generated `driver.md` looks like a senior engineer's notes after spending an hour clicking around the app and recording what they saw.
 
+### Starter prompt
+
+Paste this into Claude (or your AI of choice) at the start of a project session. Adjust the bracketed parts to fit your codebase; otherwise it's ready to use as-is.
+
+> Read this project's source code and any available documentation. Based on what you find, draft `forge/hints/driver.md` and `forge/hints/forge.md` for me.
+>
+> For **`driver.md`**, focus on:
+> - **App shape** — one or two sentences naming the frontend framework, UI library (MUI, Kendo, AntD, Bootstrap, etc.), and overall structure.
+> - **Common routes** — the route patterns the driver will navigate (e.g. `/login`, `/events`, `/events/:id/...`). Include only what's actually present in the routing config.
+> - **Canonical selectors per element class** — one selector per UI element class (search box, primary button, item card, etc.). Prefer `data-test*` / `data-testid` / stable IDs where they exist; fall back to role + name only when nothing more stable is present.
+> - **Known gotchas** — anything the driver should be told upfront. Examples: component libraries that intercept pointer events (require `dispatchEvent('click')`), virtual lists with settle animations, dynamic IDs containing special characters, async stores that update after URL change, label/dropdown substring overlaps that need `{ exact: true }`.
+>
+> For **`forge.md`**, focus on:
+> - **Env contract** — what env vars forge needs to set per pool slot (usernames, passwords, API keys, tenant IDs). Don't include values; just declare the keys.
+> - **Authentication / test accounts** — what login the app expects, where test credentials are documented, any single-session-per-user constraints or rate limits.
+> - **Setup before each run** *(optional)* — if the project needs SQL seeding, a database reset, or other state preparation, describe it in plain language.
+> - **Teardown after each run** *(optional)* — same shape, for end-of-run cleanup the agent defaults won't cover.
+>
+> Use plain language, not configuration syntax. If something isn't documented and isn't obvious from the code, note the gap rather than guessing. Skip `snippet-author.md`, `spec-writer.md`, and `spec-verifier.md` unless you spot a clear project-specific deviation worth recording — the agent defaults usually cover those.
+
 ## See also
 
 - `docs/project-conventions.md` — full convention details and rationale.
