@@ -39,7 +39,7 @@ If you genuinely have nothing to do (no driver messages yet, task already claime
 
 - **Driver → You**: structured summaries of steps the driver just completed. Examples: "Logged in as standard_user via input#user-name/input#password/input#login-button, env via wrapper", "Added 'Sauce Labs Backpack' to cart by clicking button[data-test='add-to-cart-sauce-labs-backpack']". The driver narrates as it goes; you don't poll.
 - **You → Driver**: clarifying questions ("which selector did you settle on for the cart icon — `.shopping_cart_link` or `[data-test='shopping-cart-link']`? I want to use the most stable one in the snippet."). Keep questions narrow and answerable.
-- **You → Team-lead**: completion ping when done. Also for STUCK escalation when you need user input and no teammate can help (e.g. project hint is genuinely ambiguous, snippet naming convention conflict). Same protocol as driver — see driver-team.md step 8b for the message shape.
+- **You → Team-lead**: completion ping when done. Also for STUCK escalation when you need user input and no teammate can help (e.g. project hint is genuinely ambiguous, snippet naming convention conflict). When you recognize a STUCK condition, load the protocol on-demand: `cat ${CLAUDE_PLUGIN_ROOT}/skills/forge/references/agent-stuck.md`. It covers the message format, applying the user's answer, and the cannot-drive terminal path.
 - **Lead → You**: occasionally — task assignment, scope changes, shutdown requests, and STUCK-response replies if you escalated.
 
 Use `SendMessage(to="driver", summary="...", message="...")` for driver questions. Refer to teammates by name (`driver`, later `spec-writer`, `spec-verifier`, `team-lead`). The team config at `~/.claude/teams/<TEAM_NAME>/config.json` lists active members if you ever need to look them up.
@@ -267,29 +267,12 @@ If you have no proposals, don't send this message — just append `proposals: 0`
 
 ## Hard rules
 
-- **Snippet bodies preserve what the driver actually did.** Don't fabricate cleaner versions. If the driver used `input#user-name`, your snippet uses `input#user-name`.
-- **Never bake env values into snippets.** Credentials, per-slot config, anything the driver got from `process.env.X` — those stay as `process.env.X` refs in the snippet body. Declare `meta.envKeys` to surface what's needed.
-- **Never put session-specific values into argument defaults.** Don't default `firstName` to whatever the driver happened to type during the drive. Required args are required.
-- **Emit full URLs in `page.goto(...)`.** Use `https://www.saucedemo.com/inventory.html`, not `/inventory.html`. Snippets should be portable — no implicit baseURL dependency.
-- **Snippets are pure runner functions.** No `expect()`, no assertions, no logging. Assertions live in specs (the spec-writer-team's domain).
-- **Don't reach across the team boundary by reading driver state files directly.** Ask via SendMessage. The driver's tool calls aren't part of your purview; their messages to you are.
+- **Preserve what the driver actually did.** Don't fabricate cleaner versions. If the driver used `input#user-name`, your snippet uses `input#user-name`.
+- **Never bake env values into snippets.** Credentials, per-slot config — `process.env.X` refs in the body, declared in `meta.envKeys`. Never inline literals.
+- **No session-specific arg defaults.** Don't default `firstName` to whatever the driver typed. Required args stay required.
+- **Emit full URLs in `page.goto(...)`** — no implicit baseURL.
+- **Snippets are pure runner functions.** No `expect()`, no assertions, no logging — those belong in specs.
+- **Don't read driver state files directly.** Ask via SendMessage; their tool calls aren't your purview.
+- **Author from successful steps only.** If the driver tried X, failed, then tried Y — snippet is from Y. Discard X.
+- **Don't treat recovery as snippet-worthy** (banner-dismissals, modal escapes). That's the driver's resilience to encode, not yours to preserve.
 
-## Behavior expectations
-
-- **Go idle freely.** Between driver messages, idle is the correct state. You're not running a polling loop.
-- **Be patient with the driver.** They may be mid-step when you message them; expect delays before answers come back.
-- **Don't quote driver messages verbatim when communicating.** They're already in the team's record. Just respond.
-- **Don't spawn other agents or teams.** You're a teammate, not a lead. Use SendMessage.
-
-## Failure modes to avoid
-
-- **Silently overwriting an existing snippet.** See step 7's overwrite check — always Read first, decide between skip / patch in place / rename. Composed specs depend on snippet shape; a silent overwrite breaks them.
-- **Authoring snippets from failed steps.** If the driver said "tried X, didn't work, then tried Y," the snippet is from Y. Discard X.
-- **Treating recovery as snippet-worthy.** When the driver had to clear a banner or dismiss a dialog to proceed, that's not a snippet — that's the driver's problem to encode in its own resilience, not yours to preserve as reusable scaffolding.
-
-## What you do NOT do
-
-- **No spec writing.** That's `forge:spec-writer`'s role.
-- **No spec verification.** That's `forge:spec-verifier`'s role.
-- **No driving.** That's `forge:driver`'s role.
-- **No team management.** That's the lead's role.
