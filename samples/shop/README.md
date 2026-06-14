@@ -1,6 +1,6 @@
 # shop — exemplar for auth-bearing apps with multi-account scenarios
 
-This sample is a `forge/`-shaped directory showing what a polished setup looks like for an app with login, multiple test accounts, and multi-step transactional flows. The target is [practicesoftwaretesting.com](https://practicesoftwaretesting.com) — Angular 20 + Bootstrap 5 e-commerce + tool-rental platform, JWT-based auth, `data-test` attributes throughout, multi-step checkout.
+This sample is a project shaped like one that's had `/forge init` run on it — a `forge/` subdir with the hints, a config, and (once you run forge against it) snippets and specs. The target is [practicesoftwaretesting.com](https://practicesoftwaretesting.com) — Angular 20 + Bootstrap 5 e-commerce + tool-rental platform, JWT-based auth, `data-test` attributes throughout, multi-step checkout.
 
 **If your project has authentication, multiple test accounts, or both, mirror this sample.**
 
@@ -8,19 +8,19 @@ This sample is a `forge/`-shaped directory showing what a polished setup looks l
 
 | File | Purpose |
 |---|---|
-| [`hints/forge.md`](./hints/forge.md) | The auth + multi-account hint. A three-row account table maps account keywords (`customer`, `customer2`, `admin`) to env-key pairs. **The shape to copy when documenting your project's accounts.** |
-| [`hints/driver.md`](./hints/driver.md) | A doc-grounded selector inventory + known-gotchas list, sourced from the app's [official docs](https://testsmith-io.github.io/practice-software-testing/). Includes the Angular zone.js `dispatchEvent` quirk, the search-box debounce, the two-click payment flow — project-specific knowledge that turns iterate-to-discover into first-try-pass. |
-| [`.env.example`](./.env.example) | The env keys the account table references, with the seeded demo credentials filled in. Copy to `.env` and either uncomment the dotenv import in `playwright.config.ts` or load the same keys via direnv / dotenv-cli / your shell. |
-| `playwright.config.ts` | Scaffolded by `/forge init`. Fallback Playwright config for forge specs. |
-| `snippets/search-for-product.ts` | **Seeded** — produced by a real forge run against this hint set. Submits a search and waits for the result list. |
-| `snippets/open-first-search-result.ts` | **Seeded** — clicks the first product card on the current page. |
-| `snippets/add-product-to-cart.ts` | **Seeded** — adds the currently-displayed product to the cart. |
+| [`forge/hints/forge.md`](./forge/hints/forge.md) | The auth + multi-account hint. A three-row account table maps account keywords (`customer`, `customer2`, `admin`) to env-key pairs. **The shape to copy when documenting your project's accounts.** |
+| [`forge/hints/driver.md`](./forge/hints/driver.md) | A doc-grounded selector inventory + known-gotchas list, sourced from the app's [official docs](https://testsmith-io.github.io/practice-software-testing/). Includes the Angular zone.js `dispatchEvent` quirk, the search-box debounce, the two-click payment flow — project-specific knowledge that turns iterate-to-discover into first-try-pass. |
+| [`.env.example`](./.env.example) | The env keys the account table references, with the seeded demo credentials filled in. Copy to `.env` and either uncomment the dotenv import in `forge/playwright.config.ts` or load the same keys via direnv / dotenv-cli / your shell. |
+| `forge/playwright.config.ts` | Scaffolded by `/forge init`. Fallback Playwright config for forge specs. |
+| `forge/snippets/search-for-product.ts` | **Seeded** — produced by a real forge run against this hint set. Submits a search and waits for the result list. |
+| `forge/snippets/open-first-search-result.ts` | **Seeded** — clicks the first product card on the current page. |
+| `forge/snippets/add-product-to-cart.ts` | **Seeded** — adds the currently-displayed product to the cart. |
 
 The seeded snippets give the walkthrough below a starting library to reuse against. They're authentic forge output, not hand-edited.
 
 ## Walkthrough — see forge work, prompt by prompt
 
-Run these in order from inside `samples/shop/`. Each prompt builds on the state of the previous.
+Run these in order from inside `samples/shop/` (the project root, parent of `forge/`). Each prompt builds on the state of the previous.
 
 Before you start: `cp .env.example .env`. The hint instructs the driver to load env per command, so you don't need to source anything yourself.
 
@@ -30,11 +30,11 @@ Before you start: `cp .env.example .env`. The hint instructs the driver to load 
 /forge add the first claw hammer to the cart
 ```
 
-The driver scans `snippets/`, recognises that all three seeded snippets cover the steps it needs, and invokes them in sequence. No new snippets are authored.
+The driver scans `forge/snippets/`, recognises that all three seeded snippets cover the steps it needs, and invokes them in sequence. No new snippets are authored.
 
 **What to look for:**
 - Driver narrates three "invoked …" steps to snippet-author.
-- `snippets/` is unchanged after the run.
+- `forge/snippets/` is unchanged after the run.
 - Total time around 30–60 seconds.
 
 **What this demonstrates:** an existing library carries a fresh task end-to-end. The "claw hammer" specifics differ from whatever the seeded snippets were originally driven against, but the snippets are parameterised on `query` and don't care which hammer — that's the value of authoring along the hint's selector boundaries.
@@ -48,7 +48,7 @@ The driver scans `snippets/`, recognises that all three seeded snippets cover th
 Now the task includes a step the seeded library doesn't cover (login). The driver invokes the three seeded snippets for the cart steps, and snippet-author authors a new snippet for the login step.
 
 **What to look for:**
-- A new `snippets/login.ts` (or similarly-named) appears.
+- A new `forge/snippets/login.ts` (or similarly-named) appears.
 - The login snippet takes `email` and `password` as args — credentials reach it via shell expansion from `$PST_CUSTOMER_EMAIL` / `$PST_CUSTOMER_PASSWORD`.
 - The three seeded snippets are invoked, not re-authored.
 
@@ -63,8 +63,8 @@ Now the task includes a step the seeded library doesn't cover (login). The drive
 Same surface as before, but spec mode adds `forge:spec-writer` and `forge:spec-verifier` to the team. The driver runs the full checkout, snippet-author authors the new checkout-step snippets that didn't exist yet (billing address, payment, confirmation), spec-writer composes a self-contained `.spec.ts` that imports and calls those snippets, and spec-verifier runs the spec cold to confirm it passes from a fresh browser context.
 
 **What to look for:**
-- New checkout-related snippets in `snippets/`.
-- A `specs/checkout-hammer-cash-on-delivery.spec.ts` (or similarly-named) lands.
+- New checkout-related snippets in `forge/snippets/`.
+- A `forge/specs/checkout-hammer-cash-on-delivery.spec.ts` (or similarly-named) lands.
 - Spec-verifier reports a pass; with this hint set first-try verification is realistic.
 
 **What this demonstrates:** the full pipeline produces a CI-ready artifact. The spec composes the snippet library directly — no inlined steps, no duplicated selectors. Re-running the spec is a single `npx playwright test` against your own project's runner; nothing forge-specific at run time.
@@ -114,9 +114,9 @@ This scales naturally to N accounts. Add a row to the table; add a pair of env k
 
 ## How to read this sample for your own project
 
-1. **Start with `hints/forge.md`.** Copy the account-table structure and adapt the rows to your project's test accounts. Keep the env-key column — it's the bridge between user-facing keywords and `process.env` names.
+1. **Start with `forge/hints/forge.md`.** Copy the account-table structure and adapt the rows to your project's test accounts. Keep the env-key column — it's the bridge between user-facing keywords and `process.env` names.
 
-2. **Read `hints/driver.md`.** Your `driver.md` should have the same shape: app overview, routes table, selector inventory grouped by element class, login flow, known gotchas. The doc-grounded approach (read your app's docs, transcribe into `driver.md`) is the highest-leverage hint-authoring investment.
+2. **Read `forge/hints/driver.md`.** Your `driver.md` should have the same shape: app overview, routes table, selector inventory grouped by element class, login flow, known gotchas. The doc-grounded approach (read your app's docs, transcribe into `driver.md`) is the highest-leverage hint-authoring investment.
 
 3. **Copy `.env.example` to `.env`** (or use direnv / dotenv-cli / your shell). Forge takes no opinion on how values reach `process.env`, only that they're there when the driver runs.
 

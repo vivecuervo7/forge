@@ -1,6 +1,6 @@
 # internet — exemplar for public, no-auth interaction-class probing
 
-This sample is a `forge/`-shaped directory showing what a good setup looks like for a site of small isolated interaction patterns — dialogs, drag-and-drop, shadow DOM, async loading, framed editors. The target is [the-internet.herokuapp.com](https://the-internet.herokuapp.com), a deliberately-built playground for classic-hard browser interactions.
+This sample is a project shaped like one that's had `/forge init` run on it — a `forge/` subdir with the hints, a config, and (once you run forge against it) snippets. The target is [the-internet.herokuapp.com](https://the-internet.herokuapp.com), a deliberately-built playground for classic-hard browser interactions — dialogs, drag-and-drop, shadow DOM, async loading, framed editors.
 
 **If your project is probe-shaped (many small interactions, no transactional flows, no auth), mirror this sample.**
 
@@ -8,9 +8,9 @@ This sample is a `forge/`-shaped directory showing what a good setup looks like 
 
 | File | Purpose |
 |---|---|
-| [`hints/driver.md`](./hints/driver.md) | A per-probe map (interaction class → path), known gotchas (HTML5 drag-and-drop's `dispatchEvent` fallback, dialog-listener ordering, iframe descent), and the public test credentials for the login probe. **Shows what a `driver.md` looks like when it's a guidebook rather than a selector dump.** |
-| `playwright.config.ts` | Scaffolded by `/forge init`. |
-| `snippets/dynamic-loading-start-and-capture.ts` | **Seeded** — produced by a real forge run. Parameterised on `variant: '1' \| '2'` so one snippet covers both example pages. |
+| [`forge/hints/driver.md`](./forge/hints/driver.md) | A per-probe map (interaction class → path), known gotchas (HTML5 drag-and-drop's `dispatchEvent` fallback, dialog-listener ordering, iframe descent), and the public test credentials for the login probe. **Shows what a `driver.md` looks like when it's a guidebook rather than a selector dump.** |
+| `forge/playwright.config.ts` | Scaffolded by `/forge init`. |
+| `forge/snippets/dynamic-loading-start-and-capture.ts` | **Seeded** — produced by a real forge run. Parameterised on `variant: '1' \| '2'` so one snippet covers both example pages. |
 
 ## Walkthrough — see how the hint shapes snippet generality
 
@@ -24,7 +24,7 @@ Run these from inside `samples/internet/`.
 
 The driver finds the seeded snippet and invokes it with `variant: '2'`. No new authoring.
 
-**What to look for:** one "invoked" step, no new files in `snippets/`.
+**What to look for:** one "invoked" step, no new files in `forge/snippets/`.
 
 **What this demonstrates:** when the hint flags a variant in advance, snippet-author writes a single parameterised snippet that covers the variant space. Future tasks that hit any variant reuse the same snippet.
 
@@ -36,7 +36,7 @@ The driver finds the seeded snippet and invokes it with `variant: '2'`. No new a
 
 Different probe (JS alerts), no library coverage yet. Snippet-author authors a new snippet.
 
-**What to look for:** a new `snippets/javascript-alerts-confirm-and-capture.ts` (or similarly-named) appears.
+**What to look for:** a new `forge/snippets/javascript-alerts-confirm-and-capture.ts` (or similarly-named) appears.
 
 **What this demonstrates:** the bare driver already handles modern Playwright idioms (`page.once('dialog', d => d.accept())` ordered before the click is the canonical pattern). The hint's job is to encode coverage intent and project-specific gotchas — not to teach Playwright.
 

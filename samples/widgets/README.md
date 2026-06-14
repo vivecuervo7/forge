@@ -1,6 +1,6 @@
 # widgets — exemplar for legacy-widget-heavy apps
 
-This sample is a `forge/`-shaped directory showing what a good setup looks like for a site with legacy UI libraries — Kendo widgets, jQuery UI sortable, React date pickers, Bootstrap modals, autocomplete chips. The target is [demoqa.com](https://demoqa.com), a deliberately-built widget gauntlet with ad clutter to boot.
+This sample is a project shaped like one that's had `/forge init` run on it — a `forge/` subdir with the hints, a config, and (once you run forge against it) snippets. The target is [demoqa.com](https://demoqa.com), a deliberately-built widget gauntlet with legacy UI libraries — Kendo widgets, jQuery UI sortable, React date pickers, Bootstrap modals, autocomplete chips — plus ad clutter.
 
 **If your project uses any of those libraries (or component libraries with similar quirks — MUI, AntD, etc.), mirror this sample.**
 
@@ -8,9 +8,9 @@ This sample is a `forge/`-shaped directory showing what a good setup looks like 
 
 | File | Purpose |
 |---|---|
-| [`hints/driver.md`](./hints/driver.md) | A 14-widget probe map, an ad-occlusion / `scrollIntoViewIfNeeded` rule, Kendo-intercept warnings for date pickers, the manual-mouse-event pattern for the drag-drop family. **Shows what a `driver.md` looks like when the app's UI library is the source of pain.** |
-| `playwright.config.ts` | Scaffolded by `/forge init`. |
-| `snippets/fill-text-box-form.ts` | **Seeded** — produced by a real forge run. The first half of the text-box pair: fills the form fields. |
+| [`forge/hints/driver.md`](./forge/hints/driver.md) | A 14-widget probe map, an ad-occlusion / `scrollIntoViewIfNeeded` rule, Kendo-intercept warnings for date pickers, the manual-mouse-event pattern for the drag-drop family. **Shows what a `driver.md` looks like when the app's UI library is the source of pain.** |
+| `forge/playwright.config.ts` | Scaffolded by `/forge init`. |
+| `forge/snippets/fill-text-box-form.ts` | **Seeded** — produced by a real forge run. The first half of the text-box pair: fills the form fields. |
 
 ## Walkthrough — see compositional decomposition emerge
 
@@ -25,7 +25,7 @@ Run these from inside `samples/widgets/`.
 The driver invokes the seeded `fill-text-box-form` snippet, then authors a complementary snippet for the submit + capture step.
 
 **What to look for:**
-- A new `snippets/get-text-box-output.ts` (or `submit-and-capture-output.ts`) appears alongside the seeded one.
+- A new `forge/snippets/get-text-box-output.ts` (or `submit-and-capture-output.ts`) appears alongside the seeded one.
 - The seeded snippet is invoked, not re-authored — the new snippet covers only the part that wasn't already there.
 
 **What this demonstrates:** the hint's selector inventory pairs fill and read as separate concerns, so snippet-author treats them as separate snippets rather than fusing them. Future tasks that want to "fill, do something else, then read" can compose the two halves independently.
@@ -38,7 +38,7 @@ The driver invokes the seeded `fill-text-box-form` snippet, then authors a compl
 
 Another natural pair — add and read. Snippet-author writes two snippets, not one.
 
-**What to look for:** two new snippets in `snippets/` (one for adding, one for reading).
+**What to look for:** two new snippets in `forge/snippets/` (one for adding, one for reading).
 
 **What this demonstrates:** library decomposition is consistent. The hint's structure suggests boundaries; snippet-author follows them every time.
 
