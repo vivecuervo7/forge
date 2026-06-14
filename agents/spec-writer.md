@@ -87,13 +87,13 @@ Spec file structure:
 import { test, expect } from '@playwright/test'
 
 // Snippet imports — composed for invoked steps.
-import * as loginAsPersona from '../snippets/login-as-persona'
+import * as login from '../snippets/login'
 import * as addItemToCart from '../snippets/add-item-to-cart'
 import * as cartGetBadgeCount from '../snippets/cart-get-badge-count'
 
 test('<short, intent-describing name>', async ({ page }) => {
   // <step 1 — invoked>
-  await loginAsPersona.run(page, {})
+  await login.run(page, { username: process.env.ADMIN_USERNAME!, password: process.env.ADMIN_PASSWORD! })
 
   // <step 2 — invoked>
   await addItemToCart.run(page, { item: 'sauce-labs-backpack' })

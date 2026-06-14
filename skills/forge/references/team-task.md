@@ -155,7 +155,7 @@ PROJECT_HINT_DRIVER:
 
 USER_TASK: <user's task verbatim>
 
-Your task ID is <DRIVE_TASK_ID>. Claim it via TaskUpdate(owner='driver', status='in_progress'), then begin driving. The forge.md hint documents personas / credential resolution for this project — read it and follow it when the user names a persona. SendMessage `snippet-author` with structured summaries after meaningful steps. When SPEC_WRITER_PRESENT=yes, send `spec-writer` a final-state summary at end of drive. When SPEC_WRITER_PRESENT=no, skip that — just TaskUpdate status='completed' and ping team-lead. Then go idle — snippet-author may have follow-up questions."
+Your task ID is <DRIVE_TASK_ID>. Claim it via TaskUpdate(owner='driver', status='in_progress'), then begin driving. The forge.md hint documents how this project describes its test accounts / credential scheme — read it and follow it when the user names an account or role. SendMessage `snippet-author` with structured summaries after meaningful steps. When SPEC_WRITER_PRESENT=yes, send `spec-writer` a final-state summary at end of drive. When SPEC_WRITER_PRESENT=no, skip that — just TaskUpdate status='completed' and ping team-lead. Then go idle — snippet-author may have follow-up questions."
 )
 ```
 
@@ -213,7 +213,7 @@ USER_TASK: <user's task verbatim>
 PROJECT_HINT_SPEC_VERIFIER:
 <spec-verifier.md contents from <FORGE_ROOT>/hints/spec-verifier.md, or 'none' if missing>
 
-Your task ID is <SPEC_VERIFIER_TASK_ID>. Claim it via TaskUpdate(owner='spec-verifier', status='in_progress'). Wait for spec-writer's 'spec ready' message. Run the spec via `forge-run-spec.mjs --spec <path>`. The verifier runs the spec the way Playwright itself would: fresh browser context, env from forge/.env + project .env loaded by playwright config. On pass, ping team-lead with verified-from-fresh status. On fail, ask driver (selectors) or spec-writer (assertions) for clarification, iterate up to 3 times, then succeed or escalate."
+Your task ID is <SPEC_VERIFIER_TASK_ID>. Claim it via TaskUpdate(owner='spec-verifier', status='in_progress'). Wait for spec-writer's 'spec ready' message. Run the spec via `forge-run-spec.mjs --spec <path>`. The verifier runs the spec the way Playwright itself would: fresh browser context, env from `process.env` as set by the user's shell plus whatever the project's playwright config loads. On pass, ping team-lead with verified-from-fresh status. On fail, ask driver (selectors) or spec-writer (assertions) for clarification, iterate up to 3 times, then succeed or escalate."
 )
 ```
 
@@ -380,7 +380,7 @@ If anything didn't go to plan (a teammate returned `cannot-drive`, the spec-veri
 - **Always close the chromium session.** Even if the drive returned `cannot-drive` or a teammate rejected shutdown, eventually call `playwright-cli -s=<SESSION_NAME> close`. Leaving chromium processes running wastes system resources and (in single-session-per-user apps) blocks the next legitimate login.
 - **Always TeamDelete.** Don't leave team config files lying around in `~/.claude/teams/`.
 - **One team at a time per session.** If a previous `/forge` invocation didn't clean up, `TeamDelete()` first before `TeamCreate`. (Claude Code allows only one active team per lead session.)
-- **`forge.md` is the source of truth for persona / credential resolution.** When the user names a persona ("log in as admin"), the driver reads `forge.md` to find the env keys, the SQL recipe, or whatever credential scheme the project uses. Don't invent personas; don't hardcode credentials.
+- **`forge.md` is the source of truth for test-account / credential resolution.** When the user names an account ("log in as admin"), the driver reads `forge.md` to find the env keys, the SQL recipe, or whatever scheme the project documents. Don't invent accounts; don't hardcode credentials.
 
 ## Failure modes to recover from
 
