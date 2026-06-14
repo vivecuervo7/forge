@@ -1,23 +1,28 @@
 #!/usr/bin/env node
 // forge-ensure-runner.mjs — make sure the project has a Playwright runner ready.
 //
-// If the project has its own Playwright setup (a playwright.config.{ts,js,mjs}
-// alongside node_modules/@playwright/test at or above the forge/ directory),
-// the plugin's runner isn't needed and this script is a no-op.
+// Runner location is per-project: <forgeRoot>/.runner/. Self-contained,
+// visible in the IDE, removed cleanly with the project. No user-global
+// install location to maintain or clean up.
 //
-// Otherwise, lazy-install the plugin-shipped Playwright runner at
-// ~/.claude/.vive-claude/forge/runner/ so the first `--spec` invocation
-// doesn't pay the ~30s npm-install cost. The install is user-global and
-// idempotent — once it lands here, every forge project on the machine
-// shares it.
+// Two paths:
 //
-// Exposed for two callers:
-//   - forge-init.sh invokes the CLI form at end of scaffold so the cost
-//     surfaces at the discoverable moment ("init is taking a moment"
-//     reads better than "first verification is taking a moment").
-//   - forge-pool-run-spec.mjs imports `ensurePluginRunner` for the
-//     just-in-time path (covers cases where /forge init wasn't run
-//     recently and the runner is missing).
+//   1. If the project has its own Playwright (a playwright.config.{ts,js,mjs}
+//      + node_modules/@playwright/test at or above the forge/ directory), the
+//      plugin's runner isn't needed — this script is a no-op.
+//
+//   2. Otherwise, lazy-install at <forgeRoot>/.runner/ so the first spec or
+//      snippet invocation doesn't pay the npm-install cost mid-run. Carries
+//      esbuild (snippet bundling), @playwright/test (spec running), and
+//      dotenv (env loading).
+//
+// Exposed for callers:
+//   - forge-init.mjs invokes the CLI form at end of scaffold so the cost
+//     surfaces at a discoverable moment.
+//   - forge-pool-run-spec.mjs imports `ensureRunnerReady` for the just-in-time
+//     path on first spec verification.
+//   - forge-pool-invoke-snippet.mjs imports `ensureBundlerAvailable` to make
+//     sure esbuild is installed before bundling.
 //
 // Usage (CLI):
 //   forge-ensure-runner.mjs <project-forge-dir>
@@ -28,14 +33,21 @@
 //   3   install failed
 
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
-import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
-export const PLUGIN_RUNNER_ROOT = join(homedir(), '.claude', '.vive-claude', 'forge', 'runner')
-export const PLUGIN_PW_MARKER = join(PLUGIN_RUNNER_ROOT, 'node_modules', '@playwright', 'test')
-export const PLUGIN_ESBUILD_BIN = join(PLUGIN_RUNNER_ROOT, 'node_modules', '.bin', 'esbuild')
+// Path helpers — runner location is per-project, parameterized by forgeRoot.
+
+export function runnerRootFor(forgeRoot) {
+  return join(forgeRoot, '.runner')
+}
+export function pwMarkerFor(forgeRoot) {
+  return join(runnerRootFor(forgeRoot), 'node_modules', '@playwright', 'test')
+}
+export function esbuildBinFor(forgeRoot) {
+  return join(runnerRootFor(forgeRoot), 'node_modules', '.bin', 'esbuild')
+}
 
 // Walk up from a starting dir, looking for a Playwright runner:
 //   - playwright.config.{ts,js,mjs} at the same level
@@ -57,17 +69,18 @@ export function findProjectRunner(startDir) {
   return null
 }
 
-// Lazy-install the plugin-shipped Playwright runner. Idempotent — re-runs
-// npm install if any declared dep is missing, so dep additions/version
-// bumps land on existing installs.
-export function ensurePluginRunner() {
-  mkdirSync(PLUGIN_RUNNER_ROOT, { recursive: true })
+// Lazy-install the plugin-shipped Playwright runner into <forgeRoot>/.runner/.
+// Idempotent — re-runs npm install if any declared dep is missing, so dep
+// additions or version bumps land on existing installs.
+export function ensurePluginRunner(forgeRoot) {
+  const runnerRoot = runnerRootFor(forgeRoot)
+  mkdirSync(runnerRoot, { recursive: true })
 
-  const pkgPath = join(PLUGIN_RUNNER_ROOT, 'package.json')
+  const pkgPath = join(runnerRoot, 'package.json')
   const pkgContent = JSON.stringify({
     name: 'forge-spec-runner',
     private: true,
-    description: 'Forge-managed Playwright workspace for running generated specs. Maintained by forge-ensure-runner.mjs.',
+    description: 'Forge-managed Playwright workspace. Maintained by forge-ensure-runner.mjs. Safe to delete forge/.runner/ to reset.',
     dependencies: {
       '@playwright/test': '^1.49.0',
       dotenv: '^16.4.0',
@@ -77,40 +90,37 @@ export function ensurePluginRunner() {
   // Overwrite on every install attempt so version bumps land deterministically.
   writeFileSync(pkgPath, pkgContent)
 
-  console.error(`forge-ensure-runner: installing plugin runner deps in ${PLUGIN_RUNNER_ROOT}/ (~30s on first run)…`)
+  console.error(`forge-ensure-runner: installing runner deps in ${runnerRoot}/ (~30s on first run)…`)
   const result = spawnSync('npm', ['install', '--silent', '--no-audit', '--no-fund', '--no-progress'], {
-    cwd: PLUGIN_RUNNER_ROOT,
+    cwd: runnerRoot,
     stdio: ['ignore', 'inherit', 'inherit'],
   })
   if (result.status !== 0) {
     throw new Error(
-      `npm install failed in ${PLUGIN_RUNNER_ROOT}/ (exit ${result.status}). Investigate and re-run.`
+      `npm install failed in ${runnerRoot}/ (exit ${result.status}). Investigate and re-run.`
     )
   }
-  if (!existsSync(PLUGIN_PW_MARKER)) {
+  if (!existsSync(pwMarkerFor(forgeRoot))) {
     throw new Error(
-      `npm install completed but @playwright/test still missing at ${PLUGIN_PW_MARKER}. This shouldn't happen — check the runner dir.`
+      `npm install completed but @playwright/test still missing at ${pwMarkerFor(forgeRoot)}. ` +
+      `Check ${runnerRoot}/ for install errors.`
     )
   }
 }
 
-// Ensure esbuild is available for snippet invocation. Independent of
-// project-runner detection: even projects with their own Playwright setup
-// need esbuild for snippet bundling, because the alternative (sending raw
-// .ts function strings into playwright-cli's run-code sandbox) is broken
-// by design — only run.toString() crosses the boundary, losing all
-// module-internal helpers, constants, and cross-snippet imports.
+// Ensure esbuild is available for snippet invocation. Independent of project-
+// runner detection — even projects with their own Playwright need esbuild for
+// snippet bundling, because the playwright-cli run-code sandbox can't
+// dynamically import .ts files.
 //
-// Triggers a full plugin-runner install if esbuild is missing. The runner
-// dir is shared user-globally; first call pays the ~30s cost, subsequent
-// calls (across forge projects on the machine) are free.
-export function ensureBundlerAvailable() {
-  if (existsSync(PLUGIN_ESBUILD_BIN)) return
-  ensurePluginRunner()
-  if (!existsSync(PLUGIN_ESBUILD_BIN)) {
+// Triggers a full plugin-runner install if esbuild is missing. The first call
+// per project pays the ~30s cost; subsequent calls are free.
+export function ensureBundlerAvailable(forgeRoot) {
+  if (existsSync(esbuildBinFor(forgeRoot))) return
+  ensurePluginRunner(forgeRoot)
+  if (!existsSync(esbuildBinFor(forgeRoot))) {
     throw new Error(
-      `forge-ensure-runner: esbuild missing at ${PLUGIN_ESBUILD_BIN} after npm install. ` +
-      `Check ${PLUGIN_RUNNER_ROOT}/ for install errors.`
+      `forge-ensure-runner: esbuild missing at ${esbuildBinFor(forgeRoot)} after npm install.`
     )
   }
 }
@@ -118,31 +128,31 @@ export function ensureBundlerAvailable() {
 // Combined "ensure a runner is ready for this project" routine. Detects
 // project-owned runner first; falls back to installing the plugin runner.
 // Returns a string describing what's in place.
-export function ensureRunnerReady(projectForge) {
-  if (!existsSync(projectForge)) {
-    throw new Error(`forge-ensure-runner: project forge dir does not exist: ${projectForge}`)
+export function ensureRunnerReady(forgeRoot) {
+  if (!existsSync(forgeRoot)) {
+    throw new Error(`forge-ensure-runner: forge dir does not exist: ${forgeRoot}`)
   }
-  const searchStart = dirname(projectForge)
+  const searchStart = dirname(forgeRoot)
   const projectRunner = findProjectRunner(searchStart)
   if (projectRunner) {
     return `project runner at ${projectRunner.rootDir} — plugin runner not needed`
   }
-  if (existsSync(PLUGIN_PW_MARKER)) {
-    return `plugin runner already installed at ${PLUGIN_RUNNER_ROOT}`
+  if (existsSync(pwMarkerFor(forgeRoot))) {
+    return `plugin runner already installed at ${runnerRootFor(forgeRoot)}`
   }
-  ensurePluginRunner()
-  return `plugin runner installed at ${PLUGIN_RUNNER_ROOT}`
+  ensurePluginRunner(forgeRoot)
+  return `plugin runner installed at ${runnerRootFor(forgeRoot)}`
 }
 
 // CLI entry point.
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const projectForge = process.argv[2]
-  if (!projectForge) {
+  const forgeRoot = process.argv[2]
+  if (!forgeRoot) {
     console.error('Usage: forge-ensure-runner.mjs <project-forge-dir>')
     process.exit(2)
   }
   try {
-    const status = ensureRunnerReady(projectForge)
+    const status = ensureRunnerReady(forgeRoot)
     console.error(`forge-ensure-runner: ${status}`)
     process.exit(0)
   } catch (err) {

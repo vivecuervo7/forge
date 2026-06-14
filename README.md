@@ -6,10 +6,10 @@ The default mode just does the thing you asked for. Spec mode is opt-in for when
 
 ## Requirements
 
-- **playwright-cli** — `brew install playwright-cli`. Forge wraps it.
-- **macOS or Linux**. Lock file primitives use `flock` (Linux) or `lockf` (macOS).
 - **Node.js** — any recent version (tested on 24).
-- **jq** — used by the pool scripts for state.json edits.
+- **playwright-cli** — `brew install playwright-cli`. Forge wraps it.
+
+Supported on macOS, Linux, and Windows. Forge's scripts are pure Node; cross-platform locking, JSON state, and hashing are handled internally — no `bash`, `jq`, `flock`, or `md5sum` required on the host.
 
 ## Quick start
 
@@ -42,17 +42,17 @@ The default mode just does the thing you asked for. Spec mode is opt-in for when
 
    That's enough to start. For an unauthenticated site, the scaffold alone is sufficient — forge mints a default slot and goes. For sites with auth or other project-specific behaviour, author hint files in `forge/hints/` (see `forge/hints/README.md` for guidance). All five hints are optional and additive: write only what you need.
 
-The plugin lazy-installs its Playwright runner under `~/.claude/.vive-claude/forge/runner/` on first spec run.
+On first spec run (or first snippet invocation), forge lazy-installs its Playwright runner into the project's `forge/.runner/` directory. Self-contained per project, visible in the IDE, removed cleanly by `rm -rf forge/` if you ever want to uninstall.
 
 ## Commands
 
 | Command | What it does |
 |---|---|
-| `/forge <task>` | **Drive mode.** Driver + snippet-author. Does the task end-to-end, accretes reusable snippets from novel work. Fastest path. |
-| `/forge teach <topic>` | **Teach mode.** Driver + snippet-author. User pilots forge turn-by-turn, signals snippet boundaries explicitly, and weaves project-specific gotchas (fallbacks, retries, conditional branches) into snippet bodies. The deliberate library-building channel. |
+| `/forge init` | Scaffolds the `forge/` directory convention into the current project. Idempotent. The starting point for any new project. |
+| `/forge <task>` | **Drive mode.** Driver + snippet-author. Does the task end-to-end, accretes reusable snippets from novel work. The everyday command. |
 | `/forge spec <task>` | **Spec mode.** Adds spec-writer + spec-verifier. Composes a self-contained `.spec.ts` and confirms it passes from a cold start. |
+| `/forge teach <topic>` | **Teach mode.** Driver + snippet-author. User pilots forge turn-by-turn, signals snippet boundaries explicitly, and weaves project-specific gotchas (fallbacks, retries, conditional branches) into snippet bodies. The deliberate library-building channel — useful when the app has quirks the agent can't be expected to discover. |
 | `/forge run <spec\|last\|latest>` | Re-runs a verified spec via the standalone runner. Add `record as <label>` to capture a video at `forge/videos/<spec>-<label>.webm`. No team spawned; no slot claimed. |
-| `/forge init` | Scaffolds the `forge/` directory convention into the current project. Idempotent. |
 | `/forge export <spec-name>` | Exports a composed spec to a self-contained inlined form, suitable for shipping into another test suite. |
 
 Spec mode also fires on natural-language signals — "create a spec for AE-1775", "write a spec that…", "capture as a spec". Teach mode fires on phrasings like "teach forge how to log in" or "let me show forge how to create an event." Plain `/forge <task>` is the unambiguous drive case.
@@ -189,6 +189,9 @@ The default scrub fires unless the hint says not to. `## Teardown after each run
 │   │   ├── profile/       # chromium profile
 │   │   └── state.json     # { checkedOutBy, lastClaimed, lastReleased }
 │   └── ...
+├── .runner/                # gitignored — lazy-installed Playwright runner
+│   ├── node_modules/      # @playwright/test, esbuild, dotenv
+│   └── package.json
 ├── snippets/               # gitignored by default — accreted via author
 ├── specs/                  # gitignored — composed during spec mode
 ├── videos/                 # gitignored — recordings from /forge run

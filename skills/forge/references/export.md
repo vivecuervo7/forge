@@ -23,7 +23,7 @@ The exported spec lives outside `forge/` deliberately — the composed form (wor
 ### 1.1. Find the project's forge root
 
 ```bash
-bash <PLUGIN_ROOT>/scripts/forge-find-root.sh
+node <PLUGIN_ROOT>/scripts/forge-find-root.mjs
 ```
 
 If it fails (exit non-zero), relay verbatim and stop. The user needs `/forge init` first.
@@ -115,5 +115,5 @@ If forge-export-spec.mjs returned a non-zero exit code, surface its error messag
 ## Failure modes
 
 - **Spec doesn't exist under `forge/specs/`** — surface "spec not found" with the list of available specs.
-- **No `forge/` directory** — surface forge-find-root.sh's error and instruct user to run `/forge init`.
+- **No `forge/` directory** — surface forge-find-root.mjs's error and instruct user to run `/forge init`.
 - **`forge-export-spec.mjs` reports no snippet imports** — surface its message; the spec is already inlined (or wasn't composed in the first place).

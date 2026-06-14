@@ -17,7 +17,7 @@ No pool slot is claimed. The script uses Playwright's ephemeral browser context;
 ### 1.1. Find the project's forge root
 
 ```bash
-bash <PLUGIN_ROOT>/scripts/forge-find-root.sh
+node <PLUGIN_ROOT>/scripts/forge-find-root.mjs
 ```
 
 If it fails (exit non-zero), relay verbatim and stop. The user needs `/forge init` first.
@@ -115,7 +115,7 @@ Surface the script's actual error output verbatim — the user needs to see exac
 ## Failure modes
 
 - **Spec doesn't exist under `forge/specs/`** — surface "spec not found" with the list of available specs.
-- **No `forge/` directory** — surface forge-find-root.sh's error and instruct user to run `/forge init`.
+- **No `forge/` directory** — surface forge-find-root.mjs's error and instruct user to run `/forge init`.
 - **Plugin runner missing** — the script lazy-installs on first use, but if installation fails, surface the npm error.
 - **Ambiguous "last"** — if `ls -t` returns multiple specs and the user's intent isn't clear from context, prefer the most-recent and tell them which one you picked.
 

@@ -30,7 +30,7 @@ Identical to team-task's phase 1 — find forge root, load hints, initialize poo
 
 Teach mode uses `forge.md`, `driver.md`, and `snippet-author.md` only — `spec-writer.md` and `spec-verifier.md` are unused.
 
-See `team-task.md` phases 1.1 through 1.6 for the exact steps; they are byte-for-byte identical here.
+See `team-task.md` phases 1.1 through 1.5 for the exact steps; they are byte-for-byte identical here.
 
 ## Phase 2 — Create the team
 
@@ -375,7 +375,7 @@ Same as team-task phase 5 (the original Phase 5 here, renumbered):
 4. `TeamDelete()`
 5. `tmux kill-pane -t <paneId>` for each captured pane (best-effort).
 6. Apply `## Teardown after each run` instructions from `forge.md` if present.
-7. `bash <PLUGIN_ROOT>/scripts/forge-pool-release.sh <POOL_DIR> <SLOT_DIR>`
+7. `node <PLUGIN_ROOT>/scripts/forge-pool-release.mjs <POOL_DIR> <SLOT_DIR>`
 
 ### 6.1 Report to the user
 

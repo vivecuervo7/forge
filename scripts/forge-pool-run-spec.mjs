@@ -61,8 +61,8 @@ import { homedir } from 'node:os'
 import { basename, dirname, join, relative, resolve } from 'node:path'
 import { loadSlotEnv, composedEnv } from './forge-slot-env.mjs'
 import {
-  PLUGIN_RUNNER_ROOT,
-  PLUGIN_PW_MARKER,
+  runnerRootFor,
+  pwMarkerFor,
   findProjectRunner,
   ensurePluginRunner,
 } from './forge-ensure-runner.mjs'
@@ -143,22 +143,22 @@ if (projectRunner) {
   cmd = 'npx'
   cmdArgs = pwArgs
 } else {
-  // Path 2: plugin-shipped fallback
-  if (!existsSync(PLUGIN_PW_MARKER)) {
+  // Path 2: plugin-shipped fallback (project-local at <projectForge>/.runner/)
+  if (!existsSync(pwMarkerFor(projectForge))) {
     try {
-      ensurePluginRunner()
+      ensurePluginRunner(projectForge)
     } catch (err) {
       die(err.message, 3)
     }
   }
-  mode = `plugin (${PLUGIN_RUNNER_ROOT})`
-  // Symlink plugin runner's node_modules into project's forge/ so resolution
-  // works. The symlink is a pure build artifact (not user-facing) — kept lazy
-  // here rather than in forge-init because it points at a user-global path
-  // that doesn't exist until /forge has been run at least once.
+  const runnerRoot = runnerRootFor(projectForge)
+  mode = `plugin (${runnerRoot})`
+  // Symlink runner's node_modules into project's forge/ so the spec's
+  // `import '@playwright/test'` resolves. The symlink target is right next
+  // door (.runner/node_modules → ../node_modules) — pure build artifact.
   const projNodeModules = join(projectForge, 'node_modules')
   if (!existsSync(projNodeModules)) {
-    symlinkSync(join(PLUGIN_RUNNER_ROOT, 'node_modules'), projNodeModules)
+    symlinkSync(join(runnerRoot, 'node_modules'), projNodeModules)
   }
   // The fallback playwright.config.ts is scaffolded by /forge init (committed
   // to the project's forge/ dir). If it's missing, the project hasn't been
