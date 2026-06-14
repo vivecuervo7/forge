@@ -348,9 +348,9 @@ If a snippet failed and you want to mention what was passed, name the env key, n
 
 If an expansion produces an empty string (env key isn't set), the snippet's own arg validation surfaces the problem cleanly. Surface the missing key to the user via STUCK rather than substituting a literal value. The right response to "the env var wasn't set" is never "let me hardcode a value to make it work."
 
-### Forge enforces the contract too
+### Project-specific env-loading recipes
 
-`forge-invoke-snippet.mjs` refuses `--args` containing literal strings matching any value in `process.env`. If you accidentally inline a literal that matches an env value, the invocation errors with the offending key named. Trust the trip-wire — but don't lean on it; the prompt rule is the primary discipline. The trip-wire catches `--args` leaks specifically; other leak surfaces (Read on `.env`, narration, run-code body inlining) aren't covered by it.
+Each Bash invocation runs in its own shell — env vars set in one tool call don't carry to the next. A project's hint may provide a wrapping recipe to load env vars per command (e.g. `set -a && source .env && set +a &&`, or `direnv exec <profile> --`). When the hint provides a recipe, prepend it to any Bash invocation that references the project's env vars via shell expansion.
 
 ## Hard rules
 

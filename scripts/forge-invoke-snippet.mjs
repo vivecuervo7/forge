@@ -43,7 +43,6 @@
 // Exit codes:
 //   0   success — playwright-cli output forwarded verbatim
 //   2   usage / arg error / invalid JSON / snippet missing run / bundler failure
-//   3   literal env-value detected in --args (use shell expansion instead)
 //   4   playwright-cli not installed
 //   5   spawn error
 //   any other — playwright-cli's exit code is propagated
@@ -95,37 +94,6 @@ try {
   parsedArgs = JSON.parse(argsJson)
 } catch (e) {
   die(`invalid --args JSON: ${e.message}`)
-}
-
-// Trip-wire: any string arg value matching an env var value is a literal-
-// credential leak. The contract is: env-sourced values reach the snippet
-// via native shell expansion ($VAR) inside the Bash command — the shell
-// resolves at exec time, so the tool-call transcript only ever records
-// the unexpanded reference. If a literal value matches process.env content,
-// the caller bypassed that contract and the value is now in the transcript.
-// Refuse and surface the leak path so the caller can correct it.
-{
-  const envValues = new Set(
-    Object.values(process.env).filter(v => typeof v === 'string' && v.length > 0)
-  )
-  // Find the env key for an offending value so the error can name it.
-  function envKeyFor(value) {
-    for (const [k, v] of Object.entries(process.env)) {
-      if (v === value) return k
-    }
-    return null
-  }
-  for (const [k, v] of Object.entries(parsedArgs)) {
-    if (typeof v === 'string' && envValues.has(v)) {
-      const matchedKey = envKeyFor(v)
-      die(
-        `--args.${k} contains a literal string matching the value of $${matchedKey} in process.env. ` +
-        `Pass env-sourced values via native shell expansion in your Bash command (e.g. ` +
-        `--args "{\\"${k}\\":\\"$${matchedKey}\\"}") so the literal stays out of the tool-call transcript.`,
-        3
-      )
-    }
-  }
 }
 
 // Read raw source. NEVER dynamically import — Node 24's strict ESM rejects

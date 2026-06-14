@@ -12,13 +12,19 @@ Auth is JWT-based. The frontend logs in via `POST /auth/login`, stores the JWT i
 
 ## Test accounts
 
-Three accounts are seeded by the deployment. Each has a pair of env keys; set them via whatever env-management approach the project uses.
+Three accounts are seeded by the deployment. Each has a pair of env keys.
 
 | Account | Role | Env keys |
 |---|---|---|
 | `customer`  | customer | `PST_CUSTOMER_EMAIL` / `PST_CUSTOMER_PASSWORD` |
 | `customer2` | customer | `PST_CUSTOMER2_EMAIL` / `PST_CUSTOMER2_PASSWORD` |
 | `admin`     | admin    | `PST_ADMIN_EMAIL` / `PST_ADMIN_PASSWORD` |
+
+To load these env vars, prepend any command that needs them with:
+
+```
+set -a && source .env && set +a &&
+```
 
 Account-specific behaviour:
 
