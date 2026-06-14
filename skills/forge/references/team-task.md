@@ -4,6 +4,9 @@ This reference is loaded by `/forge`'s router for **task** and **spec** routes. 
 
 - Decided `MODE` (one of `drive` | `spec`)
 - Stripped any leading `spec` keyword from the task description
+- Resolved `PLUGIN_ROOT` to the plugin's install path (see SKILL.md phase 1.0)
+
+**Placeholder note.** `<PLUGIN_ROOT>` in the bash commands below is a placeholder — substitute the literal path captured by the router. Do **not** use `${CLAUDE_PLUGIN_ROOT}` here: the env var isn't reliably populated in the bash context that runs from this reference, and the placeholder pattern sidesteps that bug.
 
 Below is the full lifecycle for running an agent team against the project's slot pool. You are the **team lead**: you manage the team's lifecycle (session-pool slot, team creation, task coordination, shutdown, cleanup) while teammates do the actual work via mesh communication. **You do not relay content between teammates — they SendMessage each other directly.** Your job is setup, lifecycle, and the user channel.
 
@@ -29,7 +32,7 @@ Then stop.
 ### 1.1. Find the project's forge root
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-find-root.sh
+bash <PLUGIN_ROOT>/scripts/forge-find-root.sh
 ```
 
 If it fails (exit non-zero), relay verbatim and stop. The user needs `/forge init`.
@@ -57,7 +60,7 @@ Default `<FORGE_ROOT>/.pool/`. If `forge.md` declares an override under "Pool lo
 ### 1.4. Initialize the pool
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-pool-init.sh <POOL_DIR>
+bash <PLUGIN_ROOT>/scripts/forge-pool-init.sh <POOL_DIR>
 ```
 
 Idempotent.
@@ -65,7 +68,7 @@ Idempotent.
 ### 1.5. Claim a slot
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-pool-claim.sh <POOL_DIR>
+bash <PLUGIN_ROOT>/scripts/forge-pool-claim.sh <POOL_DIR>
 ```
 
 Three outcomes:
@@ -91,7 +94,7 @@ Before handing the slot to the team, reset its state per the project's policy. Y
 2. **Decide whether the default scrub applies.** The default is: invoke
 
    ```bash
-   bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-pool-reset.sh <SLOT_DIR>
+   bash <PLUGIN_ROOT>/scripts/forge-pool-reset.sh <SLOT_DIR>
    ```
 
    which deletes cookies + localStorage + sessionStorage from the slot's chromium profile (the universally-biting class — cart state, stale auth, etc.). Run it **unless** the hint clearly tells you not to (e.g. "don't reset any state between runs," "runs share state intentionally"). If there's no section at all, run the default.
@@ -183,6 +186,7 @@ Always spawn driver + snippet-author. In spec mode, also spawn spec-writer + spe
 
 ```
 Agent(
+  description="Drive <USER_TASK>",
   subagent_type="forge:driver",
   team_name="<TEAM_NAME>",
   name="driver",
@@ -204,10 +208,13 @@ Your task ID is <DRIVE_TASK_ID>. Claim it via TaskUpdate(owner='driver', status=
 )
 ```
 
+`description` is required by the Agent tool — keep it short (a few words is enough; it's just a label for the spawned agent in transcripts).
+
 ### 3.2. Spawn the snippet-author
 
 ```
 Agent(
+  description="Author snippets",
   subagent_type="forge:snippet-author",
   team_name="<TEAM_NAME>",
   name="snippet-author",
@@ -226,6 +233,7 @@ Your task ID is <SNIPPET_AUTHOR_TASK_ID>. Claim it via TaskUpdate(owner='snippet
 
 ```
 Agent(
+  description="Compose spec",
   subagent_type="forge:spec-writer",
   team_name="<TEAM_NAME>",
   name="spec-writer",
@@ -243,12 +251,13 @@ Your task ID is <SPEC_WRITER_TASK_ID>. Claim it via TaskUpdate(owner='spec-write
 
 ```
 Agent(
+  description="Verify spec from cold",
   subagent_type="forge:spec-verifier",
   team_name="<TEAM_NAME>",
   name="spec-verifier",
   prompt="TEAM_NAME: <TEAM_NAME>
 PROJECT_FORGE_ROOT: <FORGE_ROOT>
-PLUGIN_ROOT: ${CLAUDE_PLUGIN_ROOT}
+PLUGIN_ROOT: <PLUGIN_ROOT>
 USER_TASK: <user's task verbatim>
 PROJECT_HINT_SPEC_VERIFIER:
 <spec-verifier.md contents from <FORGE_ROOT>/hints/spec-verifier.md, or 'none' if missing>
@@ -347,7 +356,7 @@ If the hint has no teardown section, skip this phase entirely.
 ### 5.3. Release the pool slot
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-pool-release.sh <POOL_DIR> <SLOT_DIR>
+bash <PLUGIN_ROOT>/scripts/forge-pool-release.sh <POOL_DIR> <SLOT_DIR>
 ```
 
 ### 5.4. Report to the user

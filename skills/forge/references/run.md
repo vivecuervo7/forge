@@ -2,6 +2,8 @@
 
 This reference is loaded by `/forge`'s router for the **run** route. The router has stripped the `run` keyword from the args and captured `RECORD_AS` (label or `none`). What remains is the spec reference — explicit name, `last` / `latest`, or empty (in which case you'll ask the user).
 
+**Placeholder note.** `<PLUGIN_ROOT>` in the bash commands below is a placeholder — substitute the literal path the router captured in SKILL.md phase 1.0. Do **not** use `${CLAUDE_PLUGIN_ROOT}` here: the env var isn't reliably populated in the bash context that runs from this reference.
+
 ## What this route does
 
 Re-runs an existing verified spec via `forge-pool-run-spec.mjs`. No team is spawned — no driver, no snippet-author, no spec-writer, no spec-verifier. Just the spec runner against an existing artifact.
@@ -15,7 +17,7 @@ No pool slot is claimed. The script uses Playwright's ephemeral browser context;
 ### 1.1. Find the project's forge root
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-find-root.sh
+bash <PLUGIN_ROOT>/scripts/forge-find-root.sh
 ```
 
 If it fails (exit non-zero), relay verbatim and stop. The user needs `/forge init` first.
@@ -74,7 +76,7 @@ If there are more than 4, include the most-recently-modified 3 plus "Other (spec
 Compose the invocation. Add `--record-as <RECORD_AS>` only when `RECORD_AS != none`:
 
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-pool-run-spec.mjs \
+node <PLUGIN_ROOT>/scripts/forge-pool-run-spec.mjs \
   --spec <FORGE_ROOT>/specs/<resolved-name>.spec.ts
 # If RECORD_AS is set, append: --record-as <RECORD_AS>
 ```

@@ -95,8 +95,9 @@ function findMatchingClose(text, openIdx, openChar, closeChar) {
 }
 
 function extractSnippetBody(snippetContent, snippetName) {
-  // Find: export async function run(page, args) {
-  const re = /export\s+async\s+function\s+run\s*\(\s*page\s*,\s*args\s*\)\s*\{/
+  // Find the `export async function run(` declaration — tolerates TypeScript
+  // type annotations on parameters (e.g. `run(page: any, args: T = {})`).
+  const re = /export\s+async\s+function\s+run\s*\(/
   const m = snippetContent.match(re)
   if (!m) {
     die(
@@ -105,7 +106,15 @@ function extractSnippetBody(snippetContent, snippetName) {
       7
     )
   }
-  const openBraceIdx = m.index + m[0].length - 1
+  // Locate the matching `)` for the parameter list opening `(`.
+  const openParenIdx = m.index + m[0].length - 1
+  const closeParenIdx = findMatchingClose(snippetContent, openParenIdx, '(', ')')
+  if (closeParenIdx === -1) die(`snippet "${snippetName}" has unbalanced parens`, 7)
+  // Scan forward past optional return-type annotation to find the `{`.
+  const afterParams = snippetContent.slice(closeParenIdx + 1)
+  const braceOffset = afterParams.indexOf('{')
+  if (braceOffset === -1) die(`snippet "${snippetName}" has no function body`, 7)
+  const openBraceIdx = closeParenIdx + 1 + braceOffset
   const closeBraceIdx = findMatchingClose(snippetContent, openBraceIdx, '{', '}')
   if (closeBraceIdx === -1) die(`snippet "${snippetName}" has unbalanced braces`, 7)
   const raw = snippetContent.slice(openBraceIdx + 1, closeBraceIdx).replace(/^\n/, '').replace(/\n\s*$/, '')

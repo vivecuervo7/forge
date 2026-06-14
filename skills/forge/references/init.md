@@ -2,6 +2,8 @@
 
 This reference is loaded by `/forge`'s router for the **init** route. The router has stripped the `init` keyword from the args; the remaining text (possibly empty) is an optional target directory.
 
+**Placeholder note.** `<PLUGIN_ROOT>` in the bash commands below is a placeholder — substitute the literal path the router captured in SKILL.md phase 1.0. Do **not** use `${CLAUDE_PLUGIN_ROOT}` here: the env var isn't reliably populated in the bash context that runs from this reference.
+
 ## What this route does
 
 Scaffolds the canonical `forge/` directory layout into a project. Run this once at the start of using forge against any new project; it sets up the directory structure described in `plugins/forge/docs/project-conventions.md`.
@@ -26,7 +28,7 @@ Everything else under `forge/` (snippets, specs, videos, the pool, transcripts) 
 Run the scaffold script with the target directory. Empty args defaults to PWD:
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-init.sh "$ARGUMENTS"
+bash <PLUGIN_ROOT>/scripts/forge-init.sh "$ARGUMENTS"
 ```
 
 Where `$ARGUMENTS` is the route-stripped remainder (possibly empty).
