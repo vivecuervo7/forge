@@ -42,7 +42,7 @@ Supported on macOS, Linux, and Windows. Forge's scripts are pure Node; cross-pla
 
    That's enough to start. For an unauthenticated site, the scaffold alone is sufficient — forge mints a default slot and goes. For sites with auth or other project-specific behaviour, author hint files in `forge/hints/` (see `forge/hints/README.md` for guidance). All five hints are optional and additive: write only what you need.
 
-On first spec run (or first snippet invocation), forge lazy-installs its Playwright runner into the project's `forge/.runner/` directory. Self-contained per project, visible in the IDE, removed cleanly by `rm -rf forge/` if you ever want to uninstall.
+On first spec run (or first snippet invocation), forge lazy-installs its Playwright runner directly into the project's `forge/` directory (standard `package.json` + `node_modules/` layout). Self-contained per project, visible in the IDE, removed cleanly by `rm -rf forge/` if you ever want to uninstall.
 
 ## Commands
 
@@ -177,7 +177,7 @@ The default scrub fires unless the hint says not to. `## Teardown after each run
 
 ```
 <project>/forge/
-├── hints/                  # committed
+├── hints/                  # committed — your project's knowledge
 │   ├── forge.md
 │   ├── driver.md
 │   ├── snippet-author.md
@@ -189,15 +189,15 @@ The default scrub fires unless the hint says not to. `## Teardown after each run
 │   │   ├── profile/       # chromium profile
 │   │   └── state.json     # { checkedOutBy, lastClaimed, lastReleased }
 │   └── ...
-├── .runner/                # gitignored — lazy-installed Playwright runner
-│   ├── node_modules/      # @playwright/test, esbuild, dotenv
-│   └── package.json
-├── snippets/               # gitignored by default — accreted via author
+├── snippets/               # gitignored — accreted via snippet-author
 ├── specs/                  # gitignored — composed during spec mode
 ├── videos/                 # gitignored — recordings from /forge run
+├── node_modules/           # gitignored — lazy-installed runner deps
+├── package.json            # gitignored — forge-managed runner manifest
+├── playwright.config.ts    # gitignored — scaffolded fallback runner config
 ├── .env                    # gitignored — forge-specific env
-├── playwright.config.ts    # scaffold — fallback if no project runner
-└── .gitignore              # self-ignores; only hints/ tracked by default
+├── .gitignore              # gitignored — self-ignores; only hints/ tracked
+└── README.md               # gitignored — scaffold, points at conventions doc
 ```
 
 Only `hints/` is tracked. Everything else is local per-machine. `forge-init` regenerates the rest from convention. See the scaffold's inline comments for adapting to projects with their own Playwright runner.
