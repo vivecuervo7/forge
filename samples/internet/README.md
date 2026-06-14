@@ -1,19 +1,50 @@
-# internet — the-internet.herokuapp.com
+# internet — exemplar for public, no-auth interaction-class probing
 
-[the-internet.herokuapp.com](https://the-internet.herokuapp.com) is an automation-testing playground that exposes each classic-hard browser interaction on its own page (alerts, frames, drag-and-drop, dynamic loading, shadow DOM, etc.). Each page is small and self-contained, which makes it a clean target for asking "how does forge handle X interaction class?" without confounding factors.
+This sample is a `forge/`-shaped directory showing what a good setup looks like for a site of small isolated interaction patterns — dialogs, drag-and-drop, shadow DOM, async loading, framed editors. The target is [the-internet.herokuapp.com](https://the-internet.herokuapp.com), a deliberately-built playground for classic-hard browser interactions.
 
-## Runs
+**If your project is probe-shaped (many small interactions, no transactional flows, no auth), mirror this sample.**
 
-- [`run-1/`](./run-1) — **bare-minimum hints.** No hint files at all; the site is fully public and needs no auth.
-- [`run-2/`](./run-2) — **comprehensive `driver.md`.** Probe map, per-probe gotchas, dialog-listener pattern, drag-and-drop notes.
+## What's here
 
-## What to expect
+| File | Purpose |
+|---|---|
+| [`hints/driver.md`](./hints/driver.md) | A per-probe map (interaction class → path), known gotchas (HTML5 drag-and-drop's `dispatchEvent` fallback, dialog-listener ordering, iframe descent), and the public test credentials for the login probe. **Shows what a `driver.md` looks like when it's a guidebook rather than a selector dump.** |
+| `playwright.config.ts` | Scaffolded by `/forge init`. |
+| `.gitignore` | Scaffolded by `/forge init`. |
 
-Both runs drove the same five probes: `/login`, `/dynamic_loading/1`, `/javascript_alerts`, `/drag_and_drop`, `/shadowdom`. These cover auth, async rendering, native dialogs, HTML5 drag-and-drop, and shadow DOM respectively — the interaction classes that historically gave automation frameworks trouble.
+## What's not here yet
 
-The interesting comparison isn't "did forge pass?" — it did on every probe in both runs. The interesting comparison is **what the snippets look like**:
+The `snippets/` directory will be populated when you run forge against this target. To generate it yourself, drive any of the probes:
 
-- Run-1 snippets are scoped tightly to the exact value the driver encountered. `accept-js-confirm-alert` accepts the alert and reads `#result`, end of story.
-- Run-2 snippets are parameterised along dimensions the hint flagged as interesting variants. `javascript-alerts-confirm-and-capture` takes a `dialogAction` arg ('accept' or 'dismiss'); `dynamic-loading-start-and-capture` takes a `variant` arg covering both `/dynamic_loading/1` and `/2`.
+```
+cd samples/internet
+/forge log in as tomsmith
+/forge open the shadow DOM page and capture the first list item
+/forge accept the JS alert and capture the result text
+```
 
-Read `run-1/snippets/` and `run-2/snippets/` side by side to see the difference compose into the library shape.
+Each drive will accrete a snippet (or several) into `snippets/`, parameterised along whatever dimensions the hint flagged as variants.
+
+## What this exemplar demonstrates
+
+**The hint file's job is to encode coverage intent, not to teach Playwright.** The bare driver already picks `data-test` selectors over text matchers, uses modern Playwright primitives, and pierces shadow DOM correctly. Your hint file is for what the driver can't derive from looking at the page — variants worth parameterising over, defensive patterns your team has learned the hard way, known framework quirks.
+
+A good illustration in this sample: the hint flags HTML5 drag-and-drop's `dragTo` as unreliable on the target page, so a drag-and-drop snippet should use `dispatchEvent` instead — even though `dragTo` happens to work. **Useful if your team has real production pain with one approach; informative if your hint has a stale rule.** Audit hints periodically.
+
+## How to read this sample for your own project
+
+1. **Open `hints/driver.md`** and notice it's mostly a guidebook of "here's how to do X on this kind of page" rather than a selector dump. For a probe-shaped surface, that's the right shape.
+
+2. **When you author your own snippets** (or watch forge author them after a drive), ask: "what dimension would a future caller want to vary?" — and make that an arg. The hint's variant documentation gives snippet-author concrete dimensions to parameterise over.
+
+3. **For auth-bearing scenarios**, see the [shop sample](../shop/) where auth is meaningful and multi-account scenarios apply.
+
+## Why this hint shape — findings from earlier runs
+
+Earlier forge runs against this target (design-phase field tests) gave us evidence for several choices the hint encodes:
+
+- **The bare driver already handles modern Playwright idioms.** Drives against five probes in this collection (login, dynamic loading, JS alerts, drag-and-drop, shadow DOM) all succeeded without a `driver.md` — five for five. The bare driver picks `data-test` / `#id` selectors over text matchers, uses modern primitives (`dragTo`, `page.once('dialog', d => d.accept())` ordered before the click, `<select>` options for React date pickers), and pierces shadow DOM via plain `locator()`. **The hint file is not for teaching Playwright** — it's for encoding coverage intent and project-specific gotchas the driver can't derive from looking at the page.
+
+- **Hints shape parameterisation, not pass-rate.** With probes flagged as variants in the hint (`dialogAction = accept | dismiss`, dynamic-loading `variant = 1 | 2`, drag-and-drop `sourceId` / `targetId`), snippet-author writes generic snippets. Without the hint, snippet-author scopes each snippet to the specific case the driver encountered. **Same drives, different snippet shape** — and snippet shape determines whether future specs compose cleanly or have to write fresh code each time.
+
+- **Defensive choices encoded in hints stick.** The hint flags HTML5 drag-and-drop's `dragTo` as unreliable on the target page, so the resulting snippet uses `dispatchEvent` instead. Earlier runs confirmed both approaches work on this page — the hint encodes a defensive preference rather than a fix. Useful if your team has real production pain with the easier primitive; informative if your hint has a stale rule.
