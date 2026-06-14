@@ -2,3 +2,16 @@
 # runs against /forge — graded outputs, benchmarks, timing data. The
 # evals/evals.json is the committed spec; iteration outputs are ephemeral.
 skills/forge-workspace/
+
+# Forge-run outputs inside the sample directories. The sample dirs are
+# committed documentation; what forge produces locally when run against
+# them (snippets, specs, recordings, lazy-installed runner deps) is
+# local-only and shouldn't pollute the repo.
+samples/*/snippets/
+samples/*/specs/
+samples/*/videos/
+samples/*/test-results/
+samples/*/node_modules/
+samples/*/package.json
+samples/*/.env
+samples/*/.cookies
