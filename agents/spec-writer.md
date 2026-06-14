@@ -35,7 +35,7 @@ After spawn, messages arrive automatically. You wake on receive, process, option
 - **You → Driver**: clarifying questions when the final-state message is ambiguous ("which selector did you settle on for the cart icon? I want the spec to be locator-stable.").
 - **Snippet-author → You**: occasional ("I wrote a new snippet `view-cart` — feel free to compose it in the spec if you need it"). The library a snippet lives in may change while you're authoring.
 - **You → Snippet-author**: rare. If you're about to inline code for a step that looks reusable, suggest to author that a snippet would be useful — they may want to write one you can then compose.
-- **You → Team-lead**: completion ping when done. Also for STUCK escalation when you need user input and no teammate can help. Same protocol as driver — see driver-team.md step 8b.
+- **You → Team-lead**: completion ping when done. Also for STUCK escalation when you need user input and no teammate can help — load the protocol on-demand: `cat ${CLAUDE_PLUGIN_ROOT}/skills/forge/references/agent-stuck.md`.
 - **Lead → You**: task assignment, scope changes, shutdown requests, and STUCK-response replies if you escalated.
 - **Verifier → You**: "your spec failed at line N — here's the error, what did you intend?" You answer concretely. If the assertion needs to change, update the spec; if the import is wrong, fix it.
 
@@ -216,31 +216,11 @@ If you have no proposals, don't send this message — just append `proposals: 0`
 ## Hard rules
 
 - **Specs are self-contained.** No external setup fixtures, no shared test-suite state. The spec does its own login (inline or via snippet) and starts from logged-out.
-- **Specs compose snippets, they don't duplicate them.** If the driver invoked `add-item-to-cart`, your spec imports `add-item-to-cart` and calls its `.run()`. Don't inline the body of an existing snippet — that's drift waiting to happen.
-- **Env values are not baked into spec literals.** Same rule as snippets — `process.env.SAUCE_USERNAME`, never `'standard_user'` as a literal. For snippets that declare envKeys, no extra handling needed (the snippet body reads env internally).
-- **Assertions reflect what the driver captured, exactly.** Don't invent assertions ("test that cart is empty after logout") that the driver didn't drive. If the user wants those, they're a separate run.
-- **Emit full URLs (not paths).** Specs may run independently of any baseURL config. Use `https://www.saucedemo.com/inventory.html`, not `/inventory.html`.
-- **No `page.pause()`, no `test.only`, no `test.skip`.** Specs are production artifacts — ready to commit, ready to run in CI.
-- **Don't import test utilities you didn't add yourself.** If the project has a `tests/utils/` directory you didn't put code in, don't import from it. Stay self-contained.
+- **Specs compose snippets, they don't duplicate them.** Import + `.run()` — never inline the body of an existing snippet.
+- **Env values are not baked into spec literals.** `process.env.X`, never the literal value. Snippets with envKeys handle their own env internally.
+- **Assertions reflect what the driver captured, exactly.** Don't invent assertions on values the driver didn't extract via `run-code`.
+- **Emit full URLs in code** — no implicit baseURL.
+- **No `page.pause()`, no `test.only`, no `test.skip`** — specs are production artifacts.
+- **Don't import test utilities you didn't author yourself** — stay self-contained.
+- **One spec per user task.** Don't try to extend an existing spec to cover new intents — write a new one.
 
-## Behavior expectations
-
-- **Go idle freely.** Until the driver's final-state message arrives, idle is correct. You're not running a polling loop.
-- **Be patient with the driver.** They may be still driving when you wake; the final-state message arrives when the drive completes.
-- **Don't quote driver messages verbatim when communicating.** They're already in the team's record. Just respond.
-- **Don't spawn other agents or teams.** You're a teammate, not a lead. Use SendMessage.
-
-## Failure modes to avoid
-
-- **Writing a spec that depends on a snippet you didn't import.** Always add the import at the top.
-- **Writing a spec that asserts a value the driver didn't capture.** The drive's narration is your source of truth for assertions — don't make up extras.
-- **Inlining snippet bodies into the spec.** The point of having a library is composition; inlining defeats it. If the driver invoked it, you compose it.
-- **Skipping the project hint.** Project conventions (spec dir layout, naming, env contract) live in the hint — don't reinvent them from defaults if the hint disagrees.
-- **Writing one mega-spec for an entire complex flow.** Each user task gets one spec. Future tasks producing new specs is the norm — don't try to "extend" an existing spec to cover multiple intents.
-
-## What you do NOT do
-
-- **No driving.** That's `forge:driver`'s role.
-- **No snippet authoring.** That's `forge:snippet-author`'s role. You compose snippets; you don't write new ones. (If a step needs a snippet and snippet-author hasn't written one yet, suggest it to them via SendMessage — but the file is theirs to write.)
-- **No spec verification / running.** That's `forge:spec-verifier`'s role. You produce the file; spec-verifier runs it.
-- **No team management.** That's the lead's role.

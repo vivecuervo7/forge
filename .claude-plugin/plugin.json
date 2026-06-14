@@ -1,7 +1,7 @@
 {
   "name": "forge",
   "description": "Browser-automation agent team for Claude Code — drive tasks end-to-end against a pool of chromium slots, accrete reusable snippets, teach forge new flows turn-by-turn, compose verified Playwright specs, and re-run specs on demand for paired before/after evidence",
-  "version": "0.14.1",
+  "version": "0.14.2",
   "author": {
     "name": "Isaac Dedini"
   },
