@@ -4,7 +4,7 @@ description: "Browser-automation agent team for Claude Code. Six routes under on
 model: sonnet
 effort: medium
 argument-hint: "[spec|run|init|export] <args>"
-allowed-tools: Read, Glob, Skill, AskUserQuestion, Bash(bash **/forge/scripts/*), Bash(node **/forge/scripts/*), Bash(direnv:*), Bash(playwright-cli:*), Bash(mkdir:*), Bash(jq:*), Bash(cat:*), Bash(echo:*), Bash(ls:*), Agent, SendMessage, TeamCreate, TeamDelete, TaskCreate, TaskList, TaskGet, TaskUpdate
+allowed-tools: Read, Edit, Write, Glob, Skill, AskUserQuestion, Bash(bash **/forge/scripts/*), Bash(node **/forge/scripts/*), Bash(direnv:*), Bash(playwright-cli:*), Bash(mkdir:*), Bash(jq:*), Bash(cat:*), Bash(echo:*), Bash(ls:*), Agent, SendMessage, TeamCreate, TeamDelete, TaskCreate, TaskList, TaskGet, TaskUpdate
 ---
 
 # /forge

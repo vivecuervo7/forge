@@ -190,13 +190,80 @@ Then SendMessage `team-lead` with the same completion summary so the lead knows 
 SendMessage(
   to="team-lead",
   summary="snippet-author task complete",
-  message="Snippet-author task <id> complete. Wrote N snippet(s): <name1>, <name2>, ... (or 'no new snippets — drive's work was already covered by existing library'). Going idle."
+  message="Snippet-author task <id> complete. Wrote N snippet(s): <name1>, <name2>, ... (or 'no new snippets — drive's work was already covered by existing library'). proposals: <M>. Going idle."
 )
 ```
+
+The `proposals: M` tail tells the lead whether to wait for a separate proposals message in Phase 4.5. See "Surfacing hint proposals" below.
 
 The team-lead ping is the authoritative completion signal — idle notifications alone aren't sufficient (they fire after every turn, including ones where you're still working).
 
 Then go idle. The lead may shut you down via SendMessage with shutdown_request — respond with shutdown_response to confirm.
+
+## Surfacing hint proposals
+
+Between your completion ping and going idle, send the lead a `proposals` message containing any patterns from this session worth lifting into the project's hint files. Be conservative — one precise proposal beats five marginal ones. If you have nothing worth proposing, append `proposals: 0` to your completion-ping summary instead of sending a separate message.
+
+### What to observe (snippet-author-specific)
+
+- **Code patterns repeated across snippets** authored this session. If 3+ snippets use the same idiom (e.g., `dispatchEvent('click')` on form elements, `if (!X) throw` for credential checks, a specific waitForURL pattern), the pattern is convention-worthy.
+- **Naming convention emerging**. If your snippets have a consistent shape (`<verb>-<resource>(-modifier)`), that's a snippet-author.md hint when not already documented.
+- **Composition patterns**. If snippet X imports snippet Y across multiple new snippets, Y is foundational and worth documenting as such. Same for "always-paired" snippets (create + delete).
+- **Parameterization defaults** that consistently match user intent. If you keep defaulting an arg to the same value across snippets, the convention belongs in the hint.
+- **Library-coverage observations**. If you authored multiple snippets in one namespace, the namespace itself is now established and might be worth documenting.
+
+### Heuristics for proposal-worthiness
+
+- **Recurring**: observed in at least 2 snippets (for code patterns) or 3+ (for naming/composition conventions).
+- **Not already documented**: check against the inlined `PROJECT_HINT_SNIPPET_AUTHOR` content.
+- **Mechanism-level**: a pattern about HOW to write snippets, not a one-off implementation detail.
+- **Actionable**: name a specific edit.
+- **Project-specific**: about the project's snippet library, not about forge's internals.
+
+### Action types
+
+- **ADD**: new section or new prose under an existing heading.
+- **AMEND**: modify existing prose. Use when an existing hint is incomplete or wrong (e.g., the hint says "use .click()" but in practice `dispatchEvent` is needed).
+- **REMOVE**: delete existing prose. **Higher bar than ADD**: the existing prose must have actively contributed to a failure mode this session, not just "didn't apply." Bias against REMOVE.
+
+### Format
+
+```
+SendMessage(
+  to="team-lead",
+  summary="proposals: <N>",
+  message="PROPOSALS
+count: <N>
+
+---
+ID: 1
+CATEGORY: snippet-author.md
+ACTION: ADD | AMEND | REMOVE
+TARGET: <section heading, or quoted existing prose for AMEND/REMOVE, or empty for ADD-new-section>
+OBSERVATION: <one-line summary>
+EVIDENCE: <concrete: snippet names where the pattern appears, line refs, occurrences>
+SUGGESTED_EDIT: |
+  <markdown prose to add or replace — empty for REMOVE>
+
+(optional)
+ALTERNATIVES:
+- A: <option>
+- B: <option>
+LEAN: A | B | none
+
+(optional)
+RATIONALE: <one-line>
+
+---
+ID: 2
+...
+"
+)
+```
+
+If an observation belongs in two hint files, emit two atomic proposals — one per CATEGORY.
+
+If you have no proposals, don't send this message — just append `proposals: 0` to your completion-ping summary.
 
 ## Teach mode
 

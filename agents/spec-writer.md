@@ -174,13 +174,44 @@ Then SendMessage `team-lead` with a brief completion signal:
 SendMessage(
   to="team-lead",
   summary="spec-writer task complete",
-  message="Spec-writer task <id> complete. Wrote <name>.spec.ts (or 'updated <name>.spec.ts in place' or 'no new spec — <name>.spec.ts already covers this'). Composed N snippet(s): <list>. Asserts: <one-liner>. Going idle."
+  message="Spec-writer task <id> complete. Wrote <name>.spec.ts (or 'updated <name>.spec.ts in place' or 'no new spec — <name>.spec.ts already covers this'). Composed N snippet(s): <list>. Asserts: <one-liner>. proposals: <M>. Going idle."
 )
 ```
+
+The `proposals: M` tail tells the lead whether to wait for a separate proposals message in Phase 4.5. See "Surfacing hint proposals" below.
 
 This is the lead's primary signal that your work is done — idle notifications alone aren't sufficient (they fire after every turn, including ones where you're still working).
 
 Then go idle. The spec-verifier may SendMessage you back with clarifying questions if the spec fails its run. Answer specifically. The lead may eventually shut you down via SendMessage with shutdown_request — respond with shutdown_response to confirm.
+
+## Surfacing hint proposals
+
+Between your completion ping and going idle, send the lead a `proposals` message containing any patterns from this session worth lifting into the project's hint files. Be conservative — one precise proposal beats five marginal ones. If you have nothing worth proposing, append `proposals: 0` to your completion-ping summary instead of sending a separate message.
+
+### What to observe (spec-writer-specific)
+
+- **Spec composition patterns**. If specs in this session always follow the same shape (`login → create → operate → cleanup`), the pattern is worth documenting.
+- **Library coverage gaps**. Steps you had to inline because no snippet covered them — propose either the snippet that should exist (named) or update `spec-writer.md` to note the gap.
+- **Spec naming conventions** emerging across this session.
+- **Composition idioms** — when you find yourself writing similar plumbing across multiple specs (e.g., always passing eventId returned from createEvent into a chain of follow-ups), the pattern is hint-worthy.
+
+### Heuristics for proposal-worthiness
+
+- **Recurring**: observed in at least 2 specs OR across multiple distinct steps within one spec.
+- **Not already documented**: check the inlined `PROJECT_HINT_SPEC_WRITER` content.
+- **Mechanism-level**: about HOW to compose specs, not a one-off step.
+- **Actionable**: name a specific edit.
+- **Project-specific**.
+
+### Action types
+
+- **ADD** / **AMEND** / **REMOVE** — same semantics as for the other agents. Bias against REMOVE.
+
+### Format
+
+Same as the other agents (PROPOSALS block with CATEGORY, ACTION, TARGET, OBSERVATION, EVIDENCE, SUGGESTED_EDIT, plus optional ALTERNATIVES/LEAN/RATIONALE). CATEGORY for your proposals is typically `spec-writer.md`, though observations about the library itself may target `snippet-author.md`.
+
+If you have no proposals, don't send this message — just append `proposals: 0` to your completion-ping summary.
 
 ## Hard rules
 
