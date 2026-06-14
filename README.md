@@ -146,6 +146,12 @@ For parallel runs against the same project, the constraint is whatever your back
 - **`driver.md`** — worth writing once you've watched a few drives and noticed the driver enumerating selectors the docs could've handed it.
 - **The other three** — write only if the project-default behaviour collides with what you want.
 
+### Hints grow during use
+
+Hints don't need to be complete at start. While working, each agent can surface **proposals** — patterns it noticed during a run that would belong in a hint file. The team-lead relays these to you at the end of a session: a short observation, evidence (which snippet, which selector, what behaviour was non-obvious), and a suggested edit. You accept, modify, or reject.
+
+This means a useful hint set can accrete from real driving rather than being front-loaded. Start with the env contract in `forge.md` and the canonical selectors in `driver.md`; the rest grows as the agents surface what they actually find useful. See [`samples/shop/forge/hints/snippet-author.md`](./samples/shop/forge/hints/snippet-author.md) for a worked example — that file was proposed by `forge:snippet-author` during a real drive, not hand-authored, after it noticed a recurring precondition pattern across two snippets.
+
 ### Setup / teardown
 
 `forge.md`'s `## Setup before each run` section drives the lead's pre-drive work. Examples:

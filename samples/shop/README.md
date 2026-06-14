@@ -15,8 +15,9 @@ This sample is a project shaped like one that's had `/forge init` run on it — 
 | `forge/snippets/search-for-product.ts` | **Seeded** — produced by a real forge run against this hint set. Submits a search and waits for the result list. |
 | `forge/snippets/open-first-search-result.ts` | **Seeded** — clicks the first product card on the current page. |
 | `forge/snippets/add-product-to-cart.ts` | **Seeded** — adds the currently-displayed product to the cart. |
+| `forge/hints/snippet-author.md` | **Proposed** during the same seed run — `forge:snippet-author` noticed both search snippets above used the same precondition pattern (page URL doesn't change after Angular renders search results) and proposed lifting that into a hint. A worked example of the proposal mechanism; see the top-level README's "Hints grow during use" section. |
 
-The seeded snippets give the walkthrough below a starting library to reuse against. They're authentic forge output, not hand-edited.
+The seeded snippets and the proposed hint give the walkthrough below a starting library to reuse against. They're authentic forge output, not hand-edited.
 
 ## Walkthrough — see forge work, prompt by prompt
 
