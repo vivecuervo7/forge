@@ -10,34 +10,44 @@ This sample is a `forge/`-shaped directory showing what a good setup looks like 
 |---|---|
 | [`hints/driver.md`](./hints/driver.md) | A per-probe map (interaction class → path), known gotchas (HTML5 drag-and-drop's `dispatchEvent` fallback, dialog-listener ordering, iframe descent), and the public test credentials for the login probe. **Shows what a `driver.md` looks like when it's a guidebook rather than a selector dump.** |
 | `playwright.config.ts` | Scaffolded by `/forge init`. |
-| `.gitignore` | Scaffolded by `/forge init`. |
+| `snippets/dynamic-loading-start-and-capture.ts` | **Seeded** — produced by a real forge run. Parameterised on `variant: '1' \| '2'` so one snippet covers both example pages. |
 
-## What's not here yet
+## Walkthrough — see how the hint shapes snippet generality
 
-The `snippets/` directory will be populated when you run forge against this target. To generate it yourself, drive any of the probes:
+Run these from inside `samples/internet/`.
+
+### 1. Library reuse — variant 2 reuses the seed
 
 ```
-cd samples/internet
-/forge log in as tomsmith
-/forge open the shadow DOM page and capture the first list item
+/forge load the second dynamic loading variant and capture the rendered text
+```
+
+The driver finds the seeded snippet and invokes it with `variant: '2'`. No new authoring.
+
+**What to look for:** one "invoked" step, no new files in `snippets/`.
+
+**What this demonstrates:** when the hint flags a variant in advance, snippet-author writes a single parameterised snippet that covers the variant space. Future tasks that hit any variant reuse the same snippet.
+
+### 2. Fresh authoring — drive a different probe
+
+```
 /forge accept the JS alert and capture the result text
 ```
 
-Each drive will accrete a snippet (or several) into `snippets/`, parameterised along whatever dimensions the hint flagged as variants.
+Different probe (JS alerts), no library coverage yet. Snippet-author authors a new snippet.
 
-## What this exemplar demonstrates
+**What to look for:** a new `snippets/javascript-alerts-confirm-and-capture.ts` (or similarly-named) appears.
 
-**The hint file's job is to encode coverage intent, not to teach Playwright.** The bare driver already picks `data-test` selectors over text matchers, uses modern Playwright primitives, and pierces shadow DOM correctly. Your hint file is for what the driver can't derive from looking at the page — variants worth parameterising over, defensive patterns your team has learned the hard way, known framework quirks.
+**What this demonstrates:** the bare driver already handles modern Playwright idioms (`page.once('dialog', d => d.accept())` ordered before the click is the canonical pattern). The hint's job is to encode coverage intent and project-specific gotchas — not to teach Playwright.
 
-A good illustration in this sample: the hint flags HTML5 drag-and-drop's `dragTo` as unreliable on the target page, so a drag-and-drop snippet should use `dispatchEvent` instead — even though `dragTo` happens to work. **Useful if your team has real production pain with one approach; informative if your hint has a stale rule.** Audit hints periodically.
+### 3. Optional — keep going
 
-## How to read this sample for your own project
+```
+/forge open the drag-and-drop page and swap columns A and B
+/forge open the shadow DOM page and capture the first list item
+```
 
-1. **Open `hints/driver.md`** and notice it's mostly a guidebook of "here's how to do X on this kind of page" rather than a selector dump. For a probe-shaped surface, that's the right shape.
-
-2. **When you author your own snippets** (or watch forge author them after a drive), ask: "what dimension would a future caller want to vary?" — and make that an arg. The hint's variant documentation gives snippet-author concrete dimensions to parameterise over.
-
-3. **For auth-bearing scenarios**, see the [shop sample](../shop/) where auth is meaningful and multi-account scenarios apply.
+Each adds a snippet. The hint flags HTML5 `dragTo` as unreliable on this page, so the drag-and-drop snippet should use `dispatchEvent` instead — even though `dragTo` happens to work here. Useful if your team has real production pain with one approach; informative if your hint has a stale rule.
 
 ## Why this hint shape — findings from earlier runs
 
@@ -48,3 +58,7 @@ Earlier forge runs against this target (design-phase field tests) gave us eviden
 - **Hints shape parameterisation, not pass-rate.** With probes flagged as variants in the hint (`dialogAction = accept | dismiss`, dynamic-loading `variant = 1 | 2`, drag-and-drop `sourceId` / `targetId`), snippet-author writes generic snippets. Without the hint, snippet-author scopes each snippet to the specific case the driver encountered. **Same drives, different snippet shape** — and snippet shape determines whether future specs compose cleanly or have to write fresh code each time.
 
 - **Defensive choices encoded in hints stick.** The hint flags HTML5 drag-and-drop's `dragTo` as unreliable on the target page, so the resulting snippet uses `dispatchEvent` instead. Earlier runs confirmed both approaches work on this page — the hint encodes a defensive preference rather than a fix. Useful if your team has real production pain with the easier primitive; informative if your hint has a stale rule.
+
+## For auth-bearing scenarios
+
+This target has no auth. See the [shop sample](../shop/) for the auth + multi-account pattern.
