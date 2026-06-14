@@ -143,26 +143,29 @@ export const meta = {
     // omit entirely when the body's first action is page.goto(...)
   },
   args: { /* declare parameter shape with type hints */ },
-  // envKeys: ['SAUCE_USERNAME', 'SAUCE_PASSWORD'],  // only when the body references process.env.X
   tags: ['auto-authored'],
 }
 
 export async function run(page, args) {
-  // body — what the driver actually did, with parameterizable values
-  // preserved as args.foo refs where appropriate
-  await page.goto('https://www.saucedemo.com/');
-  await page.locator('input#user-name').fill(process.env.SAUCE_USERNAME);
-  // ... etc
+  const { username, password, baseURL = 'https://app.example.com' } = args
+  if (!username) throw new Error('username arg is required')
+  if (!password) throw new Error('password arg is required')
+
+  await page.goto(`${baseURL}/login`);
+  await page.locator('input#user-name').fill(username);
+  // ... etc — all credentials and config come from args
 }
 ```
 
-**Name** — lowercase kebab-case, intent-level, specific. `login-as-persona` not `login`. `add-item-to-cart` not `add`.
+**Name** — lowercase kebab-case, intent-level, specific. `login` not `login-as-admin` (snippets are persona-agnostic — the persona lives in the caller's args). `add-item-to-cart` not `add`.
 
 **Description** — one sentence, written so a future reader scanning a snippet listing knows whether to use it.
 
-**args** — declare the parameter shape (with type hints in JSDoc-ish comments if helpful). The body references `args.foo` for things that should vary per invocation (item name, persona name, etc.). For things that come from env, use `process.env.X`.
+**args** — declare the parameter shape (with type hints in JSDoc-ish comments). The body destructures from args. **All sensitive values (credentials, tokens) MUST be args — never read from process.env directly.** The caller (driver in drive mode, spec body in spec mode) decides where credentials come from and passes them in. This keeps snippets persona-agnostic and reusable across credential schemes.
 
-**envKeys** — when the body references `process.env.X`, add a `meta.envKeys` array listing every key. The runner uses this list to know which env vars to include in the sandbox's `process = { env: ... }` shim. **envKeys is informational, not enforcing**: missing keys at runtime are skipped, not fatal. The snippet body is authoritative about what's actually required — use `if (!X) throw new Error(...)` for hard requirements (credentials, identifiers) and `?? 'default'` for soft fallbacks (base URLs, timeouts). Always declare every key the body references, even if the body has a fallback; declaring soft keys lets the runner pass through the user's override when set without forcing them to set it.
+For non-sensitive defaults (baseURL, timeouts), inline a hardcoded fallback in the args destructure (`baseURL = 'https://...'`). Callers can still override by passing a value; the default keeps the snippet usable without one. Don't reach into `process.env` for these either — args + default is enough.
+
+The `meta.envKeys` field no longer exists. Snippets that have credentials-as-args don't need to declare env keys; the caller handles env resolution via `$env.KEY` substitution in the invoker.
 
 ### 8. Mark task complete and signal the lead (and spec-writer, if present)
 
@@ -268,7 +271,7 @@ If you have no proposals, don't send this message — just append `proposals: 0`
 ## Hard rules
 
 - **Preserve what the driver actually did.** Don't fabricate cleaner versions. If the driver used `input#user-name`, your snippet uses `input#user-name`.
-- **Never bake env values into snippets.** Credentials, per-slot config — `process.env.X` refs in the body, declared in `meta.envKeys`. Never inline literals.
+- **Never bake env values into snippets.** Credentials and per-persona config come from args. Snippet body destructures from args; never reads `process.env` for sensitive values. The caller (driver or spec) resolves env and passes it in.
 - **No session-specific arg defaults.** Don't default `firstName` to whatever the driver typed. Required args stay required.
 - **Emit full URLs in `page.goto(...)`** — no implicit baseURL.
 - **Snippets are pure runner functions.** No `expect()`, no assertions, no logging — those belong in specs.

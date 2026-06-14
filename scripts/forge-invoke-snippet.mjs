@@ -1,37 +1,29 @@
 #!/usr/bin/env node
-// forge-pool-invoke-snippet.mjs — invoke a forge snippet against a slot's chromium.
+// forge-invoke-snippet.mjs — invoke a forge snippet against a playwright-cli session.
 //
-// Counterpart to forge-pool-run-code.mjs but for prebuilt snippets. The snippet is
-// a .ts file exporting `meta` (description, args, envKeys, preconditions) and a
-// `run(page, args)` function. The snippet may also have module-internal helpers,
-// constants, and relative imports of other snippets.
+// The snippet is a .ts file exporting a `run(page, args)` function and an
+// optional `meta` block (description, args, tags). Snippets are pure
+// functional units: they take their config (including credentials) as args
+// and don't read process.env. The CALLER decides what credentials to pass.
 //
 // What this script does:
 //
-//   1. Reads `meta.envKeys` directly from the snippet's raw source via regex.
-//      It does NOT dynamically import the snippet — Node 24's strict ESM
-//      resolver rejects extensionless relative imports against .ts files,
-//      which breaks the moment a snippet composes another snippet.
-//   2. Resolves declared envKeys from the slot's .env (when --slot is given)
-//      merged with this process's env. process.env wins, so user shell
-//      direnv layers on top of slot values cleanly. envKeys is treated as
-//      informational: missing keys are skipped, not fatal — the snippet
-//      body decides what's actually required (via throws or fallbacks).
-//   3. Bundles the snippet with esbuild — `--bundle --platform=node
+//   1. Resolves `$env.KEY` references in --args. Any string-valued arg that
+//      starts with `$env.` is replaced with `process.env[KEY]` BEFORE the
+//      args cross the playwright-cli sandbox boundary. This keeps literal
+//      credential values out of the tool-call transcript — only the env
+//      reference appears in stdout/stderr capture.
+//   2. Bundles the snippet with esbuild: `--bundle --platform=node
 //      --format=esm --external:playwright --external:@playwright/test`.
-//      Bundling is load-bearing: it transpiles TS types away, inlines
+//      Bundling is load-bearing — it transpiles TS types away, inlines
 //      cross-snippet relative imports, and produces a single self-contained
-//      JS blob ready to cross the playwright-cli sandbox boundary.
-//   4. Strips `export` keywords from the bundle output so all names live in
+//      JS blob ready to cross the sandbox boundary.
+//   3. Strips `export` keywords from the bundle output so all names live in
 //      local scope inside the wrapped `async page => { ... }` function.
-//   5. Injects a `const process = { env: {...} }` shim containing only the
-//      declared envKeys, so `process.env.X` references inside the bundle
-//      resolve in the browser-side sandbox (which doesn't expose Node's
-//      process object).
-//   6. Wraps the bundle as `async page => { <shim>; <bundle>; const __args
-//      = <args-json>; return await run(page, __args); }` and passes the
-//      whole thing to `playwright-cli -s=<session> run-code`.
-//   7. Forwards stdout/stderr/exit-code verbatim.
+//   4. Wraps the bundle as `async page => { <bundle>; const __args =
+//      <args-json-with-env-resolved>; return await run(page, __args); }`
+//      and passes the whole thing to `playwright-cli -s=<session> run-code`.
+//   5. Forwards stdout/stderr/exit-code verbatim.
 //
 // Why the bundler approach: an earlier version tried `mod.run.toString()`
 // over a dynamically-imported snippet. That broke in five distinct ways:
@@ -41,16 +33,18 @@
 // blocked inside the run-code VM sandbox itself. esbuild + bundling
 // solves all five at once.
 //
-// Esbuild ships with the plugin runner. First invocation may trigger a
-// ~30s install at ~/.claude/.vive-claude/forge/runner/; subsequent calls
-// (across forge projects on the machine) are free.
-//
 // Usage:
-//   forge-pool-invoke-snippet.mjs -s=<session> --snippet <path> [--args '<json>'] [--slot <dir>]
+//   forge-invoke-snippet.mjs -s=<session> --snippet <path> [--args '<json>']
+//
+// $env.KEY references in --args:
+//   --args '{"username":"$env.ADMIN_USERNAME","password":"$env.ADMIN_PASSWORD"}'
+// Each $env.KEY is resolved to process.env[KEY] before reaching the sandbox.
+// Missing keys cause a fatal error.
 //
 // Exit codes:
 //   0   success — playwright-cli output forwarded verbatim
 //   2   usage / arg error / invalid JSON / snippet missing run / bundler failure
+//   3   $env.KEY referenced but KEY not in process.env
 //   4   playwright-cli not installed
 //   5   spawn error
 //   any other — playwright-cli's exit code is propagated
@@ -58,20 +52,15 @@
 import { spawnSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
-import { loadSlotEnv } from './forge-slot-env.mjs'
 import { ensureRunnerDeps, esbuildBinFor, loadFromRunner } from './forge-ensure-runner.mjs'
 
 function die(msg, code = 2) {
-  console.error('forge-pool-invoke-snippet:', msg)
+  console.error('forge-invoke-snippet:', msg)
   process.exit(code)
 }
 
-// Parse with mri. Snippet path is required, so we ensure runner deps first
-// using the snippet path's derived forge root.
-//
-// Bootstrap detail: we can't load mri until runner deps are installed, but
-// we need to know forgeRoot to find the runner. Resolve the snippet path
-// from raw argv just for that.
+// Bootstrap mri load — we need the snippet path to derive forgeRoot before
+// runner deps are available. Read it from raw argv first.
 function rawArgValue(name, short = null) {
   const av = process.argv.slice(2)
   for (let i = 0; i < av.length; i++) {
@@ -91,7 +80,7 @@ ensureRunnerDeps(forgeRoot)
 
 const { default: mri } = await loadFromRunner(forgeRoot, 'mri')
 const args = mri(process.argv.slice(2), {
-  string: ['session', 'snippet', 'args', 'slot'],
+  string: ['session', 'snippet', 'args'],
   alias: { s: 'session' },
   default: { args: '{}' },
 })
@@ -99,7 +88,6 @@ const args = mri(process.argv.slice(2), {
 const session = args.session ?? null
 const snippetPath = args.snippet
 const argsJson = args.args
-const slot = args.slot ?? null
 
 if (!session) die('missing -s=<session-name>')
 
@@ -108,6 +96,26 @@ try {
   parsedArgs = JSON.parse(argsJson)
 } catch (e) {
   die(`invalid --args JSON: ${e.message}`)
+}
+
+// Resolve $env.KEY references in parsedArgs. Sensitive values (credentials)
+// pass through this path; their literal values land in the wrapped code only,
+// never in the tool-call transcript.
+const resolvedArgs = {}
+for (const [k, v] of Object.entries(parsedArgs)) {
+  if (typeof v === 'string' && v.startsWith('$env.')) {
+    const key = v.slice(5)
+    if (process.env[key] === undefined) {
+      die(
+        `$env.${key} referenced in args, but ${key} is not in process.env. ` +
+        `Set the env var (via direnv, shell export, or forge/.env loaded by playwright config) and retry.`,
+        3
+      )
+    }
+    resolvedArgs[k] = process.env[key]
+  } else {
+    resolvedArgs[k] = v
+  }
 }
 
 // Read raw source. NEVER dynamically import — Node 24's strict ESM rejects
@@ -120,46 +128,12 @@ try {
   die(`failed to read snippet ${snippetPath}: ${e.message || e}`)
 }
 
-// Parse envKeys from raw source. Matches `envKeys: ['KEY1', 'KEY2']` or
-// `envKeys: ["KEY1", "KEY2"]` — the standard meta-block shape. The regex
-// is intentionally conservative: keys must be SCREAMING_SNAKE_CASE.
-const envKeysMatch = rawSrc.match(/envKeys\s*:\s*\[([^\]]*)\]/)
-let envKeys = []
-if (envKeysMatch) {
-  envKeys = [...envKeysMatch[1].matchAll(/['"]([A-Z_][A-Z0-9_]*)['"]/g)].map(m => m[1])
-}
-
 // Verify the snippet exports a run() function via raw-source check. Catches
 // the common "forgot to export run" mistake without dynamic import.
 if (!/export\s+(?:async\s+)?function\s+run\s*\(/.test(rawSrc) &&
     !/export\s*\{[^}]*\brun\b[^}]*\}/.test(rawSrc)) {
   die(`snippet at ${snippetPath} does not export a run(page, args) function`)
 }
-
-// Resolve declared envKeys. Slot .env first, process.env overrides — same
-// semantics as forge-pool-run-code.mjs so direnv shell layers win.
-//
-// envKeys is informational, not enforcing: it tells us which env vars to
-// include in the `process = { env: ... }` shim so the snippet's
-// `process.env.X` references resolve inside the playwright-cli sandbox.
-// We pass through whatever IS set among the declared keys and skip
-// quietly for the rest — the snippet body is authoritative about what's
-// actually required (via `if (!X) throw` for hard reqs; `?? 'default'`
-// for soft ones). Hard-failing here would contradict snippet bodies that
-// have legitimate fallbacks (e.g. a base URL that defaults to localhost
-// when no FORGE_BASE_URL is set).
-const slotEnv = await loadSlotEnv(slot)
-const combinedEnv = { ...slotEnv, ...process.env }
-
-const envObj = {}
-for (const key of envKeys) {
-  if (combinedEnv[key] !== undefined) {
-    envObj[key] = combinedEnv[key]
-  }
-}
-
-// forgeRoot was derived above (during mri bootstrap) and ensureRunnerDeps
-// has already run, so esbuild is installed and ready.
 
 // Bundle the snippet. esbuild handles:
 //   - TS type stripping (--platform=node)
@@ -181,7 +155,7 @@ if (transpile.status !== 0) {
 
 // Strip `export` keywords from the bundle. esbuild emits ESM with explicit
 // exports; the playwright-cli run-code sandbox doesn't run as a module, so
-// these would be syntax errors. Three patterns to catch:
+// these would be syntax errors. Three patterns:
 //   1. re-export blocks:   export { foo, bar };
 //   2. default exports:    export default <expr>
 //   3. named exports:      export const X = ..., export function Y(...), etc.
@@ -190,15 +164,9 @@ const jsBody = transpile.stdout
   .replace(/^export\s+default\s+/gm, '')
   .replace(/^export\s+(?=(?:async\s+)?function|const|let|var|class)/gm, '')
 
-// Compose the wrapped run-code body. The shim ONLY includes declared envKeys
-// — don't leak the broader environment into the sandbox.
-const processShim = Object.keys(envObj).length > 0
-  ? `const process = { env: ${JSON.stringify(envObj)} };\n`
-  : ''
-
 const wrappedCode = `async page => {
-${processShim}${jsBody}
-const __args = ${JSON.stringify(parsedArgs)};
+${jsBody}
+const __args = ${JSON.stringify(resolvedArgs)};
 return await run(page, __args);
 }`
 

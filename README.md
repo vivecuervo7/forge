@@ -40,7 +40,7 @@ Supported on macOS, Linux, and Windows. Forge's scripts are pure Node; cross-pla
    /forge add the backpack to the cart
    ```
 
-   That's enough to start. For an unauthenticated site, the scaffold alone is sufficient — forge mints a default slot and goes. For sites with auth or other project-specific behaviour, author hint files in `forge/hints/` (see `forge/hints/README.md` for guidance). All five hints are optional and additive: write only what you need.
+   That's enough to start. For an unauthenticated site, the scaffold alone is sufficient — forge launches a fresh chromium and goes. For sites with auth or other project-specific behaviour, author hint files in `forge/hints/` (see `forge/hints/README.md` for guidance). All five hints are optional and additive: write only what you need.
 
 On first spec run (or first snippet invocation), forge lazy-installs its Playwright runner directly into the project's `forge/` directory (standard `package.json` + `node_modules/` layout). Self-contained per project, visible in the IDE, removed cleanly by `rm -rf forge/` if you ever want to uninstall.
 
@@ -52,7 +52,7 @@ On first spec run (or first snippet invocation), forge lazy-installs its Playwri
 | `/forge <task>` | **Drive mode.** Driver + snippet-author. Does the task end-to-end, accretes reusable snippets from novel work. The everyday command. |
 | `/forge spec <task>` | **Spec mode.** Adds spec-writer + spec-verifier. Composes a self-contained `.spec.ts` and confirms it passes from a cold start. |
 | `/forge teach <topic>` | **Teach mode.** Driver + snippet-author. User pilots forge turn-by-turn, signals snippet boundaries explicitly, and weaves project-specific gotchas (fallbacks, retries, conditional branches) into snippet bodies. The deliberate library-building channel — useful when the app has quirks the agent can't be expected to discover. |
-| `/forge run <spec\|last\|latest>` | Re-runs a verified spec via the standalone runner. Add `record as <label>` to capture a video at `forge/videos/<spec>-<label>.webm`. No team spawned; no slot claimed. |
+| `/forge run <spec\|last\|latest>` | Re-runs a verified spec via the standalone runner. Add `record as <label>` to capture a video at `forge/videos/<spec>-<label>.webm`. No team spawned. |
 | `/forge export <spec-name>` | Exports a composed spec to a self-contained inlined form, suitable for shipping into another test suite. |
 
 Spec mode also fires on natural-language signals — "create a spec for AE-1775", "write a spec that…", "capture as a spec". Teach mode fires on phrasings like "teach forge how to log in" or "let me show forge how to create an event." Plain `/forge <task>` is the unambiguous drive case.
@@ -79,7 +79,7 @@ Teach-mode mechanics in brief:
 
 ## Architecture
 
-Four agents communicate in a mesh via `SendMessage`. The `/forge` skill is the **team lead** — it spawns teammates, manages the lifecycle (slot claim, team creation, shutdown), and bridges the user channel for STUCK escalations.
+Four agents communicate in a mesh via `SendMessage`. The `/forge` skill is the **team lead** — it spawns teammates, manages the lifecycle (session start, team creation, shutdown), and bridges the user channel for STUCK escalations.
 
 ```mermaid
 flowchart LR
@@ -89,7 +89,7 @@ flowchart LR
     Author(["forge:snippet-author"])
     Writer(["forge:spec-writer<br/><i>spec mode only</i>"])
     Verifier(["forge:spec-verifier<br/><i>spec mode only</i>"])
-    Slot[("chromium slot<br/>+ playwright-cli")]
+    Chrome[("chromium<br/>+ playwright-cli")]
     Snippets[("forge/snippets/")]
     Specs[("forge/specs/")]
 
@@ -105,7 +105,7 @@ flowchart LR
     Verifier -.->|"failures"| Driver
     Verifier -.->|"failures"| Writer
 
-    Driver -->|"drive / invoke"| Slot
+    Driver -->|"drive / invoke"| Chrome
     Author -->|writes| Snippets
     Writer -.->|writes| Specs
     Verifier -.->|runs| Specs
@@ -113,20 +113,20 @@ flowchart LR
 
 | Agent | Role |
 |---|---|
-| `forge:driver` | Drives the browser via `playwright-cli` against a claimed slot. Invokes existing snippets where they match; drives fresh otherwise. |
+| `forge:driver` | Drives the browser via `playwright-cli` against a fresh chromium session. Invokes existing snippets where they match; drives fresh otherwise. |
 | `forge:snippet-author` | Listens to driver narration during the drive. Writes per-step snippets for novel work into `forge/snippets/`. |
 | `forge:spec-writer` *(spec mode)* | Composes a self-contained `.spec.ts` after the drive completes. Imports snippets for invoked steps; inlines code for fresh-drive steps. |
-| `forge:spec-verifier` *(spec mode)* | Runs the spec via `forge-pool-run-spec.mjs` against the still-warm slot, surfaces pass/fail. Iterates with driver / spec-writer on failure. |
+| `forge:spec-verifier` *(spec mode)* | Runs the spec via `forge-run-spec.mjs` against a fresh browser context, surfaces pass/fail. Iterates with driver / spec-writer on failure. |
 
 Dashed edges fire only in spec mode. Drive mode runs the top two agents (driver + snippet-author) and stops once the task is done — no spec artifact produced. Teach mode also runs just driver + snippet-author, but the lead's role is much more active — it pipes user input to the driver turn-by-turn and only writes snippets when the user explicitly caps them.
 
-## Pool + slot model
+## Session model
 
-Forge owns a per-project pool of chromium "slots" — each slot is an isolated chromium profile with its own `.env`. Claims are serialized by a file lock; two concurrent `/forge` invocations grab different slots and run in parallel.
+Each `/forge` invocation is stateless: launch a fresh chromium with an ephemeral profile, run the user's task, close the chromium at the end. No pool, no persistent slot directories, no claim/release lifecycle, no profile to scrub. Clean state every time, by design.
 
-The default slot is identity-free (`slot-1` / `slot-2` / …) with an empty `.env` — enough for any unauthenticated site. Projects with auth declare a persona-bound provisioning recipe in `forge.md` (e.g. `slot-standard_user`, `slot-problem_user`) that puts the right credentials in each slot's `.env`.
+**Personas and credentials are a project concern**, not forge's. Projects with multiple test accounts document them in `forge/hints/forge.md` — a plain-prose persona table that the driver reads at session start ("admin uses ADMIN_USERNAME / ADMIN_PASSWORD," "user1 uses USER1_USERNAME / USER1_PASSWORD," "fresh users are minted via this SQL"). When the user names a persona ("log in as admin"), the driver resolves credentials per the hint and passes them into snippet invocations via `$env.KEY` references (the substitution happens before the args cross the playwright-cli sandbox, so literal credential values stay out of tool-call transcripts).
 
-At claim time, the lead invokes a filesystem-level scrub of cookies + localStorage + sessionStorage on the slot's profile — covers the universally-biting class without depending on the previous chromium session being alive. Project-specific cleanup (database resets, account churn, third-party state) is hint-driven (see below).
+For parallel runs against the same project: use different personas — two `/forge` sessions, one as `admin`, one as `user1`, work in parallel as long as the project's backend isn't single-session-per-user for the same account. The single-session-per-user constraint (if it exists) is documented in `forge.md` and is the user's responsibility to respect.
 
 ## Hints
 
@@ -134,8 +134,8 @@ At claim time, the lead invokes a filesystem-level scrub of cookies + localStora
 
 | File | Read by |
 |---|---|
-| `forge.md` | The skill (env contract, provisioning recipe, setup, teardown) |
-| `driver.md` | `forge:driver` (app structure, gotchas) |
+| `forge.md` | The skill + driver (env contract, personas, setup, teardown) |
+| `driver.md` | `forge:driver` (app structure, selector inventory, gotchas) |
 | `snippet-author.md` | `forge:snippet-author` (project-specific snippet conventions) |
 | `spec-writer.md` | `forge:spec-writer` (spec naming, imports) |
 | `spec-verifier.md` | `forge:spec-verifier` (verification conventions) |
@@ -183,12 +183,6 @@ The default scrub fires unless the hint says not to. `## Teardown after each run
 │   ├── snippet-author.md
 │   ├── spec-writer.md
 │   └── spec-verifier.md
-├── .pool/                  # gitignored — slot state
-│   ├── slot-<persona>/
-│   │   ├── .env           # per-persona credentials
-│   │   ├── profile/       # chromium profile
-│   │   └── state.json     # { checkedOutBy, lastClaimed, lastReleased }
-│   └── ...
 ├── snippets/               # gitignored — accreted via snippet-author
 ├── specs/                  # gitignored — composed during spec mode
 ├── videos/                 # gitignored — recordings from /forge run

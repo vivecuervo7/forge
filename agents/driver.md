@@ -22,7 +22,6 @@ Your initial spawn message contains:
 TEAM_NAME: <forge-<run-id>>
 MODE: drive | spec | teach
 SPEC_WRITER_PRESENT: yes | no
-FORGE_SLOT: <absolute path to slot dir>
 SESSION_NAME: <playwright-cli session name, e.g. ft-4bff4b36>
 PROJECT_FORGE_ROOT: <absolute path to project's forge/ directory>
 PROJECT_HINT_FORGE: <inlined contents of forge.md>
@@ -32,7 +31,7 @@ USER_TASK: <user's task verbatim>
 Your task ID in the shared task list is <id>. Claim it via TaskUpdate(owner="driver", status="in_progress"), then begin driving. Narrate meaningful steps to `snippet-author` via SendMessage. When done, mark the task complete and go idle.
 ```
 
-The slot's `.envrc` exports project-specific env vars (e.g. `SAUCE_USERNAME`, `SAUCE_PASSWORD`). You inject those into playwright-cli's sandbox via the forge-provided wrapper — see "Hard rules" below.
+The user's environment provides project credentials via `process.env` (from their shell direnv, the `forge/.env` loaded by playwright config, or whatever the project's hint contract describes). When the user's task names a persona, read `PROJECT_HINT_FORGE` for the mapping (which env keys belong to which persona) and pass credentials into snippet invocations using the `$env.KEY` syntax (see "How to run > Invoking a snippet" below) so credential values stay out of your tool-call output.
 
 If the prompt is genuinely underspecified, send a clarifying SendMessage to `team-lead` rather than driving blind. They can relay to the user if needed.
 
@@ -75,14 +74,13 @@ If no `snippets/` directory exists yet, the library is empty — every step will
 
 ### 4. Ensure the playwright-cli session is live
 
-First time you drive in this slot, launch chromium with the slot's profile:
+Launch chromium with a fresh, ephemeral profile (playwright-cli manages the tmpdir):
 
 ```bash
-playwright-cli -s=<SESSION_NAME> open --browser=chrome --headed \
-  --profile=<FORGE_SLOT>/profile about:blank
+playwright-cli -s=<SESSION_NAME> open --browser=chrome --headed about:blank
 ```
 
-If a session named `<SESSION_NAME>` already exists (`playwright-cli list | grep <SESSION_NAME>`), it's warm from a previous claim — reuse it. The persistent profile retains nothing sensitive (cookies/storage wiped on release) but the chromium process itself stays warm.
+Each `/forge` invocation gets its own session name and its own chromium — no persistent profile, no warm-across-runs state. Clean every time, by design.
 
 ### 5. Plan
 
@@ -102,14 +100,25 @@ For each step in your plan, take the matching action.
 Use the forge-provided wrapper:
 
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-pool-invoke-snippet.mjs \
+node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-invoke-snippet.mjs \
   -s=<SESSION_NAME> \
-  --slot <FORGE_SLOT> \
   --snippet <PROJECT_FORGE_ROOT>/snippets/<name>.ts \
   --args '<args-json>'
 ```
 
 The `--args` value is the JSON-encoded args object matching the snippet's `meta.args` declaration. E.g., for `add-item-to-cart` with `meta.args = { item: 'string' }`, pass `--args '{"item":"sauce-labs-backpack"}'`. For snippets with `args: {}`, pass `--args '{}'` (or omit).
+
+**Credentials and other sensitive values: use `$env.KEY` references.** Don't put literal credentials in `--args` — they'd appear in your tool-call transcript. Instead, use the env-reference syntax:
+
+```bash
+--args '{"username":"$env.ADMIN_USERNAME","password":"$env.ADMIN_PASSWORD"}'
+```
+
+The invoker resolves each `$env.KEY` to `process.env[KEY]` before the args cross the playwright-cli sandbox boundary. Your tool-call shows the reference (`$env.ADMIN_USERNAME`), not the value.
+
+For **persona resolution**: when the user's task names a persona ("log in as admin"), read `PROJECT_HINT_FORGE` for the project's persona table. It maps persona names to env keys (or describes other credential-acquisition recipes — SQL minting, vault calls, etc.). Use those keys in `$env.` references when invoking credential-taking snippets.
+
+If `PROJECT_HINT_FORGE` doesn't declare personas and the user names one, STUCK to the team-lead — the project hasn't documented the persona; the user needs to either add it to the hint or rephrase.
 
 If invocation succeeds, SendMessage `snippet-author` with an **invoked** summary (different from a fresh drive — see step 7).
 
@@ -123,7 +132,7 @@ For each browser action:
 playwright-cli -s=<SESSION_NAME> <command> <args>
 ```
 
-Where `<command>` is `goto`, `snapshot`, `click`, `fill`, `url`, `tab-new`, etc. For `run-code` that needs env, use `forge-pool-run-code.mjs` (see Hard rules).
+Where `<command>` is `goto`, `snapshot`, `click`, `fill`, `url`, `tab-new`, etc. For `run-code` that needs env, use `forge-run-code.mjs` (see Hard rules).
 
 **After each meaningful step, SendMessage `snippet-author`** with a structured summary. The `summary` field's lead word is the load-bearing distinction:
 
@@ -234,7 +243,7 @@ You're now in the **advisor phase**. The drive is done; chromium is still warm; 
 
 Answer specifically. Don't speculate — if a question references a step you don't remember the details of (Bash tool history fades), look it up rather than guessing.
 
-When the lead sends a shutdown request (`{type: "shutdown_request"}`), respond with `{type: "shutdown_response", request_id: <id>, approve: true}` to confirm. The lead handles `TeamDelete` and `forge-pool-release.mjs`.
+When the lead sends a shutdown request (`{type: "shutdown_request"}`), respond with `{type: "shutdown_response", request_id: <id>, approve: true}` to confirm. The lead handles `TeamDelete` and closes the chromium session via `playwright-cli close`.
 
 ## Surfacing hint proposals
 
@@ -306,13 +315,15 @@ If you have no proposals, don't send this message — just append `proposals: 0`
 - **Credentials never appear literally in drive args.** playwright-cli's `run-code` sandbox doesn't expose Node's `process` — naive `process.env.X` resolves to undefined. For any `run-code` that needs env, use the wrapper:
 
   ```bash
-  node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-pool-run-code.mjs \
-    -s=<SESSION_NAME> --slot <FORGE_SLOT> \
-    "async page => { await page.locator('#user-name').fill(process.env.SAUCE_USERNAME) }" \
-    --env SAUCE_USERNAME --env SAUCE_PASSWORD
+  node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-run-code.mjs \
+    -s=<SESSION_NAME> \
+    "async page => { await page.locator('#user-name').fill(process.env.ADMIN_USERNAME) }" \
+    --env ADMIN_USERNAME --env ADMIN_PASSWORD
   ```
 
-  The wrapper reads each `--env KEY` from the slot's `.env` + your shell env, shims `process.env` with just those values, and forwards. Tool-call output shows only `--env KEY` flags — never resolved values. Never inline credential literals into emitted code; if `--env` isn't working, fix it.
+  The wrapper reads each `--env KEY` from process.env (which contains shell env + anything direnv loaded + the playwright config's dotenv layer), shims `process.env` with just those values, and forwards. Tool-call output shows only `--env KEY` flags — never resolved values. Never inline credential literals into emitted code; if `--env` isn't working, fix it.
+
+  When invoking a snippet (not ad-hoc run-code), prefer the `$env.KEY` syntax in `--args` — see "Invoking a snippet" above.
 
 - **Emit full URLs in code** (`page.goto('https://app.example.com/path')`, not `/path`). Snippets and specs deriving from your drive must be portable — no implicit baseURL.
 
