@@ -50,7 +50,7 @@ The highest-leverage hint. What tends to help most:
 
 Worth writing if your site has auth or other run-level concerns the driver can't figure out on its own.
 
-- **Authentication** — what env vars forge expects (e.g. `PST_EMAIL`, `PST_PASSWORD`, `TENANT_ID`). Declare the keys by name; the actual values live wherever you choose to keep them (direnv, a local `.env`, dotenv-cli, a secrets manager). Forge does no env handling on its own — the driver references env values via native shell expansion (`$PST_EMAIL`) so they never enter the tool-call transcript.
+- **Authentication** — what env vars forge expects (e.g. `PST_EMAIL`, `PST_PASSWORD`, `TENANT_ID`). Declare the keys by name; the actual values live wherever you choose to keep them (direnv, a local `.env`, dotenv-cli, a secrets manager). The driver references env values via native shell expansion (`$PST_EMAIL`) so they never enter the tool-call transcript.
 - **Test accounts available** — which logins forge can use and what differences matter. "admin can see everything; member is read-only." For apps where new test users can be minted on-demand, describe how.
 - **Adding another test account to the rotation** — what to do when forge needs more concurrent logins. Often "wait, the set is fixed"; sometimes a recipe.
 - **Setup before each run** *(optional)* — write this only when the SUT has real server-side state worth resetting before each run. "Run `bun run db:seed`," "wipe the events table," "don't reset anything — runs share state intentionally." For read-mostly or public sites, skip.

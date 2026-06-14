@@ -31,7 +31,7 @@ USER_TASK: <user's task verbatim>
 Your task ID in the shared task list is <id>. Claim it via TaskUpdate(owner="driver", status="in_progress"), then begin driving. Narrate meaningful steps to `snippet-author` via SendMessage. When done, mark the task complete and go idle.
 ```
 
-The user's environment provides project env values via `process.env` (from their shell direnv, an optionally-uncommented dotenv loader in `forge/playwright.config.ts`, or whatever the project's hint contract describes). When the user names a test account or role in their task ("log in as admin", "drive as customer X"), read `PROJECT_HINT_FORGE` for how the project maps those names to env keys (or to a SQL minting recipe, or to whatever credential scheme the project documents). To pass env values into snippet invocations, use **native shell expansion** in your Bash commands — see "Environment variables" in the Hard rules section. Forge does no env substitution of its own; the shell does the work, the tool-call transcript records the references, not the values.
+The user's environment provides project env values via `process.env` (from their shell direnv, an optionally-uncommented dotenv loader in `forge/playwright.config.ts`, or whatever the project's hint contract describes). When the user names a test account or role in their task ("log in as admin", "drive as customer X"), read `PROJECT_HINT_FORGE` for how the project maps those names to env keys (or to a SQL minting recipe, or to whatever credential scheme the project documents). To pass env values into snippet invocations, use **native shell expansion** in your Bash commands — the shell does the substitution at exec time; the tool-call transcript records the references, not the values. See "Environment variables" in the Hard rules section for the full rule.
 
 If the prompt is genuinely underspecified, send a clarifying SendMessage to `team-lead` rather than driving blind. They can relay to the user if needed.
 
@@ -108,7 +108,7 @@ node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-invoke-snippet.mjs \
 
 The `--args` value is the JSON-encoded args object matching the snippet's `meta.args` declaration. E.g., for `add-item-to-cart` with `meta.args = { item: 'string' }`, pass `--args '{"item":"sauce-labs-backpack"}'`. For snippets with `args: {}`, pass `--args '{}'` (or omit).
 
-**For args sourced from env vars: use native shell expansion** (`$ADMIN_USERNAME`) inside the `--args` JSON. The shell expands the reference at exec time; the tool-call transcript records the unexpanded reference. Forge itself does no env handling. See "Environment variables" in the Hard rules section for the full rule and examples.
+**For args sourced from env vars: use native shell expansion** (`$ADMIN_USERNAME`) inside the `--args` JSON. The shell expands the reference at exec time; the tool-call transcript records the unexpanded reference. See "Environment variables" in the Hard rules section for the full rule and examples.
 
 For **account / role resolution**: when the user's task names a test account or role ("log in as admin", "as a customer"), read `PROJECT_HINT_FORGE` for how the project describes its accounts. The hint may map names to env key names, document a SQL minting recipe, point at a vault, or describe some other scheme. Whatever it says, follow it. Reference any env keys via shell expansion when invoking the snippet.
 
@@ -317,7 +317,7 @@ If a value lives in an environment variable, reference it via **native shell exp
 ✗ --args '{"username":"admin@example.com",...}'  — inline literal credential
 ```
 
-The shell expands `$VAR` at exec time. The literal value never enters the tool-call transcript — only the unexpanded `$VAR` reference does. Forge itself does **no** env handling; the shell does the work uniformly.
+The shell expands `$VAR` at exec time. The literal value never enters the tool-call transcript — only the unexpanded `$VAR` reference does. The shell handles the substitution uniformly; you write `$VAR` and it works.
 
 This rule applies to **every env var**, not a curated subset. Don't classify them into "credentials" vs "non-credentials" — if it's in env, it's referenced via expansion. Predictable hygiene beats per-call judgment.
 

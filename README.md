@@ -118,15 +118,15 @@ flowchart LR
 | `forge:spec-writer` *(spec mode)* | Composes a self-contained `.spec.ts` after the drive completes. Imports snippets for invoked steps; inlines code for fresh-drive steps. |
 | `forge:spec-verifier` *(spec mode)* | Runs the spec via `forge-run-spec.mjs` against a fresh browser context, surfaces pass/fail. Iterates with driver / spec-writer on failure. |
 
-Dashed edges fire only in spec mode. Drive mode runs the top two agents (driver + snippet-author) and stops once the task is done — no spec artifact produced. Teach mode also runs just driver + snippet-author, but the lead's role is much more active — it pipes user input to the driver turn-by-turn and only writes snippets when the user explicitly caps them.
+Dashed edges fire only in spec mode. Drive mode runs the top two agents (driver + snippet-author) and stops once the task is done; spec mode adds the bottom two for spec composition + verification. Teach mode also runs just driver + snippet-author, but the lead's role is much more active — it pipes user input to the driver turn-by-turn and only writes snippets when the user explicitly caps them.
 
 ## Session model
 
-Each `/forge` invocation is stateless: launch a fresh chromium with an ephemeral profile, run the user's task, close the chromium at the end. No pool, no persistent slot directories, no claim/release lifecycle, no profile to scrub. Clean state every time, by design.
+Each `/forge` invocation is stateless. Launch a fresh chromium with an ephemeral profile, run the user's task, close the chromium at the end. Clean state every time, by design.
 
-Forge doesn't model accounts, roles, or test users — anything multi-user is a project concern. If a project has multiple test accounts, it documents them in `forge/hints/forge.md` in whatever shape fits (an account list, a role table, a SQL minting recipe, a vault-lookup script). The driver reads the hint and follows what it says. Forge's only role is to make the hint reachable; the project owns the conventions.
+Multi-account scenarios are project-owned. If your project has multiple test accounts, document them in `forge/hints/forge.md` in whatever shape fits — an account list, a role table, a SQL minting recipe, a vault-lookup script. The driver reads the hint and follows it.
 
-For parallel runs against the same project, the constraint is whatever the project's backend imposes (single-session-per-user is common). The project documents that constraint in `forge.md`; the user respects it. Forge doesn't enforce or detect anything here.
+For parallel runs against the same project, the constraint is whatever your backend imposes (single-session-per-user is common). Document the constraint in `forge.md`; the user respects it when launching parallel sessions.
 
 ## Hints
 
@@ -171,7 +171,7 @@ Or simply:
 Don't reset any state — runs share state intentionally.
 ```
 
-The default scrub fires unless the hint says not to. `## Teardown after each run` is the symmetric escape hatch for end-of-run cleanup forge can't infer (server-side state, logout endpoints).
+Each session launches its own ephemeral chromium profile, so browser-side state stays clean without configuration. `## Setup before each run` is for state forge can't reach on its own — server-side data, account provisioning, anything outside the browser. `## Teardown after each run` is the symmetric hook for end-of-run cleanup (server-side state, logout endpoints).
 
 ## Storage layout
 
@@ -197,11 +197,11 @@ Only `hints/` is tracked. Everything else is local per-machine. `forge-init` reg
 
 ## Environment variables
 
-Forge does no env handling on its own. Whatever's in `process.env` at run time is what your specs and snippets see — and forge leaves it entirely to you to decide how it gets there. Direnv, dotenv-cli, manual shell exports, a secrets manager, or the optional dotenv line in the scaffolded `forge/playwright.config.ts` — your choice, your call.
+Env handling is delegated to your project. Whatever's in `process.env` at run time is what your specs and snippets see — direnv, dotenv-cli, manual shell exports, a secrets manager, or the optional dotenv line in the scaffolded `forge/playwright.config.ts` all work; pick what fits your setup.
 
-The one rule forge does enforce, via the driver's prompt: **env values are referenced, never inlined**. The driver uses native shell expansion (`$ADMIN_USERNAME`) inside its Bash commands; the shell expands at exec time; the tool-call transcript records the unexpanded reference, not the value. This applies uniformly to every env var — no credential/non-credential distinction. Predictable hygiene beats per-call judgment.
+The driver follows one rule: **env values are referenced, never inlined**. It uses native shell expansion (`$ADMIN_USERNAME`) inside its Bash commands; the shell expands at exec time; the tool-call transcript records the unexpanded reference. The rule applies uniformly to every env var — predictable hygiene over per-call judgment.
 
-For projects with multiple test accounts, document the mapping however your project thinks about it in `forge/hints/forge.md` — naming convention (admin → `$ADMIN_USERNAME` / `$ADMIN_PASSWORD`, user → `$USER_USERNAME` / `$USER_PASSWORD`), provisioning recipe, or whatever fits. The driver reads the hint and follows its instructions. Forge takes no opinion on the structure.
+For projects with multiple test accounts, document the mapping in `forge/hints/forge.md` in whatever shape fits — a naming convention (admin → `$ADMIN_USERNAME` / `$ADMIN_PASSWORD`, user → `$USER_USERNAME` / `$USER_PASSWORD`), a provisioning recipe, or anything else. The driver reads the hint and follows it.
 
 ## Use cases
 

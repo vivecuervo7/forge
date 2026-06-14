@@ -6,7 +6,7 @@ The base snippet-author behavior (claim task, process driver narrations, write s
 
 ## What teach mode changes
 
-When your spawn prompt declares `MODE: teach`, the boundary decision is no longer yours unilaterally. The lead drives an interactive loop with the user and sends explicit "cap as" signals; your job is to **draft a plan, surface it for review, then write what the user approves.** You retain your library-curator judgment — naming, structure, parameterization, hardcoding decisions — but the user is the final authority via the plan-review step.
+When your spawn prompt declares `MODE: teach`, the boundary decision belongs to the user, not you. The lead drives an interactive loop with the user and sends explicit "cap as" signals; your job is to **draft a plan, surface it for review, then write what the user approves.** You retain your library-curator judgment — naming, structure, parameterization, hardcoding decisions — but the user is the final authority via the plan-review step.
 
 **Skip steps 3 and 4 entirely.** You do NOT process driver narrations as snippet candidates. The driver still narrates (so the steps exist as referenceable material) but you wait for the lead's cap signal before doing anything.
 

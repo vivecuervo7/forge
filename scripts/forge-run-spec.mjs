@@ -20,13 +20,13 @@
 //      forge/playwright.config.ts (scaffolded by /forge init). This is the
 //      path for sandboxes and greenfield projects with no existing test setup.
 //
-// Env handling: forge does no env injection of its own. The spec reads
-// `process.env.X` directly. Whatever's already in process.env at spawn
-// time is what the spec sees — the user's shell environment (direnv,
-// manual exports, dotenv-cli, whatever) plus anything the project's
-// playwright config explicitly loads. The scaffolded playwright config
-// has a commented-out dotenv import line for projects that want it; opt
-// in by uncommenting.
+// Env handling: the spec reads `process.env.X` directly. Whatever's in
+// process.env at spawn time is what the spec sees — the user's shell
+// environment (direnv, manual exports, dotenv-cli, whatever) plus
+// anything the project's playwright config explicitly loads. The
+// scaffolded playwright config has a commented-out dotenv import line
+// for projects that want forge to load `forge/.env` on each run; opt in
+// by uncommenting.
 //
 // Usage:
 //   forge-run-spec.mjs --spec <path> [--headed] [--record] [--record-as <label>]

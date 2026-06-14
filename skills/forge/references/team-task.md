@@ -67,7 +67,7 @@ Capture as `SESSION_NAME`. It's used by the driver to launch and reference the b
 
 If `forge.md` has a `## Setup before each run` (or similarly-named) section, follow it literally. The user writes it in their own words; treat it as instructions to you, not config. Examples: SQL seeding, account-reset endpoint, mint a fresh test user via API, "don't reset anything."
 
-If `forge.md` is empty or has no setup section, skip — forge no longer does a default state scrub, because each session's chromium profile is fresh anyway.
+If `forge.md` is empty or has no setup section, skip — each session's chromium profile is fresh, so browser-side state starts clean without configuration.
 
 If setup needs to capture values (e.g. a freshly-minted user's credentials), hold them in your context for the duration of the session — you'll pass them to the driver via the spawn prompt or by appending to the project's env contract documented in `forge.md`. The driver will then resolve credentials per the hint when invoking snippets that need them.
 
