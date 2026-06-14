@@ -53,68 +53,25 @@ Capture each. Inline whatever you got in the spawn prompts so teammates don't ne
 
 All five hints are optional. A bare `/forge init` scaffold (no hint files authored) drives correctly; hints exist purely to encode project-specific knowledge that the agents can't derive from the app itself.
 
-### 1.3. Determine pool location
+### 1.3. Generate a session name
 
-Default `<FORGE_ROOT>/.pool/`. If `forge.md` declares an override under "Pool location", honor it. Capture as `POOL_DIR`.
-
-### 1.4. Initialize the pool
+Forge runs are stateless — each invocation gets its own chromium with a fresh, ephemeral profile. Generate a unique playwright-cli session name to reference throughout this run:
 
 ```bash
-node <PLUGIN_ROOT>/scripts/forge-pool-init.mjs <POOL_DIR>
+echo "ft-$(node -e 'console.log(require("crypto").randomBytes(4).toString("hex"))')"
 ```
 
-Idempotent.
+Capture as `SESSION_NAME`. It's used by the driver to launch and reference the browser, and by phase 5 to close it cleanly at shutdown.
 
-### 1.5. Claim a slot
+### 1.4. Apply setup instructions (optional)
 
-```bash
-node <PLUGIN_ROOT>/scripts/forge-pool-claim.mjs <POOL_DIR>
-```
+If `forge.md` has a `## Setup before each run` (or similarly-named) section, follow it literally. The user writes it in their own words; treat it as instructions to you, not config. Examples: SQL seeding, account-reset endpoint, mint a fresh test user via API, "don't reset anything."
 
-Three outcomes:
+If `forge.md` is empty or has no setup section, skip — forge no longer does a default state scrub, because each session's chromium profile is fresh anyway.
 
-- **Two key:value lines printed to stdout (exit 0):**
+If setup needs to capture values (e.g. a freshly-minted user's credentials), hold them in your context for the duration of the session — you'll pass them to the driver via the spawn prompt or by appending to the project's env contract documented in `forge.md`. The driver will then resolve credentials per the hint when invoking snippets that need them.
 
-  ```
-  slotDir: /absolute/path/to/slot
-  sessionName: ft-abc12345
-  ```
-
-  Capture both — `SLOT_DIR` and `SESSION_NAME` — and continue to phase 2. The session name is computed once per slot from a hash of the slot path and persists in `state.json`; subsequent claims reuse it so chromium stays warm across claims.
-
-- **`EXHAUSTED` (exit 1)** — mint a new slot, then re-attempt the claim. If `forge.md` describes how to add another test account (under any heading — common phrasings: "test accounts available", "adding another test account to the rotation", "provisioning recipe", "personas") follow those instructions literally: pick an identifier not yet in the pool, create `<POOL_DIR>/slot-<id>/profile/`, write `<POOL_DIR>/slot-<id>/.env` with whatever env keys the hint specifies, write `<POOL_DIR>/slot-<id>/state.json` as `{ "checkedOutBy": null }`. If no such guidance is in `forge.md` (or no `forge.md` exists), fall back to the default:
-
-  1. Pick the next slot identifier: `slot-<N>` where `<N>` is the lowest positive integer not already present in `<POOL_DIR>/slot-*`.
-  2. `mkdir -p <POOL_DIR>/slot-<N>/profile`
-  3. `: > <POOL_DIR>/slot-<N>/.env` (empty file — placeholder for any env the project wants to add later)
-  4. Write `<POOL_DIR>/slot-<N>/state.json`: `{ "checkedOutBy": null }`
-  5. Re-attempt the claim.
-
-  The default is sufficient for sites that don't need credentials. For authenticated sites, the project's `forge.md` is expected to describe what each test account's env contents look like.
-- **Other error (exit ≥2)** — surface and stop.
-
-### 1.5b. Apply setup instructions
-
-Before handing the slot to the team, reset its state per the project's policy. You are the only place hints get interpreted — the mechanical scripts know nothing about them.
-
-1. **Look for a `## Setup before each run` (or similarly-named) section in `forge.md`.** The user writes it in their own words; treat it as instructions to you, not as a config file. They might describe SQL to run, an account-reset endpoint to call, a directory to wipe, or an explicit "don't reset anything."
-
-2. **Decide whether the default scrub applies.** The default is: invoke
-
-   ```bash
-   node <PLUGIN_ROOT>/scripts/forge-pool-reset.mjs <SLOT_DIR>
-   ```
-
-   which deletes cookies + localStorage + sessionStorage from the slot's chromium profile (the universally-biting class — cart state, stale auth, etc.). Run it **unless** the hint clearly tells you not to (e.g. "don't reset any state between runs," "runs share state intentionally"). If there's no section at all, run the default.
-
-3. **Execute any additional instructions the hint provides.** Use the tools you already have: `Bash` for SQL via `psql`, shell commands, file deletes; `curl` for endpoint calls; whatever the user asked for. Use any captured values (e.g. a freshly-generated test-user email) by re-writing them into the slot's `.env` so the spawned spec/teammates pick them up:
-
-   ```bash
-   # example only — pattern, not prescription
-   echo "TEST_USER_EMAIL=$generated" >> <SLOT_DIR>/.env
-   ```
-
-4. If the hint's instructions fail (SQL error, endpoint timeout, etc.), surface to the user and stop — don't proceed with a half-initialized slot.
+If setup fails (SQL error, endpoint timeout, etc.), surface to the user and stop — don't proceed with a half-initialized environment.
 
 ## Phase 2 — Create the team
 
@@ -144,7 +101,7 @@ Always create the driver + snippet-author tasks. Add the spec-writer + spec-veri
 ```
 TaskCreate(
   subject="drive: <USER_TASK>",
-  description="Drive the user's browser task end-to-end in the slot at <SLOT_DIR>. Scan <FORGE_ROOT>/snippets/ first and invoke matching snippets via forge-pool-invoke-snippet.mjs instead of driving fresh. Narrate each step to `snippet-author` as 'invoked X' or 'drove fresh: X'. MODE=<MODE>: in spec mode, at end of drive, send `spec-writer` a final-state summary. In drive mode, no spec-writer to message — just ping team-lead and go idle. Mark complete when the drive is finished; stay idle (advisor phase) until shutdown."
+  description="Drive the user's browser task end-to-end using playwright-cli session <SESSION_NAME>. Scan <FORGE_ROOT>/snippets/ first and invoke matching snippets via forge-invoke-snippet.mjs instead of driving fresh. Narrate each step to `snippet-author` as 'invoked X' or 'drove fresh: X'. MODE=<MODE>: in spec mode, at end of drive, send `spec-writer` a final-state summary. In drive mode, no spec-writer to message — just ping team-lead and go idle. Mark complete when the drive is finished; stay idle (advisor phase) until shutdown."
 )
 # Note the task ID returned — call it DRIVE_TASK_ID.
 
@@ -166,7 +123,7 @@ TaskCreate(
 
 TaskCreate(
   subject="spec-verifier: run spec slot-independently, confirm it passes from cold start",
-  description="Wait for spec-writer's 'spec ready' message. Run the spec via `forge-pool-run-spec.mjs --spec <path>` — WITHOUT --slot. The verifier mirrors how the spec will be run downstream (CI / `playwright test` directly): env from forge/.env + project .env, fresh browser context, no slot env injection. On pass: ping team-lead with verified-from-fresh status. On fail: SendMessage driver (selectors) or spec-writer (assertions/imports) for clarification, iterate up to 3 times, then either succeed or escalate. Mark complete when done."
+  description="Wait for spec-writer's 'spec ready' message. Run the spec via `forge-run-spec.mjs --spec <path>`. The verifier mirrors how the spec will be run downstream (CI / `playwright test` directly): fresh browser context, env from forge/.env + project .env loaded by playwright config. On pass: ping team-lead with verified-from-fresh status. On fail: SendMessage driver (selectors) or spec-writer (assertions/imports) for clarification, iterate up to 3 times, then either succeed or escalate. Mark complete when done."
 )
 # Note as SPEC_VERIFIER_TASK_ID.
 ```
@@ -188,7 +145,6 @@ Agent(
   prompt="TEAM_NAME: <TEAM_NAME>
 MODE: <MODE>
 SPEC_WRITER_PRESENT: <yes if MODE=spec, else no>
-FORGE_SLOT: <SLOT_DIR>
 SESSION_NAME: <SESSION_NAME>
 PROJECT_FORGE_ROOT: <FORGE_ROOT>
 PROJECT_HINT_FORGE:
@@ -199,7 +155,7 @@ PROJECT_HINT_DRIVER:
 
 USER_TASK: <user's task verbatim>
 
-Your task ID is <DRIVE_TASK_ID>. Claim it via TaskUpdate(owner='driver', status='in_progress'), then begin driving. SendMessage `snippet-author` with structured summaries after meaningful steps. When SPEC_WRITER_PRESENT=yes, send `spec-writer` a final-state summary at end of drive. When SPEC_WRITER_PRESENT=no, skip that — just TaskUpdate status='completed' and ping team-lead. Then go idle — snippet-author may have follow-up questions."
+Your task ID is <DRIVE_TASK_ID>. Claim it via TaskUpdate(owner='driver', status='in_progress'), then begin driving. The forge.md hint documents personas / credential resolution for this project — read it and follow it when the user names a persona. SendMessage `snippet-author` with structured summaries after meaningful steps. When SPEC_WRITER_PRESENT=yes, send `spec-writer` a final-state summary at end of drive. When SPEC_WRITER_PRESENT=no, skip that — just TaskUpdate status='completed' and ping team-lead. Then go idle — snippet-author may have follow-up questions."
 )
 ```
 
@@ -257,7 +213,7 @@ USER_TASK: <user's task verbatim>
 PROJECT_HINT_SPEC_VERIFIER:
 <spec-verifier.md contents from <FORGE_ROOT>/hints/spec-verifier.md, or 'none' if missing>
 
-Your task ID is <SPEC_VERIFIER_TASK_ID>. Claim it via TaskUpdate(owner='spec-verifier', status='in_progress'). Wait for spec-writer's 'spec ready' message. Run the spec via `forge-pool-run-spec.mjs --spec <path>` — **without** --slot. The verifier runs the spec the way Playwright itself would, using forge/.env + project .env, no slot env injection. On pass, ping team-lead with verified-from-fresh status. On fail, ask driver (selectors) or spec-writer (assertions) for clarification, iterate up to 3 times, then succeed or escalate."
+Your task ID is <SPEC_VERIFIER_TASK_ID>. Claim it via TaskUpdate(owner='spec-verifier', status='in_progress'). Wait for spec-writer's 'spec ready' message. Run the spec via `forge-run-spec.mjs --spec <path>`. The verifier runs the spec the way Playwright itself would: fresh browser context, env from forge/.env + project .env loaded by playwright config. On pass, ping team-lead with verified-from-fresh status. On fail, ask driver (selectors) or spec-writer (assertions) for clarification, iterate up to 3 times, then succeed or escalate."
 )
 ```
 
@@ -365,17 +321,19 @@ tmux kill-pane -t <paneId>
 
 Run this once per spawned teammate. Best-effort: if a pane is already gone (user closed it manually, tmux server restarted, etc.) the command exits non-zero and that's fine — `tmux kill-pane` failures should not block the rest of cleanup. Skip this step if the backend wasn't tmux (no `paneId` in the shutdown responses).
 
-### 5.2b. Apply teardown instructions
+### 5.2b. Apply teardown instructions (optional)
 
-Mirror of phase 1.5b for end-of-run cleanup. Look for a `## Teardown after each run` (or similarly-named) section in `forge.md`. If present, execute its instructions as you would for setup: SQL queries, endpoint calls, whatever the user asked for. There is no automatic teardown default — the start-of-next-run scrub handles client-side leakage. This phase is purely for things the project knows about that forge can't (server-side state, account cleanup, third-party integrations, etc.).
+Look for a `## Teardown after each run` (or similarly-named) section in `forge.md`. If present, execute its instructions as you would for setup: SQL queries, endpoint calls, whatever the user asked for. Examples: delete the test event/user that setup created, call a logout endpoint, reset server-side state.
 
-If the hint has no teardown section, skip this phase entirely.
+If the hint has no teardown section, skip.
 
-### 5.3. Release the pool slot
+### 5.3. Close the chromium session
 
 ```bash
-node <PLUGIN_ROOT>/scripts/forge-pool-release.mjs <POOL_DIR> <SLOT_DIR>
+playwright-cli -s=<SESSION_NAME> close
 ```
+
+Best-effort. If `playwright-cli close` errors or the chromium process survives, fall back to identifying and killing the process tree. The driver may have already done this if it cleaned up after itself, in which case the close call is a no-op.
 
 ### 5.4. Report to the user
 
@@ -383,8 +341,6 @@ Compose a tight summary. Drive mode is shorter — no spec/spec-verifier lines.
 
 **Drive mode:**
 
-> Drove via `slot-<persona>`.
->
 > <driver's final-result one-liner>
 >
 > Snippet-author wrote N snippet(s):
@@ -394,12 +350,10 @@ Compose a tight summary. Drive mode is shorter — no spec/spec-verifier lines.
 > Hint files updated: <one line per file with summary, e.g. "forge/hints/driver.md (+2 sections)">.
 > (Omit this header entirely if no proposals were surfaced or all were rejected.)
 >
-> Slot released. Team cleaned up.
+> Browser session closed. Team cleaned up.
 
 **Spec mode:**
 
-> Drove via `slot-<persona>`.
->
 > <driver's final-result one-liner>
 >
 > Snippet-author wrote N snippet(s):
@@ -409,7 +363,7 @@ Compose a tight summary. Drive mode is shorter — no spec/spec-verifier lines.
 > Spec-writer wrote `<name>.spec.ts` composing <list of snippets> and asserting <one-liner>.
 > (or: "Spec-writer updated `<name>.spec.ts` in place" / "No new spec — existing one covers this.")
 >
-> Spec-verifier ran `<name>.spec.ts` against `slot-<persona>` — **passed** in <duration>.
+> Spec-verifier ran `<name>.spec.ts` — **passed** in <duration>.
 > (or: "Spec-verifier ran spec, FAILED after 3 iterations — escalated. See <details>.")
 >
 > Hint files updated: <one line per file with summary>.
@@ -423,14 +377,14 @@ If anything didn't go to plan (a teammate returned `cannot-drive`, the spec-veri
 
 - **You are an orchestrator, not an actor.** All browser driving belongs to `driver`. Snippet authoring belongs to `snippet-author`. Spec writing belongs to `spec-writer`. Spec verification belongs to `spec-verifier`. You set up the team, create tasks, spawn teammates, manage the lifecycle, AND **handle the user channel**: STUCK messages from teammates → AskUserQuestion → SendMessage the answer back. You do NOT invoke `playwright-cli` yourself, write snippet or spec files, run specs, or message-relay between teammates EXCEPT for STUCK-response (that's deliberately you relaying user input).
 - **Teammates message each other directly.** Don't parse driver messages and forward to snippet-author — they're already addressed to snippet-author directly. You only handle messages explicitly addressed to `team-lead`.
-- **Always release the slot.** Even if the drive returned `cannot-drive` or a teammate rejected shutdown, eventually call `forge-pool-release.mjs`. Leaving a slot perpetually checked out wastes capacity.
+- **Always close the chromium session.** Even if the drive returned `cannot-drive` or a teammate rejected shutdown, eventually call `playwright-cli -s=<SESSION_NAME> close`. Leaving chromium processes running wastes system resources and (in single-session-per-user apps) blocks the next legitimate login.
 - **Always TeamDelete.** Don't leave team config files lying around in `~/.claude/teams/`.
 - **One team at a time per session.** If a previous `/forge` invocation didn't clean up, `TeamDelete()` first before `TeamCreate`. (Claude Code allows only one active team per lead session.)
-- **Provisioning recipe is the source of truth for slot creation.** Execute literally from the hint — don't invent fields.
+- **`forge.md` is the source of truth for persona / credential resolution.** When the user names a persona ("log in as admin"), the driver reads `forge.md` to find the env keys, the SQL recipe, or whatever credential scheme the project uses. Don't invent personas; don't hardcode credentials.
 
 ## Failure modes to recover from
 
 - **`TeamCreate` fails because a team already exists.** Call `TeamDelete()` first, then retry. (Note: `TeamDelete` fails if active teammates exist — you may need to shut them down first via SendMessage.)
-- **`forge-pool-claim.mjs` keeps returning EXHAUSTED even after provisioning.** The provisioning recipe may have a bug — look at the slot dir to confirm everything's in place. Surface to user if you can't diagnose.
 - **Driver returns `cannot-drive` before doing meaningful work.** Snippet-author has nothing to author. Mark snippet-author's task complete with note "drive failed; no work to author"; proceed to shutdown and cleanup.
 - **A teammate goes idle and never responds to your SendMessage.** It may have errored mid-turn. Try a follow-up nudge. If still no response, surface to user with the team's current state.
+- **Credentials missing.** If the driver reports STUCK because referenced env keys aren't in process.env (e.g. `$env.ADMIN_USERNAME` referenced but ADMIN_USERNAME isn't set), surface the missing key to the user with a clear request to set it before retrying.

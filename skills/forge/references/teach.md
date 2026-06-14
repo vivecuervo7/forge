@@ -26,7 +26,7 @@ Then stop.
 
 ## Phase 1 — Discovery and setup
 
-Identical to team-task's phase 1 — find forge root, load hints, initialize pool, claim slot, apply setup, compute session name. The default scrub still applies unless `forge.md` opts out. Capture `FORGE_ROOT`, `POOL_DIR`, `SLOT_DIR`, `SESSION_NAME`.
+Identical to team-task's phase 1 — find forge root, load hints, generate session name, apply setup if `forge.md` declares any. Capture `FORGE_ROOT` and `SESSION_NAME`.
 
 Teach mode uses `forge.md`, `driver.md`, and `snippet-author.md` only — `spec-writer.md` and `spec-verifier.md` are unused.
 
@@ -87,7 +87,6 @@ Agent(
   prompt="TEAM_NAME: <TEAM_NAME>
 MODE: teach
 SPEC_WRITER_PRESENT: no
-FORGE_SLOT: <SLOT_DIR>
 SESSION_NAME: <SESSION_NAME>
 PROJECT_FORGE_ROOT: <FORGE_ROOT>
 PROJECT_HINT_FORGE:
@@ -375,12 +374,12 @@ Same as team-task phase 5 (the original Phase 5 here, renumbered):
 4. `TeamDelete()`
 5. `tmux kill-pane -t <paneId>` for each captured pane (best-effort).
 6. Apply `## Teardown after each run` instructions from `forge.md` if present.
-7. `node <PLUGIN_ROOT>/scripts/forge-pool-release.mjs <POOL_DIR> <SLOT_DIR>`
+7. `playwright-cli -s=<SESSION_NAME> close` — close the chromium session.
 
 ### 6.1 Report to the user
 
 ```
-> Teach session complete via `slot-<persona>`.
+> Teach session complete.
 >
 > Authored / updated N snippet(s):
 >   - <name1> — <one-line; flag new vs edited>
@@ -390,7 +389,7 @@ Same as team-task phase 5 (the original Phase 5 here, renumbered):
 > Hint files updated: <one line per file with summary>.
 > (Omit this line entirely if no proposals were surfaced or all were rejected.)
 >
-> Slot released. Team cleaned up.
+> Browser session closed. Team cleaned up.
 ```
 
 ## Hard rules

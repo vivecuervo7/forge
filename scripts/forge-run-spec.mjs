@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// forge-pool-run-spec.mjs — run a project's forge spec, preferring the project's
+// forge-run-spec.mjs — run a project's forge spec, preferring the project's
 // own Playwright runner over the plugin-shipped fallback.
 //
 // Two paths, picked at runtime:
@@ -13,24 +13,22 @@
 //      projects (EventsAir, monorepos) where the runner is part of the dev
 //      workflow.
 //
-//   2. PLUGIN-SHIPPED FALLBACK. If no project runner exists, lean on the
-//      one-time-installed runner at ~/.claude/.vive-claude/forge/runner/
-//      (lazy-installed by ensurePluginRunner below on first use). We symlink
-//      that runner's node_modules
-//      into the project's forge/ dir so the spec's `import '@playwright/test'`
-//      resolves, then run from forge/ using the project-committed config at
+//   2. PLUGIN-SHIPPED FALLBACK. If no project runner exists, install (lazily)
+//      into the project's forge/ directory itself. The spec's `import
+//      '@playwright/test'` resolves naturally from <forge>/node_modules.
+//      Runs from forge/ using the project-committed config at
 //      forge/playwright.config.ts (scaffolded by /forge init). This is the
 //      path for sandboxes and greenfield projects with no existing test setup.
 //
-// In both paths, --slot reads <slot>/.env (dotenv format) into a dict and
-// merges it into the spawned process's env. Forge no longer requires direnv:
-// slot env comes from a plain .env file the provisioning recipe writes.
-// User direnv (whatever's in process.env when the wrapper starts) still
-// takes precedence — it's the user's personal layer for 1Password, machine-
-// specific overrides, etc.
+// Env handling: forge no longer manages env injection at the script level —
+// the spec reads `process.env.X` directly. Env values come from (in order):
+// the user's shell environment (direnv, manual exports), then forge/.env
+// loaded by the playwright config via dotenv. Project .env can do more
+// sophisticated loading (multi-file, conditional, vault) by customizing the
+// playwright config.
 //
 // Usage:
-//   forge-pool-run-spec.mjs --spec <path> [--slot <slot-dir>] [--headed] [--record] [--record-as <label>]
+//   forge-run-spec.mjs --spec <path> [--headed] [--record] [--record-as <label>]
 //
 // --record sets FORGE_RECORD=1 in the spawn env. The forge-scaffolded
 // playwright.config.ts honors this by enabling `use.video = 'on'` and
@@ -58,7 +56,6 @@
 import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, dirname, join, relative, resolve } from 'node:path'
-import { loadSlotEnv, composedEnv } from './forge-slot-env.mjs'
 import {
   pwMarkerFor,
   findProjectRunner,
@@ -68,25 +65,36 @@ import {
 } from './forge-ensure-runner.mjs'
 
 function die(msg, code = 2) {
-  console.error('forge-pool-run-spec:', msg)
+  console.error('forge-run-spec:', msg)
   process.exit(code)
 }
 
-// Parse args. mri's `string` option keeps flags whose values look like paths
-// from being mis-classified as booleans; `alias` is unused here but kept
-// available for future short forms.
-const specsForgeRoot = process.cwd()  // tentative; will be overwritten by spec path
-ensureRunnerDeps(specsForgeRoot)  // best-effort up front; refined after we know forgeRoot
-const { default: mri } = await loadFromRunner(specsForgeRoot, 'mri')
+// Bootstrap mri — needs forgeRoot, which we derive from the spec path. Read
+// it from raw argv first.
+function rawArgValue(name) {
+  const av = process.argv.slice(2)
+  for (let i = 0; i < av.length; i++) {
+    if (av[i] === name && i + 1 < av.length) return av[i + 1]
+    if (av[i].startsWith(`${name}=`)) return av[i].slice(name.length + 1)
+  }
+  return null
+}
+
+const rawSpec = rawArgValue('--spec')
+if (!rawSpec) die('missing --spec <path-to-spec>')
+const specPathAbs = resolve(rawSpec)
+const provisionalForgeRoot = dirname(dirname(specPathAbs))
+ensureRunnerDeps(provisionalForgeRoot)
+
+const { default: mri } = await loadFromRunner(provisionalForgeRoot, 'mri')
 const args = mri(process.argv.slice(2), {
-  string: ['spec', 'slot', 'record-as'],
+  string: ['spec', 'record-as'],
   boolean: ['headed', 'record'],
 })
 
 let specPath = args.spec
 if (!specPath) die('missing --spec <path-to-spec>')
 
-const slot = args.slot ?? null
 const headed = !!args.headed
 const recordAs = args['record-as'] ?? null
 const record = !!args.record || recordAs !== null  // --record-as implies --record
@@ -104,7 +112,7 @@ if (!existsSync(join(projectForge, 'hints'))) {
   )
 }
 
-// findProjectRunner + ensurePluginRunner are shared with forge-init.sh via
+// findProjectRunner + ensurePluginRunner are shared with forge-init.mjs via
 // forge-ensure-runner.mjs (imported above). /forge init pre-installs the
 // plugin runner if no project runner is detected, so the path below where
 // we'd install it lazily is now a fallback rather than the primary trigger.
@@ -165,19 +173,12 @@ if (projectRunner) {
   cmdArgs = pwArgs
 }
 
-console.error(`forge-pool-run-spec: using ${mode} runner`)
-
-// Load slot env (if --slot provided) into a plain dict, then merge with
-// process.env winning. User direnv (whatever's already in process.env when
-// the wrapper starts) takes precedence over slot values — matches the
-// design where direnv is the user's personal layer, not forge's mechanism.
-const slotEnv = await loadSlotEnv(slot)
+console.error(`forge-run-spec: using ${mode} runner`)
 
 // FORGE_RECORD is read by the forge-scaffolded playwright.config.ts to
-// enable video + trace. User env precedence still wins, so an explicit
-// FORGE_RECORD=0 in the shell can suppress recording even with --record.
-const baseEnv = composedEnv(slotEnv)
-const finalEnv = record ? { FORGE_RECORD: '1', ...baseEnv } : baseEnv
+// enable video + trace. User env precedence wins — an explicit FORGE_RECORD=0
+// in the shell can suppress recording even with --record.
+const finalEnv = record ? { ...process.env, FORGE_RECORD: '1' } : { ...process.env }
 
 // Note the start time so we can find videos produced by THIS run (and
 // ignore stale artifacts from earlier runs).
@@ -210,7 +211,7 @@ if (record) {
   try {
     await persistRecording()
   } catch (err) {
-    console.error(`forge-pool-run-spec: recording persistence failed: ${err.message}`)
+    console.error(`forge-run-spec: recording persistence failed: ${err.message}`)
   }
 }
 
@@ -226,7 +227,7 @@ if (exitCode === 0) {
     try {
       rmSync(testResults, { recursive: true, force: true })
     } catch (err) {
-      console.error(`forge-pool-run-spec: test-results cleanup failed: ${err.message}`)
+      console.error(`forge-run-spec: test-results cleanup failed: ${err.message}`)
     }
   }
 }
@@ -265,7 +266,7 @@ function persistRecording() {
       const name = `${specBase}-${suffix}${indexed}.webm`
       const dest = join(videosDir, name)
       copyFileSync(src, dest)
-      console.error(`forge-pool-run-spec: persisted recording → ${dest}`)
+      console.error(`forge-run-spec: persisted recording → ${dest}`)
     }
     resolve()
   })

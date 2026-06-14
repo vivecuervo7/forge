@@ -254,11 +254,11 @@
       "id": 20,
       "name": "run-verify-only",
       "prompt": "/forge run add-backpack-to-cart-standard",
-      "expected_output": "Run route executes against an existing spec. forge-pool-run-spec.mjs is invoked with --spec but without --record or --record-as. Verification-only \u2014 exit 0 indicates spec passes. No new file appears in forge/videos/.",
+      "expected_output": "Run route executes against an existing spec. forge-run-spec.mjs is invoked with --spec but without --record or --record-as. Verification-only \u2014 exit 0 indicates spec passes. No new file appears in forge/videos/.",
       "files": [],
       "expectations": [
         "Lead loads references/run.md (visible in tool call log)",
-        "forge-pool-run-spec.mjs is invoked via Bash with --spec",
+        "forge-run-spec.mjs is invoked via Bash with --spec",
         "The Bash invocation does NOT include --record or --record-as flags",
         "After the run, no new .webm file with a recent modification time appears in forge/videos/",
         "No Agent (subagent) calls are made \u2014 run route is team-less"
@@ -268,11 +268,11 @@
       "id": 21,
       "name": "run-with-label",
       "prompt": "/forge run add-backpack-to-cart-standard, record as smoke-s3",
-      "expected_output": "Run route with explicit recording label. forge-pool-run-spec.mjs is invoked with --spec and --record-as smoke-s3. After the run, a video file lands at forge/videos/add-backpack-to-cart-standard-smoke-s3.webm.",
+      "expected_output": "Run route with explicit recording label. forge-run-spec.mjs is invoked with --spec and --record-as smoke-s3. After the run, a video file lands at forge/videos/add-backpack-to-cart-standard-smoke-s3.webm.",
       "files": [],
       "expectations": [
         "Lead loads references/run.md",
-        "forge-pool-run-spec.mjs is invoked via Bash with --spec and --record-as smoke-s3",
+        "forge-run-spec.mjs is invoked via Bash with --spec and --record-as smoke-s3",
         "After the run, forge/videos/add-backpack-to-cart-standard-smoke-s3.webm exists",
         "The video file is larger than 10000 bytes (not empty)",
         "No Agent subagent calls are made"
@@ -287,7 +287,7 @@
       "expectations": [
         "Lead loads references/run.md",
         "Lead resolves 'last' to a specific spec name (lists forge/specs/ sorted by mtime)",
-        "forge-pool-run-spec.mjs is invoked via Bash with --spec pointing to the resolved file",
+        "forge-run-spec.mjs is invoked via Bash with --spec pointing to the resolved file",
         "The Bash invocation does NOT include --record or --record-as flags",
         "Lead's final report names the resolved spec so the user can correct if needed"
       ]

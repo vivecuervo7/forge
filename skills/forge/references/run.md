@@ -6,7 +6,7 @@ This reference is loaded by `/forge`'s router for the **run** route. The router 
 
 ## What this route does
 
-Re-runs an existing verified spec via `forge-pool-run-spec.mjs`. No team is spawned — no driver, no snippet-author, no spec-writer, no spec-verifier. Just the spec runner against an existing artifact.
+Re-runs an existing verified spec via `forge-run-spec.mjs`. No team is spawned — no driver, no snippet-author, no spec-writer, no spec-verifier. Just the spec runner against an existing artifact.
 
 Optionally records a video (when `RECORD_AS` is set) at `forge/videos/<spec-basename>-<RECORD_AS>.webm`. The recording is evidence — typically used in a before/after workflow where the same spec is run twice against different code states.
 
@@ -76,7 +76,7 @@ If there are more than 4, include the most-recently-modified 3 plus "Other (spec
 Compose the invocation. Add `--record-as <RECORD_AS>` only when `RECORD_AS != none`:
 
 ```bash
-node <PLUGIN_ROOT>/scripts/forge-pool-run-spec.mjs \
+node <PLUGIN_ROOT>/scripts/forge-run-spec.mjs \
   --spec <FORGE_ROOT>/specs/<resolved-name>.spec.ts
 # If RECORD_AS is set, append: --record-as <RECORD_AS>
 ```
@@ -95,7 +95,7 @@ Capture the exit code and stderr output. Exit 0 = pass. Anything else = fail.
 
 > Ran `<spec-name>.spec.ts` — **passed** in <duration>. Video: `<FORGE_ROOT>/videos/<spec-basename>-<RECORD_AS>.webm`.
 >
-> The wrapper's stderr line `forge-pool-run-spec: persisted recording → <path>` confirms the persisted location.
+> The wrapper's stderr line `forge-run-spec: persisted recording → <path>` confirms the persisted location.
 
 **On fail:**
 
@@ -110,7 +110,7 @@ Surface the script's actual error output verbatim — the user needs to see exac
 - **No team involved.** This route is a thin script invocation. Don't spawn driver, snippet-author, spec-writer, or spec-verifier. If the spec's authoring needs re-doing, that's `/forge spec`'s job.
 - **No slot claim.** The script doesn't need pool semantics — Playwright launches its own browser, credentials come from `forge/.env`.
 - **Default to verification-only.** When `RECORD_AS = none`, do NOT pass `--record` to the script. Recordings are an explicit user request; silent recording bloats `forge/videos/` and wastes time.
-- **Surface script errors verbatim.** If `forge-pool-run-spec.mjs` fails, the user needs to see Playwright's actual report (which selector failed, which assertion mismatched, etc.) — don't paraphrase.
+- **Surface script errors verbatim.** If `forge-run-spec.mjs` fails, the user needs to see Playwright's actual report (which selector failed, which assertion mismatched, etc.) — don't paraphrase.
 
 ## Failure modes
 
