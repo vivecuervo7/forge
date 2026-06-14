@@ -20,7 +20,9 @@ The seeded snippets give the walkthrough below a starting library to reuse again
 
 ## Walkthrough — see forge work, prompt by prompt
 
-Run these in order from inside `samples/shop/`. Each prompt builds on the state of the previous. Set the env vars from `.env.example` first (any of the methods listed there).
+Run these in order from inside `samples/shop/`. Each prompt builds on the state of the previous.
+
+Before you start: `cp .env.example .env`. The hint instructs the driver to load env per command, so you don't need to source anything yourself.
 
 ### 1. Library reuse — the existing snippets carry a fresh task
 
