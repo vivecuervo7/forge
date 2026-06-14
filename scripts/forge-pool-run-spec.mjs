@@ -55,7 +55,6 @@
 //   6   plugin fallback selected but forge/playwright.config.ts missing
 //       (project hasn't been /forge init'd, or the config was deleted)
 
-import { spawn } from 'node:child_process'
 import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, symlinkSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, dirname, join, relative, resolve } from 'node:path'
@@ -65,6 +64,8 @@ import {
   pwMarkerFor,
   findProjectRunner,
   ensurePluginRunner,
+  ensureRunnerDeps,
+  loadFromRunner,
 } from './forge-ensure-runner.mjs'
 
 function die(msg, code = 2) {
@@ -72,36 +73,24 @@ function die(msg, code = 2) {
   process.exit(code)
 }
 
-const argv = process.argv.slice(2)
+// Parse args. mri's `string` option keeps flags whose values look like paths
+// from being mis-classified as booleans; `alias` is unused here but kept
+// available for future short forms.
+const specsForgeRoot = process.cwd()  // tentative; will be overwritten by spec path
+ensureRunnerDeps(specsForgeRoot)  // best-effort up front; refined after we know forgeRoot
+const { default: mri } = await loadFromRunner(specsForgeRoot, 'mri')
+const args = mri(process.argv.slice(2), {
+  string: ['spec', 'slot', 'record-as'],
+  boolean: ['headed', 'record'],
+})
 
-let specPath = null
-let slot = null
-let headed = false
-let record = false
-let recordAs = null
-
-for (let i = 0; i < argv.length; i++) {
-  const arg = argv[i]
-  if (arg === '--spec') {
-    if (i + 1 >= argv.length) die('--spec requires a path')
-    specPath = argv[++i]
-  } else if (arg === '--slot') {
-    if (i + 1 >= argv.length) die('--slot requires a path')
-    slot = argv[++i]
-  } else if (arg === '--headed') {
-    headed = true
-  } else if (arg === '--record') {
-    record = true
-  } else if (arg === '--record-as') {
-    if (i + 1 >= argv.length) die('--record-as requires a label')
-    recordAs = argv[++i]
-    record = true  // --record-as implies --record
-  } else {
-    die(`unknown arg: ${arg}`)
-  }
-}
-
+let specPath = args.spec
 if (!specPath) die('missing --spec <path-to-spec>')
+
+const slot = args.slot ?? null
+const headed = !!args.headed
+const recordAs = args['record-as'] ?? null
+const record = !!args.record || recordAs !== null  // --record-as implies --record
 
 specPath = resolve(specPath)
 if (!existsSync(specPath)) die(`spec not found: ${specPath}`, 4)
@@ -188,7 +177,7 @@ console.error(`forge-pool-run-spec: using ${mode} runner`)
 // process.env winning. User direnv (whatever's already in process.env when
 // the wrapper starts) takes precedence over slot values — matches the
 // design where direnv is the user's personal layer, not forge's mechanism.
-const slotEnv = loadSlotEnv(slot)
+const slotEnv = await loadSlotEnv(slot)
 
 // FORGE_RECORD is read by the forge-scaffolded playwright.config.ts to
 // enable video + trace. User env precedence still wins, so an explicit
@@ -200,50 +189,55 @@ const finalEnv = record ? { FORGE_RECORD: '1', ...baseEnv } : baseEnv
 // ignore stale artifacts from earlier runs).
 const runStartedAt = Date.now()
 
-const child = spawn(cmd, cmdArgs, {
-  cwd,
-  stdio: 'inherit',
-  env: finalEnv,
-})
+const { execa } = await loadFromRunner(projectForge, 'execa')
 
-child.on('error', (err) => {
+let exitCode = 1
+try {
+  const result = await execa(cmd, cmdArgs, {
+    cwd,
+    stdio: 'inherit',
+    env: finalEnv,
+    reject: false,  // capture non-zero exits without throwing
+  })
+  exitCode = result.exitCode ?? 1
+} catch (err) {
   if (err.code === 'ENOENT') {
     die(`command not found: ${cmd}. Install it and retry.`, 5)
   }
   die(`spawn error: ${err.message}`, 5)
-})
+}
 
-child.on('exit', (code) => {
-  // Recording persistence: copy any video.webm produced under
-  // <projectForge>/test-results to <projectForge>/videos/ before exit.
-  // Done before process.exit so the artifact survives even if the run
-  // itself failed (a failure recording is often more useful than a
-  // passing one for debugging).
-  if (record) {
-    persistRecording().catch((err) => {
-      console.error(`forge-pool-run-spec: recording persistence failed: ${err.message}`)
-    })
+// Recording persistence: copy any video.webm produced under
+// <projectForge>/test-results to <projectForge>/videos/ before exit.
+// Done before process.exit so the artifact survives even if the run
+// itself failed (a failure recording is often more useful than a
+// passing one for debugging).
+if (record) {
+  try {
+    await persistRecording()
+  } catch (err) {
+    console.error(`forge-pool-run-spec: recording persistence failed: ${err.message}`)
   }
+}
 
-  // Clean up test-results/ on success. Playwright's working directory
-  // contains video.webm (already copied to forge/videos/ above), trace
-  // artifacts (only present on failure per playwright config's
-  // retain-on-failure setting), and other Playwright internals — none
-  // of which the user asked for. On failure, leave it intact so the
-  // trace + any other diagnostic artifacts survive for debugging.
-  if (code === 0) {
-    const testResults = join(projectForge, 'test-results')
-    if (existsSync(testResults)) {
-      try {
-        rmSync(testResults, { recursive: true, force: true })
-      } catch (err) {
-        console.error(`forge-pool-run-spec: test-results cleanup failed: ${err.message}`)
-      }
+// Clean up test-results/ on success. Playwright's working directory
+// contains video.webm (already copied to forge/videos/ above), trace
+// artifacts (only present on failure per playwright config's
+// retain-on-failure setting), and other Playwright internals — none
+// of which the user asked for. On failure, leave it intact so the
+// trace + any other diagnostic artifacts survive for debugging.
+if (exitCode === 0) {
+  const testResults = join(projectForge, 'test-results')
+  if (existsSync(testResults)) {
+    try {
+      rmSync(testResults, { recursive: true, force: true })
+    } catch (err) {
+      console.error(`forge-pool-run-spec: test-results cleanup failed: ${err.message}`)
     }
   }
+}
 
-  process.exit(code ?? 1)
-})
+process.exit(exitCode)
 
 function persistRecording() {
   return new Promise((resolve) => {

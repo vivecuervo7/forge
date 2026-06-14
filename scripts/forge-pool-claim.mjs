@@ -20,8 +20,8 @@
 //
 // Slot dirs scanned alphabetically; first available wins (deterministic).
 //
-// Locking: claim/release are serialized via a mkdir-based mutex at
-// <pool-dir>/.lock/. See forge-lock.mjs.
+// Locking: claim/release are serialized via proper-lockfile against the
+// pool dir. Stale locks (holder process dead) are auto-recovered.
 //
 // Output:
 //   slotDir: /absolute/path/to/slot
@@ -32,10 +32,10 @@
 //
 // Claimant ID defaults to ${CLAUDE_CODE_SESSION_ID:-pid-<pid>}.
 
-import { readdirSync, readFileSync, writeFileSync, renameSync, statSync, existsSync } from 'node:fs'
+import { readdirSync, readFileSync, statSync, existsSync } from 'node:fs'
 import { createHash } from 'node:crypto'
-import { join, resolve } from 'node:path'
-import { withLock } from './forge-lock.mjs'
+import { dirname, join, resolve } from 'node:path'
+import { ensureRunnerDeps, loadFromRunner } from './forge-ensure-runner.mjs'
 
 const poolArg = process.argv[2]
 const claimant = process.argv[3] ?? process.env.CLAUDE_CODE_SESSION_ID ?? `pid-${process.pid}`
@@ -51,20 +51,34 @@ if (!existsSync(poolDir) || !statSync(poolDir).isDirectory()) {
   process.exit(3)
 }
 
-const lockDir = join(poolDir, '.lock')
+// Derive forgeRoot from pool dir: <forge>/.pool/ → forgeRoot = parent of poolDir
+const forgeRoot = dirname(poolDir)
 
-const result = await withLock(lockDir, () => {
+// Ensure runner deps are installed before importing them. Idempotent if
+// already present.
+ensureRunnerDeps(forgeRoot)
+
+const lockfile = await loadFromRunner(forgeRoot, 'proper-lockfile')
+const writeFileAtomic = (await loadFromRunner(forgeRoot, 'write-file-atomic')).default
+
+const release = await lockfile.lock(poolDir, {
+  retries: { retries: 20, minTimeout: 50, maxTimeout: 200 },
+  stale: 30_000,
+  realpath: false,
+})
+
+try {
   const now = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
   const timestampedClaim = `${claimant}@${now}`
 
-  // Scan slot dirs alphabetically.
   let entries
   try {
     entries = readdirSync(poolDir).sort()
   } catch {
-    return null
+    entries = []
   }
 
+  let claimed = null
   for (const name of entries) {
     if (!name.startsWith('slot-')) continue
     const slotDir = join(poolDir, name)
@@ -92,22 +106,19 @@ const result = await withLock(lockDir, () => {
       state.playwrightSessionName = `ft-${hash}`
     }
 
-    // Atomic write via tmp + rename — survives crash mid-write.
-    const tmp = stateFile + '.tmp'
-    writeFileSync(tmp, JSON.stringify(state, null, 2) + '\n')
-    // rename is atomic on POSIX and Windows when src and dst are on same volume.
-    renameSync(tmp, stateFile)
+    await writeFileAtomic(stateFile, JSON.stringify(state, null, 2) + '\n')
 
-    return { slotDir, sessionName: state.playwrightSessionName }
+    claimed = { slotDir, sessionName: state.playwrightSessionName }
+    break
   }
 
-  return null
-})
+  if (!claimed) {
+    console.error('EXHAUSTED')
+    process.exit(1)
+  }
 
-if (!result) {
-  console.error('EXHAUSTED')
-  process.exit(1)
+  console.log(`slotDir: ${claimed.slotDir}`)
+  console.log(`sessionName: ${claimed.sessionName}`)
+} finally {
+  await release()
 }
-
-console.log(`slotDir: ${result.slotDir}`)
-console.log(`sessionName: ${result.sessionName}`)
