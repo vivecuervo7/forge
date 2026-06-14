@@ -6,12 +6,16 @@ skills/forge-workspace/
 # Forge-run outputs inside the sample directories. The sample dirs are
 # committed documentation; what forge produces locally when run against
 # them (snippets, specs, recordings, lazy-installed runner deps) is
-# local-only and shouldn't pollute the repo.
-samples/*/snippets/
-samples/*/specs/
-samples/*/videos/
-samples/*/test-results/
-samples/*/node_modules/
-samples/*/package.json
+# local-only and shouldn't pollute the repo. Each sample is shaped as a
+# project containing a forge/ subdir, so runtime outputs live under
+# samples/<name>/forge/.
+samples/*/forge/snippets/
+samples/*/forge/specs/
+samples/*/forge/videos/
+samples/*/forge/test-results/
+samples/*/forge/node_modules/
+samples/*/forge/package.json
 samples/*/.env
+samples/*/forge/.env
 samples/*/.cookies
+samples/*/forge/.cookies
