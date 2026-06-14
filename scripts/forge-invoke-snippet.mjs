@@ -3,27 +3,32 @@
 //
 // The snippet is a .ts file exporting a `run(page, args)` function and an
 // optional `meta` block (description, args, tags). Snippets are pure
-// functional units: they take their config (including credentials) as args
-// and don't read process.env. The CALLER decides what credentials to pass.
+// functional units: they take their config (including any env-sourced
+// values) as args and don't read process.env. The CALLER decides what to
+// pass.
+//
+// This script does NO env handling. Args are passed through verbatim. The
+// caller (driver agent, or any other invoker) is responsible for sourcing
+// env values — typically via native shell expansion at the Bash boundary,
+// e.g. `--args "{\"username\":\"$ADMIN_USERNAME\"}"`. The shell expands the
+// reference before forge ever sees it; the tool-call transcript records the
+// unexpanded `$VAR` string; the literal value reaches forge only through
+// argv, never through any logged channel. See the driver agent prompt's
+// "Environment variables" section for the full rule.
 //
 // What this script does:
 //
-//   1. Resolves `$env.KEY` references in --args. Any string-valued arg that
-//      starts with `$env.` is replaced with `process.env[KEY]` BEFORE the
-//      args cross the playwright-cli sandbox boundary. This keeps literal
-//      credential values out of the tool-call transcript — only the env
-//      reference appears in stdout/stderr capture.
-//   2. Bundles the snippet with esbuild: `--bundle --platform=node
+//   1. Bundles the snippet with esbuild: `--bundle --platform=node
 //      --format=esm --external:playwright --external:@playwright/test`.
 //      Bundling is load-bearing — it transpiles TS types away, inlines
 //      cross-snippet relative imports, and produces a single self-contained
 //      JS blob ready to cross the sandbox boundary.
-//   3. Strips `export` keywords from the bundle output so all names live in
+//   2. Strips `export` keywords from the bundle output so all names live in
 //      local scope inside the wrapped `async page => { ... }` function.
-//   4. Wraps the bundle as `async page => { <bundle>; const __args =
-//      <args-json-with-env-resolved>; return await run(page, __args); }`
-//      and passes the whole thing to `playwright-cli -s=<session> run-code`.
-//   5. Forwards stdout/stderr/exit-code verbatim.
+//   3. Wraps the bundle as `async page => { <bundle>; const __args =
+//      <args-json>; return await run(page, __args); }` and passes the whole
+//      thing to `playwright-cli -s=<session> run-code`.
+//   4. Forwards stdout/stderr/exit-code verbatim.
 //
 // Why the bundler approach: an earlier version tried `mod.run.toString()`
 // over a dynamically-imported snippet. That broke in five distinct ways:
@@ -36,15 +41,9 @@
 // Usage:
 //   forge-invoke-snippet.mjs -s=<session> --snippet <path> [--args '<json>']
 //
-// $env.KEY references in --args:
-//   --args '{"username":"$env.ADMIN_USERNAME","password":"$env.ADMIN_PASSWORD"}'
-// Each $env.KEY is resolved to process.env[KEY] before reaching the sandbox.
-// Missing keys cause a fatal error.
-//
 // Exit codes:
 //   0   success — playwright-cli output forwarded verbatim
 //   2   usage / arg error / invalid JSON / snippet missing run / bundler failure
-//   3   $env.KEY referenced but KEY not in process.env
 //   4   playwright-cli not installed
 //   5   spawn error
 //   any other — playwright-cli's exit code is propagated
@@ -98,26 +97,6 @@ try {
   die(`invalid --args JSON: ${e.message}`)
 }
 
-// Resolve $env.KEY references in parsedArgs. Sensitive values (credentials)
-// pass through this path; their literal values land in the wrapped code only,
-// never in the tool-call transcript.
-const resolvedArgs = {}
-for (const [k, v] of Object.entries(parsedArgs)) {
-  if (typeof v === 'string' && v.startsWith('$env.')) {
-    const key = v.slice(5)
-    if (process.env[key] === undefined) {
-      die(
-        `$env.${key} referenced in args, but ${key} is not in process.env. ` +
-        `Set the env var (via direnv, shell export, or forge/.env loaded by playwright config) and retry.`,
-        3
-      )
-    }
-    resolvedArgs[k] = process.env[key]
-  } else {
-    resolvedArgs[k] = v
-  }
-}
-
 // Read raw source. NEVER dynamically import — Node 24's strict ESM rejects
 // extensionless imports against .ts files, which is how snippets compose
 // each other (e.g. `import { searchEvent } from './search-event'`).
@@ -166,7 +145,7 @@ const jsBody = transpile.stdout
 
 const wrappedCode = `async page => {
 ${jsBody}
-const __args = ${JSON.stringify(resolvedArgs)};
+const __args = ${JSON.stringify(parsedArgs)};
 return await run(page, __args);
 }`
 

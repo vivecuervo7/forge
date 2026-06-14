@@ -124,7 +124,7 @@ Dashed edges fire only in spec mode. Drive mode runs the top two agents (driver 
 
 Each `/forge` invocation is stateless: launch a fresh chromium with an ephemeral profile, run the user's task, close the chromium at the end. No pool, no persistent slot directories, no claim/release lifecycle, no profile to scrub. Clean state every time, by design.
 
-**Personas and credentials are a project concern**, not forge's. Projects with multiple test accounts document them in `forge/hints/forge.md` — a plain-prose persona table that the driver reads at session start ("admin uses ADMIN_USERNAME / ADMIN_PASSWORD," "user1 uses USER1_USERNAME / USER1_PASSWORD," "fresh users are minted via this SQL"). When the user names a persona ("log in as admin"), the driver resolves credentials per the hint and passes them into snippet invocations via `$env.KEY` references (the substitution happens before the args cross the playwright-cli sandbox, so literal credential values stay out of tool-call transcripts).
+**Personas and credentials are a project concern**, not forge's. Projects with multiple test accounts document them in `forge/hints/forge.md` — a plain-prose persona table that the driver reads at session start ("admin uses ADMIN_USERNAME / ADMIN_PASSWORD," "user1 uses USER1_USERNAME / USER1_PASSWORD," "fresh users are minted via this SQL"). When the user names a persona ("log in as admin"), the driver references the corresponding env keys via **native shell expansion** (`$ADMIN_USERNAME`) at the Bash boundary. The shell expands the reference at exec time; the tool-call transcript records the unexpanded `$VAR`, never the value. Forge does no env handling of its own — the rule applies uniformly to every env var (not just credentials).
 
 For parallel runs against the same project: use different personas — two `/forge` sessions, one as `admin`, one as `user1`, work in parallel as long as the project's backend isn't single-session-per-user for the same account. The single-session-per-user constraint (if it exists) is documented in `forge.md` and is the user's responsibility to respect.
 
@@ -189,22 +189,19 @@ The default scrub fires unless the hint says not to. `## Teardown after each run
 ├── node_modules/           # gitignored — lazy-installed runner deps
 ├── package.json            # gitignored — forge-managed runner manifest
 ├── playwright.config.ts    # gitignored — scaffolded fallback runner config
-├── .env                    # gitignored — forge-specific env
 ├── .gitignore              # gitignored — self-ignores; only hints/ tracked
 └── README.md               # gitignored — scaffold, points at conventions doc
 ```
 
 Only `hints/` is tracked. Everything else is local per-machine. `forge-init` regenerates the rest from convention. See the scaffold's inline comments for adapting to projects with their own Playwright runner.
 
-## Credentials
+## Environment variables
 
-Forge speaks dotenv natively. Three layers, last-set wins:
+Forge does no env handling on its own. Whatever's in `process.env` at run time is what your specs and snippets see — and forge leaves it entirely to you to decide how it gets there. Direnv, dotenv-cli, manual shell exports, a secrets manager, or the optional dotenv line in the scaffolded `forge/playwright.config.ts` — your choice, your call.
 
-1. **`<project-root>/.env`** — baseline.
-2. **`forge/.env`** — forge-specific overrides.
-3. **`<slot>/.env`** — per-persona overrides (injected by `--slot` on wrapper scripts).
+The one rule forge does enforce, via the driver's prompt: **env values are referenced, never inlined**. The driver uses native shell expansion (`$ADMIN_USERNAME`) inside its Bash commands; the shell expands at exec time; the tool-call transcript records the unexpanded reference, not the value. This applies uniformly to every env var — no credential/non-credential distinction. Predictable hygiene beats per-call judgment.
 
-User shell env (e.g. `direnv` with 1Password injecting `OP_TOKEN`) sits on top — already in `process.env` when the wrappers start; wins via `dotenv`'s non-override default. Direnv is your personal layer, not forge's mechanism.
+For multi-persona projects, document the persona → env-key mapping in `forge/hints/forge.md` (e.g. "admin → `$ADMIN_USERNAME` / `$ADMIN_PASSWORD`, user → `$USER_USERNAME` / `$USER_PASSWORD`"). The driver reads the hint and references the keys; nothing else needs to change in forge.
 
 ## Use cases
 

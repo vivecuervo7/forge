@@ -97,7 +97,7 @@ Once you have either a trivial-cap fast-path or a resolved plan, write the file.
 - `EDIT_EXISTING: yes` — the user authorized in-place overwrite at the cap step. Skip the usual overwrite check (step 7's three-case decision). Read the existing file to understand its shape, then write the new version. Preserve the file path; preserve the meta block's structure; replace the body and update the description and args as the plan demands.
 - `EDIT_EXISTING: no` — apply the usual overwrite check from step 7. The lead has already verified the name is free, but defense-in-depth is fine.
 
-**Format** — same as standard step 7: `meta` block with description / args / envKeys / tags, single exported `run(page, args)` function. The body preserves what the driver actually did, with parameterizable values referenced as `args.foo` and env values as `process.env.X`.
+**Format** — same as standard step 7: `meta` block with description / args / tags, single exported `run(page, args)` function. The body preserves what the driver actually did, with parameterizable values (including any env-sourced ones) referenced as `args.foo`. Snippets never read `process.env` directly — the caller resolves env values and passes them in as args.
 
 ## 6. Weave annotations into the body
 

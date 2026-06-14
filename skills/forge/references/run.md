@@ -10,7 +10,7 @@ Re-runs an existing verified spec via `forge-run-spec.mjs`. No team is spawned �
 
 Optionally records a video (when `RECORD_AS` is set) at `forge/videos/<spec-basename>-<RECORD_AS>.webm`. The recording is evidence — typically used in a before/after workflow where the same spec is run twice against different code states.
 
-No pool slot is claimed. The script uses Playwright's ephemeral browser context; credentials come from the project's `forge/.env` (loaded by `forge/playwright.config.ts`). To use a different persona, the user overrides via shell env before invoking, e.g. `SAUCE_USERNAME=problem_user /forge run last spec, record as problem-flow`.
+The script uses Playwright's ephemeral browser context. Env values come from whatever's already in `process.env` at invocation time — the user's shell env (direnv, manual exports, etc.) plus anything the project's `forge/playwright.config.ts` chose to load. To use a different persona, the user overrides via shell env before invoking, e.g. `SAUCE_USERNAME=problem_user /forge run last spec, record as problem-flow`.
 
 ## Phase 1 — Discovery
 
@@ -108,7 +108,7 @@ Surface the script's actual error output verbatim — the user needs to see exac
 ## Hard rules
 
 - **No team involved.** This route is a thin script invocation. Don't spawn driver, snippet-author, spec-writer, or spec-verifier. If the spec's authoring needs re-doing, that's `/forge spec`'s job.
-- **No slot claim.** The script doesn't need pool semantics — Playwright launches its own browser, credentials come from `forge/.env`.
+- **No team, no session, no pool semantics.** Playwright launches its own browser; env comes from `process.env` as set by the user's shell + whatever the project's `forge/playwright.config.ts` loads.
 - **Default to verification-only.** When `RECORD_AS = none`, do NOT pass `--record` to the script. Recordings are an explicit user request; silent recording bloats `forge/videos/` and wastes time.
 - **Surface script errors verbatim.** If `forge-run-spec.mjs` fails, the user needs to see Playwright's actual report (which selector failed, which assertion mismatched, etc.) — don't paraphrase.
 

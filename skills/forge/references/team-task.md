@@ -8,7 +8,7 @@ This reference is loaded by `/forge`'s router for **task** and **spec** routes. 
 
 **Placeholder note.** `<PLUGIN_ROOT>` in the bash commands below is a placeholder — substitute the literal path captured by the router. Do **not** use `${CLAUDE_PLUGIN_ROOT}` here: the env var isn't reliably populated in the bash context that runs from this reference, and the placeholder pattern sidesteps that bug.
 
-Below is the full lifecycle for running an agent team against the project's slot pool. You are the **team lead**: you manage the team's lifecycle (session-pool slot, team creation, task coordination, shutdown, cleanup) while teammates do the actual work via mesh communication. **You do not relay content between teammates — they SendMessage each other directly.** Your job is setup, lifecycle, and the user channel.
+Below is the full lifecycle for running an agent team against an ephemeral chromium session. You are the **team lead**: you manage the team's lifecycle (session creation, team creation, task coordination, shutdown, cleanup) while teammates do the actual work via mesh communication. **You do not relay content between teammates — they SendMessage each other directly.** Your job is setup, lifecycle, and the user channel.
 
 `MODE` shapes everything:
 
@@ -77,7 +77,7 @@ If setup fails (SQL error, endpoint timeout, etc.), surface to the user and stop
 
 ### 2.1. Generate a team name
 
-Use `forge-<run-id>` where `<run-id>` is a short identifier — derive from `SESSION_NAME` (already short and slot-bound) plus the current timestamp's last 4 digits to avoid collisions across reclaims:
+Use `forge-<run-id>` where `<run-id>` is a short identifier — derive from `SESSION_NAME` (already short and session-bound) plus the current timestamp's last 4 digits to avoid collisions across reclaims:
 
 ```bash
 RUN_ID="${SESSION_NAME#ft-}-$(date +%s | tail -c 5)"
@@ -122,8 +122,8 @@ TaskCreate(
 # Note as SPEC_WRITER_TASK_ID.
 
 TaskCreate(
-  subject="spec-verifier: run spec slot-independently, confirm it passes from cold start",
-  description="Wait for spec-writer's 'spec ready' message. Run the spec via `forge-run-spec.mjs --spec <path>`. The verifier mirrors how the spec will be run downstream (CI / `playwright test` directly): fresh browser context, env from forge/.env + project .env loaded by playwright config. On pass: ping team-lead with verified-from-fresh status. On fail: SendMessage driver (selectors) or spec-writer (assertions/imports) for clarification, iterate up to 3 times, then either succeed or escalate. Mark complete when done."
+  subject="spec-verifier: run spec from a cold context, confirm it passes",
+  description="Wait for spec-writer's 'spec ready' message. Run the spec via `forge-run-spec.mjs --spec <path>`. The verifier mirrors how the spec will be run downstream (CI / `playwright test` directly): fresh browser context, env from whatever's already in `process.env` plus anything the project's `forge/playwright.config.ts` chose to load. On pass: ping team-lead with verified-from-fresh status. On fail: SendMessage driver (selectors) or spec-writer (assertions/imports) for clarification, iterate up to 3 times, then either succeed or escalate. Mark complete when done."
 )
 # Note as SPEC_VERIFIER_TASK_ID.
 ```
@@ -256,7 +256,7 @@ SendMessage(
 
 If they respond with a completion summary, treat it as the missing ping and proceed.
 
-If 2 more idle notifications arrive after the nudge with no response, the teammate is genuinely stuck or has exited without a clean shutdown. Inspect whatever artifacts exist on disk (`ls <FORGE_ROOT>/snippets/` for snippet-author, `ls <FORGE_ROOT>/specs/` for spec-writer), surface the state to the user, and proceed with force-cleanup: skip the shutdown_request for the stalled teammate, call `TeamDelete()` (which may fail if the teammate process is still attached — in that case `rm -rf ~/.claude/teams/<TEAM_NAME> ~/.claude/tasks/<TEAM_NAME>` removes the directories directly), and continue to phase 5.3 to release the slot.
+If 2 more idle notifications arrive after the nudge with no response, the teammate is genuinely stuck or has exited without a clean shutdown. Inspect whatever artifacts exist on disk (`ls <FORGE_ROOT>/snippets/` for snippet-author, `ls <FORGE_ROOT>/specs/` for spec-writer), surface the state to the user, and proceed with force-cleanup: skip the shutdown_request for the stalled teammate, call `TeamDelete()` (which may fail if the teammate process is still attached — in that case `rm -rf ~/.claude/teams/<TEAM_NAME> ~/.claude/tasks/<TEAM_NAME>` removes the directories directly), and continue to phase 5.3 to close the chromium session.
 
 **Bounded waiting**: independently of the per-teammate watchdog, if 10+ minutes pass overall without all expected completion pings AND no STUCK / cannot-drive escalations, surface to user and prepare for force-cleanup.
 
@@ -387,4 +387,4 @@ If anything didn't go to plan (a teammate returned `cannot-drive`, the spec-veri
 - **`TeamCreate` fails because a team already exists.** Call `TeamDelete()` first, then retry. (Note: `TeamDelete` fails if active teammates exist — you may need to shut them down first via SendMessage.)
 - **Driver returns `cannot-drive` before doing meaningful work.** Snippet-author has nothing to author. Mark snippet-author's task complete with note "drive failed; no work to author"; proceed to shutdown and cleanup.
 - **A teammate goes idle and never responds to your SendMessage.** It may have errored mid-turn. Try a follow-up nudge. If still no response, surface to user with the team's current state.
-- **Credentials missing.** If the driver reports STUCK because referenced env keys aren't in process.env (e.g. `$env.ADMIN_USERNAME` referenced but ADMIN_USERNAME isn't set), surface the missing key to the user with a clear request to set it before retrying.
+- **Credentials missing.** If the driver reports STUCK because a referenced env key isn't in process.env (e.g. `$ADMIN_USERNAME` expanded empty because ADMIN_USERNAME isn't set in the user's shell env), surface the missing key to the user with a clear request to set it before retrying.

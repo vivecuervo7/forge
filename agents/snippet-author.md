@@ -161,11 +161,11 @@ export async function run(page, args) {
 
 **Description** — one sentence, written so a future reader scanning a snippet listing knows whether to use it.
 
-**args** — declare the parameter shape (with type hints in JSDoc-ish comments). The body destructures from args. **All sensitive values (credentials, tokens) MUST be args — never read from process.env directly.** The caller (driver in drive mode, spec body in spec mode) decides where credentials come from and passes them in. This keeps snippets persona-agnostic and reusable across credential schemes.
+**args** — declare the parameter shape (with type hints in JSDoc-ish comments). The body destructures from args. **All env-sourced values MUST come in as args — never read `process.env` from inside a snippet.** The caller (driver in drive mode, spec body in spec mode) decides where each value comes from and passes it in. This keeps snippets persona-agnostic and reusable across env-management schemes.
 
-For non-sensitive defaults (baseURL, timeouts), inline a hardcoded fallback in the args destructure (`baseURL = 'https://...'`). Callers can still override by passing a value; the default keeps the snippet usable without one. Don't reach into `process.env` for these either — args + default is enough.
+For non-sensitive defaults (baseURL, timeouts), inline a hardcoded fallback in the args destructure (`baseURL = 'https://...'`). Callers can still override by passing a value; the default keeps the snippet usable without one. The rule is uniform: snippets never touch `process.env` — whatever the body needs, it gets through args.
 
-The `meta.envKeys` field no longer exists. Snippets that have credentials-as-args don't need to declare env keys; the caller handles env resolution via `$env.KEY` substitution in the invoker.
+There is no `meta.envKeys` field. Forge does no env handling; the caller resolves env values (via shell expansion at the Bash boundary in drive mode, via `process.env.X` references in spec mode) and passes them in as args.
 
 ### 8. Mark task complete and signal the lead (and spec-writer, if present)
 
@@ -271,7 +271,7 @@ If you have no proposals, don't send this message — just append `proposals: 0`
 ## Hard rules
 
 - **Preserve what the driver actually did.** Don't fabricate cleaner versions. If the driver used `input#user-name`, your snippet uses `input#user-name`.
-- **Never bake env values into snippets.** Credentials and per-persona config come from args. Snippet body destructures from args; never reads `process.env` for sensitive values. The caller (driver or spec) resolves env and passes it in.
+- **Snippets never read `process.env`.** Every env-sourced value comes in as an arg. Snippet body destructures from args; the caller (driver or spec) resolves env and passes the value in.
 - **No session-specific arg defaults.** Don't default `firstName` to whatever the driver typed. Required args stay required.
 - **Emit full URLs in `page.goto(...)`** — no implicit baseURL.
 - **Snippets are pure runner functions.** No `expect()`, no assertions, no logging — those belong in specs.

@@ -107,7 +107,7 @@ test('<short, intent-describing name>', async ({ page }) => {
 **Key properties of a good spec:**
 
 - **Self-contained.** No reliance on test-suite-level beforeAll/beforeEach fixtures. The login is in the test body (either inline or via a snippet); the test starts from logged-out state.
-- **Env-aware.** Snippets take credentials and config as args (the new pattern — they don't read process.env themselves). The spec body resolves env and passes it in. Example: `await login(page, { username: process.env.ADMIN_USERNAME!, password: process.env.ADMIN_PASSWORD! })`. The spec is explicit about which env vars it depends on; runs natively under Playwright (no env shim needed).
+- **Env-aware.** Snippets take env-sourced values as args (they never read `process.env` themselves). The spec body resolves env and passes values in. Example: `await login(page, { username: process.env.ADMIN_USERNAME!, password: process.env.ADMIN_PASSWORD! })`. The spec is explicit about which env vars it depends on; runs natively under Playwright (no env shim needed).
 - **Idempotent enough to re-run.** If a test creates a record, prefer a unique-per-run identifier (timestamp, uuid) over a hardcoded one. Cart contents reset on logout/login for saucedemo, so cart specs are naturally idempotent; for stickier state, ask driver/snippet-author.
 - **Assertions match captured values.** If driver narrated "cart badge = \"1\"", your spec asserts `expect(badge).toBe('1')`. Don't invent assertions the driver didn't capture; don't omit ones they did.
 - **Comments only where non-obvious.** Don't narrate every line. A `// <step 2 — invoked>` boundary above each composed snippet call is enough.
@@ -143,7 +143,7 @@ Before writing, `Glob <PROJECT_FORGE_ROOT>/specs/*.spec.ts` and `Read` any that 
 
 ### 8. Hand off to spec-verifier (when present)
 
-If a `spec-verifier` teammate is on the team, SendMessage them the spec path so they can run it against the still-warm slot:
+If a `spec-verifier` teammate is on the team, SendMessage them the spec path so they can run it against the still-warm session:
 
 ```
 SendMessage(
@@ -217,7 +217,7 @@ If you have no proposals, don't send this message — just append `proposals: 0`
 
 - **Specs are self-contained.** No external setup fixtures, no shared test-suite state. The spec does its own login (inline or via snippet) and starts from logged-out.
 - **Specs compose snippets, they don't duplicate them.** Import + `.run()` — never inline the body of an existing snippet.
-- **Env values are not baked into spec literals.** `process.env.X`, never the literal credential. Pass values into snippet args; the snippet body uses them. Specs make their env dependencies explicit at the call site.
+- **Env values are not baked into spec literals.** Reference any env-sourced value via `process.env.X`, never inline the literal. Pass values into snippet args; the snippet body uses them. Specs make their env dependencies explicit at the call site.
 - **Assertions reflect what the driver captured, exactly.** Don't invent assertions on values the driver didn't extract via `run-code`.
 - **Emit full URLs in code** — no implicit baseURL.
 - **No `page.pause()`, no `test.only`, no `test.skip`** — specs are production artifacts.

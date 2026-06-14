@@ -9,7 +9,7 @@ One `evals.json`, 24 auto-runnable cases. Each case checks observable behaviour 
 The suite tests **decisions and side-effects of script invocations**, not full team execution. Two reasons:
 
 - **Routing tests** check Phase 0 / 0a / 0b dispatch. The subagent reads `SKILL.md`, applies the routing rules to a prompt, outputs a JSON decision, and stops. No team spawned.
-- **Script tests** check `/forge run` and `/forge export`. These routes don't claim slots and don't spawn teammates — they invoke `forge-run-spec.mjs` / `forge-export-spec.mjs` directly. The subagent invokes the skill end-to-end and we check the resulting artifacts.
+- **Script tests** check `/forge run` and `/forge export`. These routes don't spawn teammates — they invoke `forge-run-spec.mjs` / `forge-export-spec.mjs` directly. The subagent invokes the skill end-to-end and we check the resulting artifacts.
 
 Both kinds of test are stateless and parallel-safe. The suite can re-run across iterations without sandbox reset.
 

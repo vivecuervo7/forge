@@ -2,9 +2,14 @@
 // forge-init.mjs — scaffold the forge/ project convention into a directory.
 //
 // Creates forge/ with the canonical layout: a gitignored data root, a hints/
-// directory for project-specific knowledge, a fallback Playwright config,
-// and a forge-level .env. Template content lives at `templates/init/` and
-// is copied verbatim into the target on missing files.
+// directory for project-specific knowledge, and a fallback Playwright config.
+// Template content lives at `templates/init/` and is copied verbatim into
+// the target on missing files.
+//
+// No .env file is scaffolded. Env handling is delegated to the user's shell
+// (direnv, dotenv-cli, manual exports, or whatever the project's hints
+// describe). See templates/init/playwright.config.ts for the optional
+// dotenv-loading line — commented out by default; uncomment to enable.
 //
 // Idempotent: existing files are preserved. Re-running fills in anything
 // missing without overwriting customizations.
@@ -69,7 +74,6 @@ scaffold('gitignore',            '.gitignore')
 scaffold('README.md',            'README.md')
 scaffold('hints-README.md',      'hints/README.md')
 scaffold('playwright.config.ts', 'playwright.config.ts')
-scaffold('env',                  '.env')
 
 // Report
 console.log(`forge-init: scaffolded ${forgeDir}`)
