@@ -108,7 +108,7 @@ Surface the script's actual error output verbatim — the user needs to see exac
 ## Hard rules
 
 - **No team involved.** This route is a thin script invocation. Don't spawn driver, snippet-author, spec-writer, or spec-verifier. If the spec's authoring needs re-doing, that's `/forge spec`'s job.
-- **No team, no session, no pool semantics.** Playwright launches its own browser; env comes from `process.env` as set by the user's shell + whatever the project's `forge/playwright.config.ts` loads.
+- **Thin script invocation.** Playwright launches its own browser; env comes from `process.env` as set by the user's shell plus whatever the project's `forge/playwright.config.ts` loads. The spec runs as a standalone Playwright test.
 - **Default to verification-only.** When `RECORD_AS = none`, do NOT pass `--record` to the script. Recordings are an explicit user request; silent recording bloats `forge/videos/` and wastes time.
 - **Surface script errors verbatim.** If `forge-run-spec.mjs` fails, the user needs to see Playwright's actual report (which selector failed, which assertion mismatched, etc.) — don't paraphrase.
 

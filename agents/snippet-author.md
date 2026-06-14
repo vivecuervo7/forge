@@ -165,7 +165,7 @@ export async function run(page, args) {
 
 For non-sensitive defaults (baseURL, timeouts), inline a hardcoded fallback in the args destructure (`baseURL = 'https://...'`). Callers can still override by passing a value; the default keeps the snippet usable without one. The rule is uniform: snippets never touch `process.env` — whatever the body needs, it gets through args.
 
-There is no `meta.envKeys` field. Forge does no env handling; the caller resolves env values (via shell expansion at the Bash boundary in drive mode, via `process.env.X` references in spec mode) and passes them in as args.
+Env values are the caller's responsibility — the caller resolves them (via shell expansion at the Bash boundary in drive mode, via `process.env.X` references in spec mode) and passes them in as args. The snippet body only ever sees the values it received.
 
 ### 8. Mark task complete and signal the lead (and spec-writer, if present)
 

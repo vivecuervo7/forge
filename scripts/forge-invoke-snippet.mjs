@@ -30,13 +30,12 @@
 //      thing to `playwright-cli -s=<session> run-code`.
 //   4. Forwards stdout/stderr/exit-code verbatim.
 //
-// Why the bundler approach: an earlier version tried `mod.run.toString()`
-// over a dynamically-imported snippet. That broke in five distinct ways:
-// only the run() body crossed the sandbox boundary (named exports lost);
-// module-internal helpers were lost; types couldn't be evaluated; cross-
-// snippet imports couldn't be resolved on Node 24; dynamic import is
-// blocked inside the run-code VM sandbox itself. esbuild + bundling
-// solves all five at once.
+// Why the bundler approach: snippets need full module semantics inside the
+// playwright-cli run-code sandbox — named exports, internal helpers, TS
+// type stripping, cross-snippet imports — and the sandbox itself blocks
+// dynamic import. esbuild bundles everything into a single self-contained
+// JS blob that crosses the boundary cleanly and runs as plain code, which
+// is the only shape the sandbox supports.
 //
 // Usage:
 //   forge-invoke-snippet.mjs -s=<session> --snippet <path> [--args '<json>']

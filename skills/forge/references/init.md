@@ -22,7 +22,7 @@ Scaffolds the canonical `forge/` directory layout into a project. Run this once 
 
 Everything else under `forge/` (snippets, specs, videos, transcripts) is created lazily by other routes as they write into it. After scaffolding, the user authors hint files in `forge/hints/` describing their project's specifics.
 
-No `.env` file is scaffolded — forge does no env handling on its own. Users who want one can create it; the scaffolded playwright config has a commented-out dotenv-loading line they can uncomment to wire it in.
+Env handling is delegated to the user. The scaffolded playwright config has a commented-out dotenv-loading line — uncomment it to have forge load `forge/.env` on each spec run, or leave it commented and use direnv / dotenv-cli / shell exports / whatever fits the project.
 
 ## Invocation
 

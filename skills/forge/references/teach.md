@@ -8,7 +8,7 @@ This reference is loaded by `/forge`'s router for the **teach** route. The route
 
 Spawns driver + snippet-author against an ephemeral chromium session. No spec-writer, no spec-verifier. You (the lead) run an interactive loop with the user: the user describes what they want forge to do or capture; you translate to the driver; the driver narrates back to the author; the author waits for your explicit "cap this as `<name>`" signals before writing snippets.
 
-The output is curated snippets — entered into the library with the user's gotcha annotations baked into the bodies. There is no spec artifact.
+The output is curated snippets — entered into the library with the user's gotcha annotations baked into the bodies. (For a spec artifact, use spec mode.)
 
 ## Why teach mode exists
 
