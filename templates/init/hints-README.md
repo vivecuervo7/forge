@@ -78,5 +78,5 @@ If you're asking Claude (or another AI) to generate hints for a codebase, point 
 
 ## See also
 
-- `plugins/forge/docs/project-conventions.md` — full convention details and rationale.
-- `plugins/forge/docs/where-it-works.md` — field report covering where forge works well and where the hint mechanism's leverage actually shows up.
+- `docs/project-conventions.md` — full convention details and rationale.
+- `docs/where-it-works.md` — field report covering where forge works well and where the hint mechanism's leverage actually shows up.
