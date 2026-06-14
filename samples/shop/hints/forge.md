@@ -14,11 +14,13 @@ REST API uses JWT-based auth. The frontend logs in via `POST /auth/login`, store
 
 The deployment seeds shared demo accounts (no signup needed). Three are documented here; each maps to a pair of env keys the driver references via native shell expansion when invoking auth-bearing snippets.
 
-| Account keyword | Email | Password | Role | Env keys |
-|---|---|---|---|---|
-| `customer`  | `customer@practicesoftwaretesting.com`  | `welcome01` | customer | `PST_CUSTOMER_EMAIL` / `PST_CUSTOMER_PASSWORD` |
-| `customer2` | `customer2@practicesoftwaretesting.com` | `welcome01` | customer | `PST_CUSTOMER2_EMAIL` / `PST_CUSTOMER2_PASSWORD` |
-| `admin`     | `admin@practicesoftwaretesting.com`     | `welcome01` | admin | `PST_ADMIN_EMAIL` / `PST_ADMIN_PASSWORD` |
+| Account keyword | Role | Env keys |
+|---|---|---|
+| `customer`  | customer | `PST_CUSTOMER_EMAIL` / `PST_CUSTOMER_PASSWORD` |
+| `customer2` | customer | `PST_CUSTOMER2_EMAIL` / `PST_CUSTOMER2_PASSWORD` |
+| `admin`     | admin    | `PST_ADMIN_EMAIL` / `PST_ADMIN_PASSWORD` |
+
+The actual email / password values for these seeded accounts are documented in the [demo's official docs](https://testsmith-io.github.io/practice-software-testing/) — look up the test-account credentials there and set them in your env layer (direnv, `.env`, etc.). This hint file deliberately doesn't list them: even publicly-documented credentials shouldn't sit in a tracked hint file. The same discipline the driver follows at runtime (env values stay in env, never in tracked files) applies to the hint that documents them.
 
 Notes:
 - TOTP setup is denied for `customer` and `admin`. Don't try to enable it during a drive.
