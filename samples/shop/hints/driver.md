@@ -73,14 +73,12 @@ Payment:
 ## Login flow
 
 1. `goto https://practicesoftwaretesting.com/auth/login`
-2. Fill `input[data-test="email"]` with the account's email (env keys documented in `forge.md`'s account table — e.g. `$PST_CUSTOMER_EMAIL` for the `customer` account)
-3. Fill `input[data-test="password"]` with the matching password env var
+2. Fill `input[data-test="email"]` with the account's email
+3. Fill `input[data-test="password"]` with the account's password
 4. Click `input[data-test="login-submit"]`
 5. URL changes to `/account` on success
 
-If login fails, `[data-test="login-error"]` renders with the error text.
-
-Auth-bearing snippets (`checkout-login.ts` here) take `email` and `password` as args; the caller resolves env values and passes them in. The driver references env keys via native shell expansion (`$PST_CUSTOMER_EMAIL`) in its Bash command; the spec uses `process.env.PST_CUSTOMER_EMAIL` directly at the call site.
+If login fails, `[data-test="login-error"]` renders with the error text. The account's env keys are documented in `forge.md`.
 
 ## Known gotchas
 
