@@ -59,43 +59,49 @@ import { spawnSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { loadSlotEnv } from './forge-slot-env.mjs'
-import { ensureBundlerAvailable, esbuildBinFor } from './forge-ensure-runner.mjs'
+import { ensureRunnerDeps, esbuildBinFor, loadFromRunner } from './forge-ensure-runner.mjs'
 
 function die(msg, code = 2) {
   console.error('forge-pool-invoke-snippet:', msg)
   process.exit(code)
 }
 
-const argv = process.argv.slice(2)
-
-let session = null
-let snippetPath = null
-let argsJson = '{}'
-let slot = null
-
-for (let i = 0; i < argv.length; i++) {
-  const arg = argv[i]
-  if (arg.startsWith('-s=')) {
-    session = arg.slice(3)
-  } else if (arg === '-s' || arg === '--session') {
-    if (i + 1 >= argv.length) die('--session requires a value')
-    session = argv[++i]
-  } else if (arg === '--snippet') {
-    if (i + 1 >= argv.length) die('--snippet requires a path')
-    snippetPath = argv[++i]
-  } else if (arg === '--args') {
-    if (i + 1 >= argv.length) die('--args requires JSON')
-    argsJson = argv[++i]
-  } else if (arg === '--slot') {
-    if (i + 1 >= argv.length) die('--slot requires a path')
-    slot = argv[++i]
-  } else {
-    die(`unknown arg: ${arg}`)
+// Parse with mri. Snippet path is required, so we ensure runner deps first
+// using the snippet path's derived forge root.
+//
+// Bootstrap detail: we can't load mri until runner deps are installed, but
+// we need to know forgeRoot to find the runner. Resolve the snippet path
+// from raw argv just for that.
+function rawArgValue(name, short = null) {
+  const av = process.argv.slice(2)
+  for (let i = 0; i < av.length; i++) {
+    if (av[i] === name && i + 1 < av.length) return av[i + 1]
+    if (short && av[i] === short && i + 1 < av.length) return av[i + 1]
+    if (av[i].startsWith(`${name}=`)) return av[i].slice(name.length + 1)
+    if (short && av[i].startsWith(`${short}=`)) return av[i].slice(short.length + 1)
   }
+  return null
 }
 
+const rawSnippet = rawArgValue('--snippet')
+if (!rawSnippet) die('missing --snippet <path>')
+
+const forgeRoot = dirname(dirname(resolve(rawSnippet)))
+ensureRunnerDeps(forgeRoot)
+
+const { default: mri } = await loadFromRunner(forgeRoot, 'mri')
+const args = mri(process.argv.slice(2), {
+  string: ['session', 'snippet', 'args', 'slot'],
+  alias: { s: 'session' },
+  default: { args: '{}' },
+})
+
+const session = args.session ?? null
+const snippetPath = args.snippet
+const argsJson = args.args
+const slot = args.slot ?? null
+
 if (!session) die('missing -s=<session-name>')
-if (!snippetPath) die('missing --snippet <path>')
 
 let parsedArgs
 try {
@@ -142,7 +148,7 @@ if (!/export\s+(?:async\s+)?function\s+run\s*\(/.test(rawSrc) &&
 // for soft ones). Hard-failing here would contradict snippet bodies that
 // have legitimate fallbacks (e.g. a base URL that defaults to localhost
 // when no FORGE_BASE_URL is set).
-const slotEnv = loadSlotEnv(slot)
+const slotEnv = await loadSlotEnv(slot)
 const combinedEnv = { ...slotEnv, ...process.env }
 
 const envObj = {}
@@ -152,16 +158,8 @@ for (const key of envKeys) {
   }
 }
 
-// Derive the project's forge root from the snippet path: <forge>/snippets/<name>.ts.
-const forgeRoot = dirname(dirname(resolve(snippetPath)))
-
-// Ensure esbuild is installed for this project. First call pays ~30s;
-// subsequent calls are free.
-try {
-  ensureBundlerAvailable(forgeRoot)
-} catch (e) {
-  die(`bundler unavailable: ${e.message || e}`, 2)
-}
+// forgeRoot was derived above (during mri bootstrap) and ensureRunnerDeps
+// has already run, so esbuild is installed and ready.
 
 // Bundle the snippet. esbuild handles:
 //   - TS type stripping (--platform=node)

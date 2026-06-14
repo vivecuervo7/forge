@@ -81,7 +81,7 @@ if (code === null) die('missing <code> positional arg')
 // Resolve env from slot .env (if --slot given) merged with process.env
 // (which already contains anything the user's shell direnv loaded). process.env
 // wins, so user direnv overrides slot.
-const slotEnv = loadSlotEnv(slot)
+const slotEnv = await loadSlotEnv(slot)
 const combinedEnv = { ...slotEnv, ...process.env }
 
 const envObj = {}

@@ -8,65 +8,47 @@
 // process.env wins, so anything in the user's shell environment when the
 // wrapper starts takes precedence over slot values.
 //
-// Format expected: KEY=VALUE per line, # comments, blank lines OK. Quoting
-// supported in the standard dotenv way (single or double quoted values are
-// unwrapped). This is a deliberately tiny parser — for richer behavior
-// (variable expansion, multi-line, etc.) projects should pass values through
-// their root .env (loaded by the playwright config via the dotenv package)
-// instead.
+// Parsing is delegated to the `dotenv` package (installed in <forge>/.runner/).
+// Standard dotenv format: KEY=VALUE per line, # comments, single/double
+// quotes unwrap. Variable expansion is NOT performed (we use dotenv.parse,
+// not dotenv-expand) — keeps values literal and prevents .env values from
+// referencing each other in surprising ways.
 //
 // Backward compatibility: if <slot>/.env doesn't exist but <slot>/.envrc
-// does (older direnv-based slots), this helper parses the .envrc's
-// `export KEY=VALUE` lines on a best-effort basis. New slots are minted
-// with .env via the provisioning recipe in hints/forge.md.
+// does (older direnv-based slots), the leading `export ` prefix is stripped
+// on the fly so dotenv.parse can read it.
 
 import { existsSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
-
-function parseDotenv(content) {
-  const env = {}
-  for (let line of content.split('\n')) {
-    line = line.trim()
-    if (!line || line.startsWith('#')) continue
-    // Strip optional `export ` prefix for back-compat with .envrc files.
-    if (line.startsWith('export ')) line = line.slice(7).trimStart()
-    const eq = line.indexOf('=')
-    if (eq < 0) continue
-    const key = line.slice(0, eq).trim()
-    let value = line.slice(eq + 1).trim()
-    // Unwrap quoted values.
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
-      value = value.slice(1, -1)
-    }
-    // Strip trailing inline comments for unquoted values only.
-    if (!value.startsWith('"') && !value.startsWith("'")) {
-      const hashIdx = value.indexOf(' #')
-      if (hashIdx > 0) value = value.slice(0, hashIdx).trimEnd()
-    }
-    if (key) env[key] = value
-  }
-  return env
-}
+import { dirname, join } from 'node:path'
+import { ensureRunnerDeps, loadFromRunner } from './forge-ensure-runner.mjs'
 
 /**
  * Read a slot's per-persona env from <slot>/.env (preferred) or <slot>/.envrc
  * (back-compat). Returns a plain key→value object. Empty object if slotDir
  * is falsy or neither file exists.
+ *
+ * Async because it loads `dotenv` from the project's runner install.
  */
-export function loadSlotEnv(slotDir) {
+export async function loadSlotEnv(slotDir) {
   if (!slotDir) return {}
+
   const envPath = join(slotDir, '.env')
-  if (existsSync(envPath)) {
-    return parseDotenv(readFileSync(envPath, 'utf8'))
-  }
   const envrcPath = join(slotDir, '.envrc')
-  if (existsSync(envrcPath)) {
-    return parseDotenv(readFileSync(envrcPath, 'utf8'))
-  }
-  return {}
+
+  const target = existsSync(envPath) ? envPath
+    : existsSync(envrcPath) ? envrcPath
+    : null
+  if (!target) return {}
+
+  // Derive forgeRoot from slotDir: <forge>/.pool/slot-X → dirname(dirname(slotDir))
+  const forgeRoot = dirname(dirname(slotDir))
+  ensureRunnerDeps(forgeRoot)
+  const dotenv = await loadFromRunner(forgeRoot, 'dotenv')
+
+  // Strip the leading `export ` prefix on each line for .envrc back-compat.
+  // dotenv doesn't handle it natively.
+  const content = readFileSync(target, 'utf8').replace(/^[ \t]*export[ \t]+/gm, '')
+  return dotenv.parse(content)
 }
 
 /**

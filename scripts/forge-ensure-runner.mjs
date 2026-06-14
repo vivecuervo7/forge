@@ -35,7 +35,8 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { spawnSync } from 'node:child_process'
-import { fileURLToPath } from 'node:url'
+import { createRequire } from 'node:module'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 // Path helpers — runner location is per-project, parameterized by forgeRoot.
 
@@ -85,6 +86,12 @@ export function ensurePluginRunner(forgeRoot) {
       '@playwright/test': '^1.49.0',
       dotenv: '^16.4.0',
       esbuild: '^0.24.0',
+      execa: '^9.5.0',
+      'find-process': '^1.4.0',
+      mri: '^1.2.0',
+      'proper-lockfile': '^4.1.0',
+      'tree-kill': '^1.2.0',
+      'write-file-atomic': '^6.0.0',
     },
   }, null, 2) + '\n'
   // Overwrite on every install attempt so version bumps land deterministically.
@@ -108,21 +115,43 @@ export function ensurePluginRunner(forgeRoot) {
   }
 }
 
-// Ensure esbuild is available for snippet invocation. Independent of project-
-// runner detection — even projects with their own Playwright need esbuild for
-// snippet bundling, because the playwright-cli run-code sandbox can't
-// dynamically import .ts files.
+// Ensure the project's .runner/ deps are installed. Sentinel is the esbuild
+// bin — once npm install succeeds, every dep in package.json is present, so
+// checking the smallest known artifact is enough.
 //
-// Triggers a full plugin-runner install if esbuild is missing. The first call
-// per project pays the ~30s cost; subsequent calls are free.
-export function ensureBundlerAvailable(forgeRoot) {
+// Used independently of project-runner detection: even projects with their
+// own Playwright need .runner/ for plugin-side deps (execa, mri,
+// proper-lockfile, etc.) used by the pool, invoke, and spec-run scripts.
+//
+// Triggers a full install if the sentinel is missing. First call per project
+// pays the ~30s cost; subsequent calls are free.
+export function ensureRunnerDeps(forgeRoot) {
   if (existsSync(esbuildBinFor(forgeRoot))) return
   ensurePluginRunner(forgeRoot)
   if (!existsSync(esbuildBinFor(forgeRoot))) {
     throw new Error(
-      `forge-ensure-runner: esbuild missing at ${esbuildBinFor(forgeRoot)} after npm install.`
+      `forge-ensure-runner: runner deps missing at ${runnerRootFor(forgeRoot)} after npm install.`
     )
   }
+}
+
+// Backward-compat alias — kept until all callers migrate.
+export const ensureBundlerAvailable = ensureRunnerDeps
+
+// Load a runner-installed dep from the plugin script side. Used by pool +
+// invoke + spec-run scripts to import packages they need (execa, mri,
+// proper-lockfile, etc.) from the project's <forgeRoot>/.runner/ install.
+//
+// Handles both CJS and ESM deps via dynamic import on the resolved file
+// path. Returns the module's namespace object — destructure named exports
+// where present, or use `.default` for CJS-style default exports.
+//
+// Callers should `ensureBundlerAvailable(forgeRoot)` or equivalent first
+// to guarantee the runner is installed.
+export async function loadFromRunner(forgeRoot, name) {
+  const req = createRequire(join(runnerRootFor(forgeRoot), 'package.json'))
+  const resolved = req.resolve(name)
+  return import(pathToFileURL(resolved).href)
 }
 
 // Combined "ensure a runner is ready for this project" routine. Detects
