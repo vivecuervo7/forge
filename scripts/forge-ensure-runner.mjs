@@ -35,6 +35,7 @@ import { fileURLToPath } from 'node:url'
 
 export const PLUGIN_RUNNER_ROOT = join(homedir(), '.claude', '.vive-claude', 'forge', 'runner')
 export const PLUGIN_PW_MARKER = join(PLUGIN_RUNNER_ROOT, 'node_modules', '@playwright', 'test')
+export const PLUGIN_ESBUILD_BIN = join(PLUGIN_RUNNER_ROOT, 'node_modules', '.bin', 'esbuild')
 
 // Walk up from a starting dir, looking for a Playwright runner:
 //   - playwright.config.{ts,js,mjs} at the same level
@@ -70,6 +71,7 @@ export function ensurePluginRunner() {
     dependencies: {
       '@playwright/test': '^1.49.0',
       dotenv: '^16.4.0',
+      esbuild: '^0.24.0',
     },
   }, null, 2) + '\n'
   // Overwrite on every install attempt so version bumps land deterministically.
@@ -88,6 +90,27 @@ export function ensurePluginRunner() {
   if (!existsSync(PLUGIN_PW_MARKER)) {
     throw new Error(
       `npm install completed but @playwright/test still missing at ${PLUGIN_PW_MARKER}. This shouldn't happen — check the runner dir.`
+    )
+  }
+}
+
+// Ensure esbuild is available for snippet invocation. Independent of
+// project-runner detection: even projects with their own Playwright setup
+// need esbuild for snippet bundling, because the alternative (sending raw
+// .ts function strings into playwright-cli's run-code sandbox) is broken
+// by design — only run.toString() crosses the boundary, losing all
+// module-internal helpers, constants, and cross-snippet imports.
+//
+// Triggers a full plugin-runner install if esbuild is missing. The runner
+// dir is shared user-globally; first call pays the ~30s cost, subsequent
+// calls (across forge projects on the machine) are free.
+export function ensureBundlerAvailable() {
+  if (existsSync(PLUGIN_ESBUILD_BIN)) return
+  ensurePluginRunner()
+  if (!existsSync(PLUGIN_ESBUILD_BIN)) {
+    throw new Error(
+      `forge-ensure-runner: esbuild missing at ${PLUGIN_ESBUILD_BIN} after npm install. ` +
+      `Check ${PLUGIN_RUNNER_ROOT}/ for install errors.`
     )
   }
 }

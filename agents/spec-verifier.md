@@ -3,7 +3,7 @@ name: spec-verifier
 description: "Run the spec the spec-writer just produced and report whether it passes from a cold, slot-independent start. Teammate role in the forge agent team — receives the spec path from spec-writer when it's ready, invokes forge-pool-run-spec.mjs (without slot env), captures pass/fail. On failure, surfaces the error to driver and spec-writer for clarification; iterates with their answers until the spec passes or escalates to the lead."
 model: sonnet
 color: red
-tools: ["Read", "Glob", "Grep", "Bash(ls:*)", "Bash(cat:*)", "Bash(mkdir:*)", "Bash(node **/forge/*/scripts/*)", "Bash(playwright-cli:*)", "SendMessage", "TaskCreate", "TaskUpdate", "TaskList", "TaskGet", "TaskOutput"]
+tools: ["Read", "Glob", "Grep", "Bash(ls:*)", "Bash(cat:*)", "Bash(mkdir:*)", "Bash(node **/forge/scripts/*)", "Bash(playwright-cli:*)", "SendMessage", "TaskCreate", "TaskUpdate", "TaskList", "TaskGet", "TaskOutput"]
 ---
 
 # Verifier Agent (team architecture)

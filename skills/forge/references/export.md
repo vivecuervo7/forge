@@ -2,6 +2,8 @@
 
 This reference is loaded by `/forge`'s router for the **export** route. The router has stripped the `export` keyword from the args; the remaining text is the spec name (possibly empty, possibly with a `--output <path>` flag).
 
+**Placeholder note.** `<PLUGIN_ROOT>` in the bash commands below is a placeholder — substitute the literal path the router captured in SKILL.md phase 1.0. Do **not** use `${CLAUDE_PLUGIN_ROOT}` here: the env var isn't reliably populated in the bash context that runs from this reference.
+
 ## What this route does
 
 Exports a composed forge spec (the working artifact that imports from `forge/snippets/`) into its inlined form (self-contained, ships anywhere `@playwright/test` is installed).
@@ -21,7 +23,7 @@ The exported spec lives outside `forge/` deliberately — the composed form (wor
 ### 1.1. Find the project's forge root
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/forge-find-root.sh
+bash <PLUGIN_ROOT>/scripts/forge-find-root.sh
 ```
 
 If it fails (exit non-zero), relay verbatim and stop. The user needs `/forge init` first.
@@ -83,7 +85,7 @@ mkdir -p "$(dirname OUTPUT_PATH)"
 Then export:
 
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-export-spec.mjs \
+node <PLUGIN_ROOT>/scripts/forge-export-spec.mjs \
   --spec <FORGE_ROOT>/specs/<name>.spec.ts \
   --output <OUTPUT_PATH> \
   --force

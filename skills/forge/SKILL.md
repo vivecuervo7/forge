@@ -1,15 +1,15 @@
 ---
 name: forge
-description: "Browser-automation agent team for Claude Code. Five routes under one skill: `/forge <task>` (drive mode — driver + snippet-author do the task end-to-end), `/forge spec <task>` (spec mode — also produces a verified Playwright spec), `/forge run <spec>` (re-run a verified spec, optionally recording a video for evidence), `/forge init` (scaffold the forge/ directory convention in CWD), `/forge export <name>` (inline a composed spec for shipping outside forge/). Walks up from CWD to find the project's forge/ directory, dispatches to a route-specific reference for the rest of the work."
+description: "Browser-automation agent team for Claude Code. Six routes under one skill: `/forge <task>` (drive mode — driver + snippet-author do the task end-to-end), `/forge teach <topic>` (teach mode — user pilots forge turn-by-turn to curate snippets with project-specific gotchas baked in), `/forge spec <task>` (spec mode — also produces a verified Playwright spec), `/forge run <spec>` (re-run a verified spec, optionally recording a video for evidence), `/forge init` (scaffold the forge/ directory convention in CWD), `/forge export <name>` (inline a composed spec for shipping outside forge/). Walks up from CWD to find the project's forge/ directory, dispatches to a route-specific reference for the rest of the work."
 model: sonnet
 effort: medium
 argument-hint: "[spec|run|init|export] <args>"
-allowed-tools: Read, Glob, Skill, AskUserQuestion, Bash(bash **/forge/*/scripts/*), Bash(node **/forge/*/scripts/*), Bash(direnv:*), Bash(playwright-cli:*), Bash(mkdir:*), Bash(jq:*), Bash(cat:*), Bash(echo:*), Bash(ls:*), Agent, SendMessage, TeamCreate, TeamDelete, TaskCreate, TaskList, TaskGet, TaskUpdate
+allowed-tools: Read, Glob, Skill, AskUserQuestion, Bash(bash **/forge/scripts/*), Bash(node **/forge/scripts/*), Bash(direnv:*), Bash(playwright-cli:*), Bash(mkdir:*), Bash(jq:*), Bash(cat:*), Bash(echo:*), Bash(ls:*), Agent, SendMessage, TeamCreate, TeamDelete, TaskCreate, TaskList, TaskGet, TaskUpdate
 ---
 
 # /forge
 
-`/forge` is a single skill with five routes (init, export, run, spec, and the default task route). This SKILL.md is a thin router — it parses the route, captures route-specific context, and dispatches to a reference file that contains the actual instructions for that route. Only the reference for the chosen route is loaded; init/export invocations don't pull in team-orchestration content, and task/spec invocations don't pull in scaffold or export logic.
+`/forge` is a single skill with six routes (init, export, run, teach, spec, and the default task route). This SKILL.md is a thin router — it parses the route, captures route-specific context, and dispatches to a reference file that contains the actual instructions for that route. Only the reference for the chosen route is loaded; init/export invocations don't pull in team-orchestration content, and task/spec/teach invocations don't pull in scaffold or export logic.
 
 ## Phase 0 — Pick the route
 
@@ -20,6 +20,7 @@ Look at the first word of `$ARGUMENTS` (case-insensitive). The dispatch table:
 | `init` | scaffold a forge/ directory | `references/init.md` | optional target dir |
 | `export` | inline a composed spec for shipping | `references/export.md` | spec name + optional `--output <path>` |
 | `run` | re-run a verified spec, optionally recording | `references/run.md` | spec name / `last` / `latest`, plus optional `record as <label>` |
+| `teach` | teach mode — user pilots forge to curate snippets | `references/teach.md` | optional session-framing topic |
 | `spec` | spec mode — drive + write spec + verify | `references/team-task.md` (with `MODE=spec`) | the actual task description |
 | *(anything else)* | (see natural-language signals below; default fallback is the task route) | `references/team-task.md` (with `MODE=drive`) | the full args = task description |
 
@@ -40,6 +41,13 @@ When the first word isn't a route keyword, check the full args for these natural
 - "inline this spec" / "inline the snippets in <name>"
 - "export the spec from the latest recording" *(also matches the first-word `export` keyword — the NL pattern is redundant-safe)*
 
+**Teach route** — a teach-verb combined with forge/snippets as the object, OR an offer-to-pilot phrasing:
+
+- "teach forge how to log in" / "teach forge to create an event"
+- "let me show forge how to ..." / "let me walk forge through ..."
+- "I want to teach forge ..." / "I'll pilot forge to capture ..."
+- "show forge how to ..." (intent must clearly be capturing a reusable snippet, not just running the action once)
+
 If a natural-language signal matches, set the route accordingly and pass the full args (no keyword stripping; the reference handles parsing them).
 
 If neither first-word nor natural-language matches, the route stays task and Phase 0a applies.
@@ -49,6 +57,8 @@ Counter-examples that should NOT match:
 - "log in and ship the package to checkout" — "ship" appears but not paired with `spec`
 - "install the user via this API" — "install" appears but not paired with `forge`
 - "spec the backpack feature out for me" — colloquial "spec" with no authoring intent (Phase 0a's spec-mode detection would also reject this)
+- "teach me how to write a Playwright test" — teaching intent is about the user being taught, not forge being taught
+- "show me the login flow" — "show" appears, but the object is the user, not forge
 
 ### Examples
 
@@ -58,13 +68,16 @@ Counter-examples that should NOT match:
 - `/forge export add-backpack-to-cart-standard` → route=export, args="add-backpack-to-cart-standard"
 - `/forge ship this spec for the team` → route=export (via NL signal), args="ship this spec for the team"
 - `/forge run last spec, record as before` → route=run, args="last spec, record as before", RECORD_AS=before
+- `/forge teach login flow` → route=teach, args="login flow"
+- `/forge teach forge how to create an event` → route=teach, args="forge how to create an event"
+- `/forge let me show forge how to log in` → route=teach (via NL signal), args="let me show forge how to log in"
 - `/forge spec AE-1775 add a backpack` → route=spec, args="AE-1775 add a backpack", MODE=spec
 - `/forge add the backpack to cart` → route=task, args="add the backpack to cart", MODE=drive
 - `/forge create a spec for adding the backpack` → route=task, args="create a spec for adding the backpack", MODE=spec (via Phase 0a natural-language signal)
 
 ## Phase 0a — Mode detection (task/spec route only)
 
-For task and spec routes, you also need to set `MODE` before loading the reference. Skip this section for init / export / run.
+For task and spec routes, you also need to set `MODE` before loading the reference. Skip this section for init / export / run / teach.
 
 **MODE selection** — spec mode is selected when:
 
@@ -85,25 +98,48 @@ The persisted recording filename is always `<spec-basename>-<suffix>.webm` under
 
 Recording is opt-in evidence: the same spec can be run multiple times with different labels for paired before/after videos around a bug fix.
 
-## Phase 1 — Load the route's reference
+## Phase 1 — Capture `PLUGIN_ROOT`, then load the route's reference
 
-Read the appropriate reference file:
+### 1.0. Capture `PLUGIN_ROOT`
+
+The harness substitutes `${CLAUDE_PLUGIN_ROOT}` in this SKILL.md before Claude reads it, but **not** in content loaded dynamically via `cat` at runtime (i.e. the reference files in `references/`). Because of that, references can't reliably use `${CLAUDE_PLUGIN_ROOT}` directly — by the time bash sees the command, the env var isn't expanded.
+
+The substituted value of `${CLAUDE_PLUGIN_ROOT}` in this paragraph is the literal path the harness wants you to use:
+
+```
+${CLAUDE_PLUGIN_ROOT}
+```
+
+Capture that exact path string as `PLUGIN_ROOT`. Substitute it for every `<PLUGIN_ROOT>` placeholder in the references and in any spawn prompts you relay to teammates. Do **not** try to re-derive the path via bash env-var lookup, filesystem search, or `find` — those routes pick up stale installs (e.g., a marketplace copy that exists alongside a `--plugin-dir` install) and silently use the wrong version.
+
+If the path above shows the literal characters `${CLAUDE_PLUGIN_ROOT}` (unsubstituted), the harness hasn't done its job and forge can't proceed. Surface to the user:
+
+> The plugin harness didn't substitute `${CLAUDE_PLUGIN_ROOT}` in SKILL.md, which forge needs to locate its scripts. This usually means the plugin isn't loaded correctly — re-install or re-load with `--plugin-dir <path>`, then re-invoke `/forge`.
+
+Then stop.
+
+### 1.1. Read the reference
 
 ```bash
-cat ${CLAUDE_PLUGIN_ROOT}/skills/forge/references/<reference>.md
+cat <PLUGIN_ROOT>/skills/forge/references/<reference>.md
 ```
+
+(Substitute the literal value captured in 1.0 for `<PLUGIN_ROOT>`.)
 
 Where `<reference>` is one of:
 - `team-task.md` (for task/spec routes — carries `MODE` into its instructions)
+- `teach.md` (for teach route — carries the optional session-framing topic)
 - `init.md` (for init route)
 - `export.md` (for export route)
 - `run.md` (for run route — carries `RECORD_AS` into its instructions)
 
 Then **follow the instructions in the loaded reference**. The reference is the authoritative body for that route; this SKILL.md just got you to the right one.
 
-When passing context into the reference's work, include the captured route-specific values:
+When passing context into the reference's work, include the captured route-specific values AND the resolved `PLUGIN_ROOT`. References use `<PLUGIN_ROOT>` as a placeholder; substitute the captured value when running their bash commands.
 
+- For all routes: `PLUGIN_ROOT` (the literal path captured in 1.0).
 - For team-task: `MODE` and the task description (args with route keyword stripped).
+- For teach: the optional session-framing topic (may be empty).
 - For init: optional target directory.
 - For export: spec name + optional `--output <path>` override.
 - For run: spec reference (explicit name / `last` / `latest` / unspecified) + `RECORD_AS`.
@@ -113,5 +149,5 @@ When passing context into the reference's work, include the captured route-speci
 - **You are a router.** Don't attempt to do the route's work from this SKILL.md — load the reference first. The references are where the actual instructions live.
 - **Only load one reference per invocation.** Don't pull in references for routes you didn't dispatch to.
 - **Route keyword recognition is case-insensitive but exact-match on the first word.** `Init` matches `init`. `spec-fixup` does NOT match the `spec` route (it's a fresh task with the word "spec" in it — natural-language detection in phase 0a may still pull it into spec mode, that's fine).
-- **If the user's input is ambiguous about which route they want, ask via AskUserQuestion** rather than guessing. The four routes are distinct enough that the user should be definitive.
+- **If the user's input is ambiguous about which route they want, ask via AskUserQuestion** rather than guessing. The routes are distinct enough that the user should be definitive.
 
