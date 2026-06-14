@@ -16,7 +16,7 @@ Both kinds of test are stateless and parallel-safe. The suite can re-run across 
 ## Running
 
 ```
-/skill-creator run the evals at plugins/forge/skills/forge/evals/evals.json against the /forge skill at plugins/forge/skills/forge/
+/skill-creator run the evals at `skills/forge/evals/evals.json against the /forge skill at `skills/forge/
 ```
 
 That's it. One file, one invocation.

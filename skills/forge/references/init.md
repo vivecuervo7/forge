@@ -6,7 +6,7 @@ This reference is loaded by `/forge`'s router for the **init** route. The router
 
 ## What this route does
 
-Scaffolds the canonical `forge/` directory layout into a project. Run this once at the start of using forge against any new project; it sets up the directory structure described in `plugins/forge/docs/project-conventions.md`.
+Scaffolds the canonical `forge/` directory layout into a project. Run this once at the start of using forge against any new project; it sets up the directory structure described in `docs/project-conventions.md`.
 
 ## What gets created
 

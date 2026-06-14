@@ -9,8 +9,8 @@ policy.
 Hints are project-specific knowledge that every contributor needs: env
 contract, provisioning recipes, app structure, conventions. See
 `hints/README.md` (your local copy, gitignored) for guidance on authoring
-them, or the full convention doc in the forge plugin source at
-`plugins/forge/docs/project-conventions.md`.
+them, or the full convention doc in the the source at
+`docs/project-conventions.md`.
 
 ## Quick reference
 

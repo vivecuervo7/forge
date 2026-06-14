@@ -3,8 +3,8 @@
 #
 # Creates forge/ with the canonical layout: a gitignored data root, a hints/
 # directory for project-specific knowledge, a fallback Playwright config, and
-# a forge-level .env. Template content lives at plugins/forge/templates/init/
-# and is copied verbatim into the target on missing files.
+# a forge-level .env. Template content lives at `templates/init/` and is
+# copied verbatim into the target on missing files.
 #
 # Idempotent: existing files are preserved. Re-running fills in anything
 # missing without overwriting customizations.

@@ -16,8 +16,8 @@ The default mode just does the thing you asked for. Spec mode is opt-in for when
 1. **Install the plugin** (one time per machine):
 
    ```bash
-   claude plugin marketplace add vivecuervo7/claude-plugins
-   claude plugin install forge@vive-claude
+   claude plugin marketplace add vivecuervo7/forge
+   claude plugin install forge@vive-forge
    ```
 
 2. **Enable experimental agent teams** in `~/.claude/settings.json`, then restart Claude Code:

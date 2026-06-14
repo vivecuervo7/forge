@@ -111,7 +111,7 @@ The skill reads this and applies the pattern. **No project-authored wrapper scri
 
 ## Discipline rules live in agent prompts, not hints
 
-Universal forge defaults — never bake env values into emitted code, snippets must be idempotent, specs must be E2E from login, etc. — live in the agent definition files at `plugins/forge/agents/`. They apply to every project automatically.
+Universal forge defaults — never bake env values into emitted code, snippets must be idempotent, specs must be E2E from login, etc. — live in the agent definition files at `agents/`. They apply to every project automatically.
 
 Hints encode only **project-specific deviations or additions**. If a project's hint doesn't override anything, the agent applies forge defaults. Minimum-viable hint files can be very small — sometimes just an env contract and a provisioning recipe.
 
@@ -133,7 +133,7 @@ The skill respects the declared location. Useful for CI (`/tmp/forge-pool/`), sh
 
 Some forge state is genuinely cross-project user state and lives outside any project's `forge/`:
 
-- The forge plugin itself: wherever Claude Code installs plugins.
+- The the itself: wherever Claude Code installs plugins.
 - User-global hints (cross-project knowledge): not yet implemented; would live at `~/.config/forge/hints/` if added.
 
 But pool slots, sessions, browser profiles — those are project-scoped and live inside `forge/`. The project owns its working state.
@@ -156,9 +156,9 @@ If no `forge/` is found in the tree, the skill surfaces a helpful error: "no for
 - **Maximally portable.** No tool-specific dependencies in the convention itself. Direnv users use direnv; dotenv users use dotenv; the convention doesn't care.
 - **Maximally additive.** Adding forge to an existing project means running `/forge init` and authoring hints. No surgery on the project's other directories.
 - **Security factoring stays clean.** Hints are committed (and should be safe to commit); secrets live in slot env files which are gitignored. The user can mix plain-literal env files in dev with secret-manager-backed env files in production without forge knowing the difference.
-- **Backwards-promotion path is clean.** When a snippet or spec earns its keep, the user copies it wherever they want — there's no enforced destination. Promotion is an explicit human action, not an automated forge step. The forge plugin doesn't dictate where promoted specs live; that's a per-project decision (often informed by the project's existing test infrastructure, if any).
+- **Backwards-promotion path is clean.** When a snippet or spec earns its keep, the user copies it wherever they want — there's no enforced destination. Promotion is an explicit human action, not an automated forge step. The the doesn't dictate where promoted specs live; that's a per-project decision (often informed by the project's existing test infrastructure, if any).
 
 ## See also
 
-- `plugins/forge/README.md` — installation, commands, architecture overview.
-- `plugins/forge/templates/init/` — the scaffold contents `/forge init` writes.
+- `README.md` — installation, commands, architecture overview.
+- `templates/init/` — the scaffold contents `/forge init` writes.
