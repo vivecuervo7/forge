@@ -309,103 +309,28 @@ If 2 more idle notifications arrive after the nudge with no response, the teamma
 
 **Bounded waiting**: independently of the per-teammate watchdog, if 10+ minutes pass overall without all expected completion pings AND no STUCK / cannot-drive escalations, surface to user and prepare for force-cleanup.
 
-## Phase 4.5 — Review hint proposals
+## Phase 4.5 — Review hint proposals (on-demand)
 
-Each teammate's completion ping ends with `proposals: <N>`. The `N` tells you whether to wait for a follow-up proposals message from that teammate:
+Each teammate's completion ping ends with `proposals: <N>`. The `N` tells you whether to wait for a follow-up proposals message:
 
 - `proposals: 0` — nothing to wait for; that teammate has no proposals.
-- `proposals: <N>` where `N > 0` — wait for a separate `PROPOSALS` SendMessage from that teammate before proceeding.
+- `proposals: <N>` where `N > 0` — wait for a separate `PROPOSALS` SendMessage before proceeding.
 
-If every teammate reported `proposals: 0`, **skip this phase entirely** and proceed to Phase 5. Don't surface a "no proposals" message to the user — the absence of value isn't worth a notification.
+**If every teammate reported `proposals: 0`, skip this phase entirely** and proceed to Phase 5. Do not load the proposal-review reference; do not surface a "no proposals" message. Silence is the right outcome.
 
-### 4.5.1 Aggregate proposals
+If any teammate reported `proposals: N > 0`:
 
-For each teammate with `proposals: N > 0`, wait for their `PROPOSALS` SendMessage. The body format is:
+1. Wait for that teammate's `PROPOSALS` SendMessage. Capture each body verbatim — you'll need them.
+2. Load the proposal-review reference:
 
-```
-PROPOSALS
-count: <N>
+   ```bash
+   cat <PLUGIN_ROOT>/skills/forge/references/proposal-review.md
+   ```
 
----
-ID: 1
-CATEGORY: <hint file name, e.g. driver.md>
-ACTION: ADD | AMEND | REMOVE
-TARGET: <section heading, quoted prose, or empty for ADD-new>
-OBSERVATION: <one-line>
-EVIDENCE: <concrete>
-SUGGESTED_EDIT: |
-  <markdown prose, or empty for REMOVE>
+3. Follow its instructions for aggregation, user review, and application.
+4. When it hands back its "Hint files updated" summary, hold it for Phase 5.4's final report.
 
-(optional)
-ALTERNATIVES:
-- A: <option>
-- B: <option>
-LEAN: A | B | none
-
-(optional)
-RATIONALE: <one-line>
-
----
-ID: 2
-...
-```
-
-Parse each. Collect across all teammates into a single list.
-
-**Dedupe.** If two proposals (from different teammates) have substantially similar OBSERVATION text AND target the same CATEGORY, merge them: take the one with more specific EVIDENCE; mention both proposing teammates in the displayed evidence.
-
-### 4.5.2 Read current hint content for AMEND/REMOVE proposals
-
-For each proposal with ACTION=AMEND or ACTION=REMOVE, read the target hint file at `<FORGE_ROOT>/hints/<CATEGORY>` and locate the TARGET text. This is needed both for the diff preview (4.5.3) and the application step (4.5.4).
-
-If a TARGET can't be found in the file, mark the proposal as "stale" — the file has changed since the agent observed. Don't surface it; quietly drop and continue with the rest.
-
-### 4.5.3 Surface to the user
-
-Begin with this intro line (every time, even on repeated runs):
-
-> **Hint proposals.** Patterns the team observed during this session that might be worth lifting into your project's hint files. Each is independent — accept what improves your hints, reject the rest.
-
-Then surface the proposals via `AskUserQuestion` with `multiSelect: true`. One option per proposal. Group up to 4 proposals per question; if you have more than 4, use multiple questions in the same `AskUserQuestion` call (up to 4 questions × 4 options = 16 proposals per call; for more, make a second call after).
-
-**Single-proposal special case**: if there's exactly one proposal, use single-select (`multiSelect: false`) with two options: Accept / Reject. Multi-select is reserved for 2+ options.
-
-**Option label**: short, identifies the proposal (e.g., `"FORGE_BASE_URL env contract"`, `"Universal dispatchEvent pattern"`).
-
-**Option description**: carries the meaningful content. Include:
-- `[<ACTION> <CATEGORY>]` prefix
-- The OBSERVATION
-- The EVIDENCE (one-line summary)
-- For ADD: the SUGGESTED_EDIT prose (first ~200 chars; user reads detail at decision time)
-- For AMEND: an inline diff showing existing TARGET prose → SUGGESTED_EDIT (use `→` or `replaces` notation)
-- For REMOVE: an inline indication of what gets deleted ("removes: <TARGET first ~100 chars>")
-- If ALTERNATIVES present, list them as sub-bullets in the description
-
-For AMEND and REMOVE proposals, **always show the existing prose alongside the proposed change** in the option description. The user accepts blind otherwise.
-
-### 4.5.4 Apply accepted proposals
-
-For each proposal the user selected:
-
-1. Re-read the target hint file (line numbers may have shifted from prior accepts).
-2. Apply the change:
-   - **ADD**: locate the appropriate heading (matching the proposal's TARGET if provided) and append the SUGGESTED_EDIT under it. If no TARGET section exists, create a new section at the end of the file. If the file doesn't exist (all hint files are optional), create it.
-   - **AMEND**: find the exact TARGET text and replace with SUGGESTED_EDIT using the Edit tool.
-   - **REMOVE**: find the exact TARGET text and remove it.
-3. If a TARGET can't be found at application time (file changed mid-loop), surface a warning to the user and skip that proposal: *"Proposal '<label>' target text not found in <file>; skipping."*
-
-Apply proposals in the order they appear; re-read between each to handle shifting offsets.
-
-### 4.5.5 Carry the summary into Phase 5's report
-
-After applying, build a one-line-per-file summary of changes:
-
-```
-forge/hints/driver.md       (+2 sections: <names>)
-forge/hints/snippet-author.md (+1 amendment, +1 new section)
-```
-
-Use this in Phase 5.4's final report under a "Hint files updated" header. If no proposals were accepted (or none surfaced), omit the header.
+Loading the reference on-demand keeps the lead's prompt lean on happy-path runs where no proposals fire.
 
 ## Phase 5 — Shut down and clean up
 

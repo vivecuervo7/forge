@@ -65,6 +65,17 @@ TaskCreate(
 
 ## Phase 3 — Spawn the teammates
 
+### 3.0 Load the teach-mode addenda
+
+Drive and spec spawns send agents lean prompts; teach mode adds protocol that lives in separate addendum files so it only loads when needed. Read both addenda before spawning:
+
+```bash
+cat <PLUGIN_ROOT>/skills/forge/references/teach-addenda/driver.md
+cat <PLUGIN_ROOT>/skills/forge/references/teach-addenda/snippet-author.md
+```
+
+Capture each as `DRIVER_TEACH_ADDENDUM` and `AUTHOR_TEACH_ADDENDUM`. Inline them into the spawn prompts below.
+
 ### 3.1 Spawn the driver
 
 ```
@@ -87,14 +98,10 @@ PROJECT_HINT_DRIVER:
 
 USER_TASK: <user's framing intent verbatim, e.g. 'teach login flow'>
 
-Your task ID is <DRIVE_TASK_ID>. Claim it via TaskUpdate(owner='driver', status='in_progress'). In teach mode you do NOT plan or autonomously drive — wait for the lead's per-step SendMessage instructions and execute them one at a time. Each instruction is one of:
+TEACH MODE ADDENDUM:
+<DRIVER_TEACH_ADDENDUM verbatim>
 
-- [act] <single user-translated action> — execute it; narrate to snippet-author as usual.
-- [ground] <scene-setting from a user takeover> — informational only; don't execute. Update your mental model of current state.
-- [pause] — user is taking over the browser. Stop acting until you receive a [resume] message; respond with an idle acknowledgement.
-- [resume] <state from the user> — user is back. Acknowledge; wait for the next [act].
-
-Don't message spec-writer (there isn't one). Stay alive until the lead sends shutdown_request."
+Your task ID is <DRIVE_TASK_ID>. Claim it via TaskUpdate(owner='driver', status='in_progress'). Follow the teach-mode addendum above for behavior; it modifies several steps of your base agent prompt. Don't message spec-writer (there isn't one). Stay alive until the lead sends shutdown_request."
 )
 ```
 
@@ -114,11 +121,10 @@ USER_TASK: <user's framing intent verbatim>
 PROJECT_HINT_SNIPPET_AUTHOR:
 <snippet-author.md contents, or 'none' if missing>
 
-Your task ID is <AUTHOR_TASK_ID>. Claim it via TaskUpdate(owner='snippet-author', status='in_progress'). In teach mode, do NOT infer snippet boundaries from driver narration. Wait for the lead's explicit 'cap as <name>' SendMessage. The lead's cap message contains the snippet name, the steps to include, and any annotations (gotchas, fallbacks, retry logic) drawn from the user. Weave annotations into the snippet body — they are the load-bearing knowledge the user is teaching, not decoration for the description.
+TEACH MODE ADDENDUM:
+<AUTHOR_TEACH_ADDENDUM verbatim>
 
-For each cap signal, follow the plan-before-write protocol: resolve STEPS, draft a plan (structure + args + hardcoded values), and either fast-path (trivial caps only — single concern, no args, no hardcoded values) or SendMessage the lead a plan and wait for the user's resolution before writing. Your agent prompt covers the full protocol in the 'Teach mode' section.
-
-If the cap message includes EDIT_EXISTING=yes, the user has authorized an in-place overwrite — skip the usual overwrite check and edit the file. Otherwise apply standard overwrite check (Read existing, decide skip / patch / rename)."
+Your task ID is <AUTHOR_TASK_ID>. Claim it via TaskUpdate(owner='snippet-author', status='in_progress'). Follow the teach-mode addendum above for behavior; it replaces the base 'process driver narrations' loop with a 'plan-before-write per cap signal' loop."
 )
 ```
 
@@ -324,11 +330,9 @@ If the user has driven actions in the current chunk but not yet capped them, ask
 
 Same protocol as team-task — driver SendMessages `team-lead` with STUCK, you surface via `AskUserQuestion`, you SendMessage the answer back. The user is already in the loop, so the STUCK is just a slight pause in normal flow rather than a special escalation.
 
-## Phase 5 — Review hint proposals
+## Phase 5 — Review hint proposals (on-demand)
 
-After the teach loop ends (user signaled in 4.4, or you both naturally wrapped up), before shutdown, give the teammates a chance to propose hint updates.
-
-Send each teammate a one-shot prompt:
+After the teach loop ends, prompt each teammate to surface any proposals they accumulated during the session:
 
 ```
 SendMessage(
@@ -343,63 +347,23 @@ SendMessage(
 )
 ```
 
-Each teammate replies with either `proposals: 0` (in summary or first line) OR a `PROPOSALS` SendMessage in the format defined in their agent prompt.
+Each teammate replies with either `proposals: 0` (in summary or first line) OR a `PROPOSALS` SendMessage.
 
-If both teammates report `proposals: 0`, **skip this phase entirely** and proceed to Phase 6. Don't surface a "no proposals" message — silence is the right outcome.
+**If both teammates report `proposals: 0`, skip this phase entirely** and proceed to Phase 6. Do not load the proposal-review reference; do not surface a "no proposals" message. Silence is the right outcome.
 
-### 5.1 Aggregate
+If any teammate sent a `PROPOSALS` SendMessage:
 
-For each teammate with proposals, parse the `PROPOSALS` body. Format:
+1. Capture each body verbatim.
+2. Load the proposal-review reference:
 
-```
-PROPOSALS
-count: <N>
+   ```bash
+   cat <PLUGIN_ROOT>/skills/forge/references/proposal-review.md
+   ```
 
----
-ID: 1
-CATEGORY: <hint file>
-ACTION: ADD | AMEND | REMOVE
-TARGET: <section or quoted prose>
-OBSERVATION: <one-line>
-EVIDENCE: <concrete>
-SUGGESTED_EDIT: |
-  <markdown prose>
-...
-```
+3. Follow its instructions for aggregation, user review, and application.
+4. When it hands back its "Hint files updated" summary, hold it for Phase 6.1's final report.
 
-Collect across teammates. **Dedupe** by observation similarity + same CATEGORY.
-
-### 5.2 Read current hint content for AMEND/REMOVE proposals
-
-For each AMEND or REMOVE proposal, read the target hint file at `<FORGE_ROOT>/hints/<CATEGORY>` and verify the TARGET text exists. If the text can't be found, mark the proposal as stale; drop it from the surface list.
-
-### 5.3 Surface to the user
-
-Begin with this intro line (every time, even on repeated runs):
-
-> **Hint proposals.** Patterns the team observed during this session that might be worth lifting into your project's hint files. Each is independent — accept what improves your hints, reject the rest.
-
-Then surface via `AskUserQuestion` with `multiSelect: true`. One option per proposal. Up to 4 proposals per question; multiple questions in the same call if needed (up to 16 total per call).
-
-**Single-proposal case**: use single-select (`multiSelect: false`) with Accept / Reject options.
-
-**Option label**: short, identifies the proposal.
-
-**Option description**: full context — `[ACTION CATEGORY]` prefix, OBSERVATION, EVIDENCE, and the suggested edit. For AMEND/REMOVE, show the existing TARGET prose alongside the proposed change so the user can review the diff inline.
-
-### 5.4 Apply accepted proposals
-
-For each selected proposal:
-
-- **ADD**: append SUGGESTED_EDIT under the target heading (or create the section / file if missing).
-- **AMEND**: find the exact TARGET text and replace with SUGGESTED_EDIT via the Edit tool.
-- **REMOVE**: find the exact TARGET text and delete.
-
-Apply in sequence; re-read between each. Skip and warn for any TARGET that can't be found at application time.
-
-### 5.5 Carry into Phase 6's report
-
-Build a one-line-per-file summary of changes for the final report.
+Loading the reference on-demand keeps the lead's prompt lean on sessions where no proposals fire.
 
 ## Phase 6 — Shut down and clean up
 
