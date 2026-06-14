@@ -16,12 +16,13 @@ Scaffolds the canonical `forge/` directory layout into a project. Run this once 
     ├── .gitignore          # committed: self-documenting policy
     ├── README.md           # committed: points at the conventions doc
     ├── playwright.config.ts # committed: fallback Playwright config
-    ├── .env                # gitignored: forge-specific env baseline
     └── hints/              # committed dir; only forge artifact in version control
         └── README.md       # gitignored: local guidance for authoring hints
 ```
 
-Everything else under `forge/` (snippets, specs, videos, the pool, transcripts) is created lazily by other routes as they write into it. After scaffolding, the user authors hint files in `forge/hints/` describing their project's specifics.
+Everything else under `forge/` (snippets, specs, videos, transcripts) is created lazily by other routes as they write into it. After scaffolding, the user authors hint files in `forge/hints/` describing their project's specifics.
+
+No `.env` file is scaffolded — forge does no env handling on its own. Users who want one can create it; the scaffolded playwright config has a commented-out dotenv-loading line they can uncomment to wire it in.
 
 ## Invocation
 

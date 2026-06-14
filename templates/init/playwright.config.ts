@@ -1,32 +1,30 @@
 // Fallback Playwright config for forge specs in this project.
 //
-// Read by forge-pool-run-spec.mjs when the project has no root-level
+// Read by forge-run-spec.mjs when the project has no root-level
 // playwright.config.{ts,js,mjs}. If your project has its own runner —
 // e.g. e2e-tests/playwright.config.ts with custom fixtures, globalSetup,
-// baseURL, etc. — forge-pool-run-spec.mjs will detect and prefer that
+// baseURL, etc. — forge-run-spec.mjs will detect and prefer that
 // config; this file is then unused and can stay as-is.
 //
-// Env loading (highest-precedence wins):
+// ENV LOADING
 //
-//   1. Process env at config-load time — your shell env (direnv if any) +
-//      any slot env the wrapper injected via spawn { env } when invoked
-//      with --slot <slot>/.env. Already in process.env by the time this
-//      config loads.
-//   2. `forge/.env` — gitignored, scaffolded by /forge init with comments
-//      only. Fill in the keys your hints declare. Re-running /forge init
-//      preserves your values (idempotent).
-//   3. `<project-root>/.env` — loaded if it exists, NOT scaffolded by
-//      forge-init (we can't guarantee a gitignore at the project root
-//      covers it, so we leave it to the user to add intentionally).
+// Forge does NO env handling on its own. Whatever's in `process.env` at
+// run time is what your specs and snippets see. You decide how it gets
+// there:
 //
-// dotenv's `override: false` default means values already in process.env
-// are preserved, AND values set by an earlier dotenv call aren't clobbered
-// by a later one. So forge/.env is loaded FIRST below — its values win over
-// <project-root>/.env. The keys each spec needs are declared in your
-// project's forge/hints/forge.md.
+//   - direnv / shell exports / dotenv-cli — populate your shell env before
+//     invoking forge; nothing extra needed here.
+//   - dotenv inside this config — uncomment the import + loadEnv calls
+//     below. Loads forge/.env (forge-specific overrides) and the project's
+//     root .env (baseline) at config-load time. Safe to leave commented
+//     out if you don't need it.
 //
-// Customize this when you DO want forge specs to use a config but don't
-// want a project-wide one. Common additions:
+// // import { config as loadEnv } from 'dotenv'
+// // loadEnv({ path: resolve(__dirname, '.env') })
+// // loadEnv({ path: resolve(__dirname, '..', '.env') })
+//
+// Customize this config when you want forge specs to use a config but
+// don't want a project-wide one. Common additions:
 //   - globalSetup: './global-setup.ts'      // e.g. clear DB before tests
 //   - globalTeardown: './global-teardown.ts'
 //   - use.baseURL: 'https://your.app/'
@@ -35,7 +33,6 @@
 //
 // Committed to the repo so teammates pick up the same fallback config.
 import { defineConfig } from '@playwright/test'
-import { config as loadEnv } from 'dotenv'
 import { resolve } from 'node:path'
 
 // Playwright's config loader compiles .ts files as CJS, so __dirname and
@@ -44,14 +41,8 @@ import { resolve } from 'node:path'
 declare const __dirname: string
 declare const process: { env: Record<string, string | undefined> }
 
-// Load forge/.env (forge-specific overrides — wins), then <project-root>/.env
-// (baseline — fills unset keys only). Both resolved from this config's
-// directory so the loading works regardless of the runner's cwd.
-loadEnv({ path: resolve(__dirname, '.env') })
-loadEnv({ path: resolve(__dirname, '..', '.env') })
-
 // FORGE_RECORD=1 enables Playwright's video capture for this run. Set by
-// `forge-pool-run-spec.mjs --record` (used by `/forge run … record as
+// `forge-run-spec.mjs --record` (used by `/forge run … record as
 // <label>` for paired before/after evidence). If your project has its own
 // playwright config, opt in by checking the same env var — that keeps
 // recordings behaving consistently regardless of which config is in effect.
@@ -67,7 +58,7 @@ export default defineConfig({
   testDir: './specs',
   // Pin output to forge/test-results regardless of cwd so test artifacts
   // never land in the project root (where they wouldn't be gitignored).
-  // forge-pool-run-spec.mjs cleans this directory after extracting the
+  // forge-run-spec.mjs cleans this directory after extracting the
   // video to forge/videos/, so nothing lingers between runs.
   outputDir: resolve(__dirname, 'test-results'),
   fullyParallel: false,

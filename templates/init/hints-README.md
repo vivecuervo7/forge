@@ -50,10 +50,10 @@ The highest-leverage hint. What tends to help most:
 
 Worth writing if your site has auth or other run-level concerns the driver can't figure out on its own.
 
-- **Authentication** — what env vars forge expects (e.g. `PST_EMAIL`, `PST_PASSWORD`, `TENANT_ID`). Declare the keys; actual values live in local `.env` files, gitignored.
+- **Authentication** — what env vars forge expects (e.g. `PST_EMAIL`, `PST_PASSWORD`, `TENANT_ID`). Declare the keys by name; the actual values live wherever you choose to keep them (direnv, a local `.env`, dotenv-cli, a secrets manager). Forge does no env handling on its own — the driver references env values via native shell expansion (`$PST_EMAIL`) so they never enter the tool-call transcript.
 - **Test accounts available** — which logins forge can use and what differences matter. "admin can see everything; member is read-only." For apps where new test users can be minted on-demand, describe how.
 - **Adding another test account to the rotation** — what to do when forge needs more concurrent logins. Often "wait, the set is fixed"; sometimes a recipe.
-- **Setup before each run** *(optional)* — write this only when the SUT has real server-side state the default profile scrub can't reach. "Run `bun run db:seed`," "wipe the events table," "don't reset anything — runs share state intentionally." For read-mostly or public sites, skip this section — the default cookie/localStorage/sessionStorage scrub covers what bites.
+- **Setup before each run** *(optional)* — write this only when the SUT has real server-side state worth resetting before each run. "Run `bun run db:seed`," "wipe the events table," "don't reset anything — runs share state intentionally." For read-mostly or public sites, skip.
 - **Teardown after each run** *(optional)* — same shape, fires at end-of-work. There's no default teardown; opt-in only.
 
 ### `snippet-author.md`, `spec-writer.md`, `spec-verifier.md`
@@ -69,7 +69,7 @@ If you don't have deviations, don't write the file. Defaults apply.
 
 - **Write in plain language about your project.** Describe what's true of the app — "we use `data-test` selectors throughout," "checkout takes 30s on slow CI," "this is a Vue 3 SPA with a Pinia store."
 - **Lead with selectors.** Selector vocabulary is where hints earn their keep, especially for spec-mode work and any flow you intend to re-run.
-- **Credentials go in `.env` (gitignored), not hints (committed).** Hints declare which env keys exist; the values live in local `.env` files alongside.
+- **Credentials never live in hints (committed).** Hints declare which env key NAMES exist for which persona; values stay in your local env layer (direnv, `.env`, your secrets manager — your choice).
 - **Universal best practices are already enforced by agent defaults.** Snippets are idempotent, specs run from cold start, the driver waits on state rather than URL changes — agents do these by default. Hints encode the things only your project knows.
 
 ## For AI-assisted hint authoring
@@ -89,7 +89,7 @@ Paste this into Claude (or your AI of choice) at the start of a project session.
 > - **Known gotchas** — anything the driver should be told upfront. Examples: component libraries that intercept pointer events (require `dispatchEvent('click')`), virtual lists with settle animations, dynamic IDs containing special characters, async stores that update after URL change, label/dropdown substring overlaps that need `{ exact: true }`.
 >
 > For **`forge.md`**, focus on:
-> - **Env contract** — what env vars forge needs to set per pool slot (usernames, passwords, API keys, tenant IDs). Don't include values; just declare the keys.
+> - **Env contract** — what env var NAMES forge expects to find in `process.env` for each persona (usernames, passwords, API keys, tenant IDs). Don't include values; just declare the key names. Map persona keywords to env key names: e.g. "admin → ADMIN_USERNAME / ADMIN_PASSWORD; user → USER_USERNAME / USER_PASSWORD."
 > - **Authentication / test accounts** — what login the app expects, where test credentials are documented, any single-session-per-user constraints or rate limits.
 > - **Setup before each run** *(optional)* — if the project needs SQL seeding, a database reset, or other state preparation, describe it in plain language.
 > - **Teardown after each run** *(optional)* — same shape, for end-of-run cleanup the agent defaults won't cover.
