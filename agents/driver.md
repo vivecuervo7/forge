@@ -284,9 +284,11 @@ Then SendMessage `team-lead` with a brief completion signal so the lead knows th
 SendMessage(
   to="team-lead",
   summary="drive task complete",
-  message="Drive task <id> complete. <one-line summary of what was accomplished + final result>. Going idle for advisor-phase follow-up from snippet-author/spec-writer/spec-verifier."
+  message="Drive task <id> complete. <one-line summary of what was accomplished + final result>. proposals: <N>. Going idle for advisor-phase follow-up from snippet-author/spec-writer/spec-verifier."
 )
 ```
+
+The `proposals: N` tail tells the lead whether to wait for a separate proposals message in Phase 4.5. Use `proposals: 0` if you have nothing to surface — see "Surfacing hint proposals" below for what's worth proposing.
 
 This is the lead's primary signal that your work is done — idle notifications alone aren't sufficient (they fire after every turn, including ones where you're still working).
 
@@ -297,6 +299,71 @@ You're now in the **advisor phase**. The drive is done; chromium is still warm; 
 Answer specifically. Don't speculate — if a question references a step you don't remember the details of (Bash tool history fades), look it up rather than guessing.
 
 When the lead sends a shutdown request (`{type: "shutdown_request"}`), respond with `{type: "shutdown_response", request_id: <id>, approve: true}` to confirm. The lead handles `TeamDelete` and `forge-pool-release.sh`.
+
+## Surfacing hint proposals
+
+Between your completion ping and going idle, send the lead a `proposals` message containing any patterns from this session worth lifting into the project's hint files. Be conservative — one precise proposal beats five marginal ones. If you have nothing worth proposing, append `proposals: 0` to your completion-ping summary instead of sending a separate message.
+
+### What to observe (driver-specific)
+
+- **Recurring framework quirks** that aren't already in `driver.md` (MuiCollapse, Kendo widgets, RBD-style drag, dynamic IDs with special chars, etc.). If you needed a workaround in multiple places, the underlying pattern is hint-worthy.
+- **Selectors that worked when documented ones failed.** If `driver.md` lists a selector and it didn't match, or you discovered a better selector through iteration, flag it.
+- **Routes navigated** that aren't in `driver.md`'s route map.
+- **Env vars referenced by invoked snippets but missing from any .env layer.** A snippet declaring `envKeys: ['X']` invoked successfully via the body fallback is a signal that `forge.md`'s env contract might be incomplete.
+- **App-shape observations** on first encounter — only if `driver.md` is empty or skeletal. Otherwise this is documentation, not a proposal.
+
+### Heuristics for proposal-worthiness
+
+- **Recurring**: observed at least twice in this session, OR a clean failure mode likely to recur (a snippet invocation exit error, a selector hard-fail, etc.).
+- **Not already documented**: check against the inlined `PROJECT_HINT_DRIVER` and `PROJECT_HINT_FORGE` content. If it's already there, don't propose.
+- **Mechanism-level**: a workaround for a class of UI behavior, not a one-off quirk of a single page or component.
+- **Actionable**: name a specific edit. "Consider improving X" is not a proposal.
+- **Project-specific**: about the app being driven, not about forge's internals.
+
+### Action types
+
+- **ADD**: new section or new prose under an existing heading. The default for first observations.
+- **AMEND**: modify existing prose. Use when current hint content is incomplete or partially wrong. Reference the existing prose exactly in `TARGET`.
+- **REMOVE**: delete existing prose. **Higher bar than ADD**: the existing prose must have actively contributed to a failure mode this session, not just "didn't apply this run." Bias against REMOVE.
+
+### Format
+
+```
+SendMessage(
+  to="team-lead",
+  summary="proposals: <N>",
+  message="PROPOSALS
+count: <N>
+
+---
+ID: 1
+CATEGORY: driver.md | forge.md
+ACTION: ADD | AMEND | REMOVE
+TARGET: <section heading, or quoted existing prose for AMEND/REMOVE, or empty for ADD-new-section>
+OBSERVATION: <one-line summary of what you noticed>
+EVIDENCE: <concrete: snippet names, step descriptions, occurrences, exit codes>
+SUGGESTED_EDIT: |
+  <markdown prose to add or replace — empty for REMOVE>
+
+(optional)
+ALTERNATIVES:
+- A: <option description>
+- B: <option description>
+LEAN: A | B | none
+
+(optional)
+RATIONALE: <one-line reason this matters>
+
+---
+ID: 2
+...
+"
+)
+```
+
+If an observation belongs in two hint files (e.g., both `forge.md` and `driver.md`), emit two atomic proposals — one per CATEGORY. Keep each proposal targeting a single file.
+
+If you have no proposals, don't send this message — just append `proposals: 0` to your completion-ping summary.
 
 ## Teach mode
 

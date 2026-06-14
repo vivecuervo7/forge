@@ -324,9 +324,86 @@ If the user has driven actions in the current chunk but not yet capped them, ask
 
 Same protocol as team-task — driver SendMessages `team-lead` with STUCK, you surface via `AskUserQuestion`, you SendMessage the answer back. The user is already in the loop, so the STUCK is just a slight pause in normal flow rather than a special escalation.
 
-## Phase 5 — Shut down and clean up
+## Phase 5 — Review hint proposals
 
-Same as team-task phase 5:
+After the teach loop ends (user signaled in 4.4, or you both naturally wrapped up), before shutdown, give the teammates a chance to propose hint updates.
+
+Send each teammate a one-shot prompt:
+
+```
+SendMessage(
+  to="driver",
+  summary="surface proposals",
+  message="Session ending. Per your 'Surfacing hint proposals' instructions, send any proposals you have for project hint files now. Reply with `proposals: 0` if you have none."
+)
+SendMessage(
+  to="snippet-author",
+  summary="surface proposals",
+  message="Session ending. Per your 'Surfacing hint proposals' instructions, send any proposals you have for project hint files now. Reply with `proposals: 0` if you have none."
+)
+```
+
+Each teammate replies with either `proposals: 0` (in summary or first line) OR a `PROPOSALS` SendMessage in the format defined in their agent prompt.
+
+If both teammates report `proposals: 0`, **skip this phase entirely** and proceed to Phase 6. Don't surface a "no proposals" message — silence is the right outcome.
+
+### 5.1 Aggregate
+
+For each teammate with proposals, parse the `PROPOSALS` body. Format:
+
+```
+PROPOSALS
+count: <N>
+
+---
+ID: 1
+CATEGORY: <hint file>
+ACTION: ADD | AMEND | REMOVE
+TARGET: <section or quoted prose>
+OBSERVATION: <one-line>
+EVIDENCE: <concrete>
+SUGGESTED_EDIT: |
+  <markdown prose>
+...
+```
+
+Collect across teammates. **Dedupe** by observation similarity + same CATEGORY.
+
+### 5.2 Read current hint content for AMEND/REMOVE proposals
+
+For each AMEND or REMOVE proposal, read the target hint file at `<FORGE_ROOT>/hints/<CATEGORY>` and verify the TARGET text exists. If the text can't be found, mark the proposal as stale; drop it from the surface list.
+
+### 5.3 Surface to the user
+
+Begin with this intro line (every time, even on repeated runs):
+
+> **Hint proposals.** Patterns the team observed during this session that might be worth lifting into your project's hint files. Each is independent — accept what improves your hints, reject the rest.
+
+Then surface via `AskUserQuestion` with `multiSelect: true`. One option per proposal. Up to 4 proposals per question; multiple questions in the same call if needed (up to 16 total per call).
+
+**Single-proposal case**: use single-select (`multiSelect: false`) with Accept / Reject options.
+
+**Option label**: short, identifies the proposal.
+
+**Option description**: full context — `[ACTION CATEGORY]` prefix, OBSERVATION, EVIDENCE, and the suggested edit. For AMEND/REMOVE, show the existing TARGET prose alongside the proposed change so the user can review the diff inline.
+
+### 5.4 Apply accepted proposals
+
+For each selected proposal:
+
+- **ADD**: append SUGGESTED_EDIT under the target heading (or create the section / file if missing).
+- **AMEND**: find the exact TARGET text and replace with SUGGESTED_EDIT via the Edit tool.
+- **REMOVE**: find the exact TARGET text and delete.
+
+Apply in sequence; re-read between each. Skip and warn for any TARGET that can't be found at application time.
+
+### 5.5 Carry into Phase 6's report
+
+Build a one-line-per-file summary of changes for the final report.
+
+## Phase 6 — Shut down and clean up
+
+Same as team-task phase 5 (the original Phase 5 here, renumbered):
 
 1. `SendMessage(to="driver", ..., message={"type": "shutdown_request", "reason": "teach session complete"})`
 2. `SendMessage(to="snippet-author", ..., shutdown_request)`
@@ -336,7 +413,7 @@ Same as team-task phase 5:
 6. Apply `## Teardown after each run` instructions from `forge.md` if present.
 7. `bash <PLUGIN_ROOT>/scripts/forge-pool-release.sh <POOL_DIR> <SLOT_DIR>`
 
-### 5.4 Report to the user
+### 6.1 Report to the user
 
 ```
 > Teach session complete via `slot-<persona>`.
@@ -345,6 +422,9 @@ Same as team-task phase 5:
 >   - <name1> — <one-line; flag new vs edited>
 >   - <name2> — ...
 > (or "No snippets captured — session was exploratory.")
+>
+> Hint files updated: <one line per file with summary>.
+> (Omit this line entirely if no proposals were surfaced or all were rejected.)
 >
 > Slot released. Team cleaned up.
 ```

@@ -88,9 +88,11 @@ Then SendMessage `team-lead`:
 SendMessage(
   to="team-lead",
   summary="spec verified",
-  message="Verifier task <id> complete. Ran <spec-path> via forge-pool-run-spec.mjs (no --slot, ephemeral browser context, project env) — passed in <duration>. Spec is verified as portable to anyone running it via `playwright test` directly. Going idle."
+  message="Verifier task <id> complete. Ran <spec-path> via forge-pool-run-spec.mjs (no --slot, ephemeral browser context, project env) — passed in <duration>. Spec is verified as portable to anyone running it via `playwright test` directly. proposals: <M>. Going idle."
 )
 ```
+
+The `proposals: M` tail tells the lead whether to wait for a separate proposals message in Phase 4.5. See "Surfacing hint proposals" below.
 
 Go idle. The lead handles shutdown.
 
@@ -156,7 +158,36 @@ Then `TaskUpdate(taskId=<id>, status="completed")` (your work is done, even if t
 
 ### 6. Mark task complete and signal the lead
 
-After pass (4a) or escalation (5), mark your task complete and ping the lead. The lead expects an explicit completion signal — idle notifications alone aren't sufficient.
+After pass (4a) or escalation (5), mark your task complete and ping the lead. The lead expects an explicit completion signal — idle notifications alone aren't sufficient. Include `proposals: <M>` in the completion summary.
+
+## Surfacing hint proposals
+
+Between your completion ping and going idle, send the lead a `proposals` message containing any patterns from this session worth lifting into the project's hint files. Be conservative — one precise proposal beats five marginal ones. If you have nothing worth proposing, append `proposals: 0` to your completion-ping summary instead of sending a separate message.
+
+### What to observe (spec-verifier-specific)
+
+- **Recurring failure modes** during verification. If the same iteration cause keeps appearing across this session (timing flakiness, external-session collision, Kendo settle-animation), the underlying class is hint-worthy.
+- **Environment-related verifier failures**. If the spec failed because a value wasn't in env (e.g., missing FORGE_BASE_URL), that's a `forge.md` env-contract proposal.
+- **External-state quirks** that surfaced as failures and required user intervention — the kind of thing that should be in `forge.md` so future runs know to suspect it.
+- **Timing patterns** — if a particular wait kept needing to be bumped, that's a project-level observation.
+
+### Heuristics for proposal-worthiness
+
+- **Recurring**: observed at least twice OR a high-signal one-off (e.g., the redirect-to-login external-collision class).
+- **Not already documented**: check the inlined `PROJECT_HINT_SPEC_VERIFIER` and `PROJECT_HINT_FORGE` content.
+- **Mechanism-level**.
+- **Actionable**.
+- **Project-specific**.
+
+### Action types
+
+- **ADD** / **AMEND** / **REMOVE** — same as the other agents. Bias against REMOVE.
+
+### Format
+
+Same as the other agents (PROPOSALS block with all the fields). Your CATEGORY is typically `spec-verifier.md` or `forge.md` depending on the observation's scope.
+
+If you have no proposals, don't send this message — just append `proposals: 0` to your completion-ping summary.
 
 ## Hard rules
 
