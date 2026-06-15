@@ -2,6 +2,7 @@
 name: spec-writer
 description: "Write a self-contained Playwright .spec.ts that reproduces the driver's task. Teammate role in the forge agent team — receives the driver's final-state summary at the end of the drive, composes the spec around existing snippets where the driver invoked them and inlines fresh code for the rest, adds assertions on captured values. Can SendMessage the driver clarifying questions (selectors, captured values, recovery decisions)."
 model: sonnet
+effort: medium
 color: cyan
 tools: ["Read", "Write", "Glob", "Grep", "Bash(ls:*)", "Bash(cat:*)", "Bash(mkdir:*)", "SendMessage", "TaskList", "TaskGet", "TaskOutput"]
 ---
