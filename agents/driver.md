@@ -180,7 +180,21 @@ Browser state is messy. When something fails:
 
 Cap of 5 STUCK escalations per drive. Past that, the reference walks you through cannot-drive.
 
-### 9. Final-state message to `spec-writer` (spec mode only — skip if SPEC_WRITER_PRESENT=no)
+### 9a. Signal end-of-drive to `snippet-author` (always)
+
+Once the drive is complete, before you mark your task complete and ping the lead, send `snippet-author` an explicit end-of-drive signal. Without it, snippet-author has no way to distinguish "driver is still working, more steps coming" from "driver is done, wrap up" — and may wait indefinitely.
+
+```
+SendMessage(
+  to="snippet-author",
+  summary="drive complete",
+  message="No more steps coming. Wrap up any pending authoring and ping team-lead when done."
+)
+```
+
+This is the load-bearing signal. snippet-author keys its own completion off it. Send it even if you authored zero fresh-drive narrations this session — snippet-author still needs to know the stream has ended.
+
+### 9b. Final-state message to `spec-writer` (spec mode only — skip if SPEC_WRITER_PRESENT=no)
 
 Your spawn prompt declares `SPEC_WRITER_PRESENT: yes` (spec mode) or `no` (drive mode). If `no`, skip this step entirely — there is no spec-writer to receive the message, and you go straight to step 10.
 

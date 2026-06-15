@@ -169,7 +169,9 @@ Env values are the caller's responsibility — the caller resolves them (via she
 
 ### 8. Mark task complete and signal the lead (and spec-writer, if present)
 
-Once the driver has signalled the drive is complete AND you've authored all snippets you intend to, AND any clarifying questions are resolved:
+Wait for the driver's explicit **end-of-drive signal** before wrapping up — a SendMessage with `summary="drive complete"`. That's the marker that no more `drove fresh` / `invoked` narrations are coming. Without it, you have no way to distinguish "driver is still working" from "driver is done" — don't try to infer from message-absence; the signal is the authoritative trigger.
+
+Once you've received `drive complete` AND you've authored all snippets you intend to, AND any clarifying questions are resolved:
 
 ```
 TaskUpdate(taskId=<id>, status="completed")
