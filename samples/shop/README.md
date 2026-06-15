@@ -109,7 +109,7 @@ Immediately switch to **Session B** and type:
 
 This is the property that lets a team run concurrent test flows against different test accounts. Two flows, two accounts, completely isolated.
 
-**Why this matters in real-world testing.** Many production apps enforce single-session-per-user (login from a second browser kicks out the first), or have shared per-account state (cart, order history, profile mutations) that makes two concurrent same-account runs collide. We don't claim to know whether practicesoftwaretesting.com behaves that way — the demo here is the pattern, not a specific constraint claim. But for the kinds of apps where it *does* apply (and that includes most stateful business apps), forge's mechanism is what lets you scale parallel testing without contention: a different account per concurrent run, declared in the hint table, picked up by the driver via shell expansion. The shop sample is the worked example you'd transplant.
+**Why this matters in real-world testing.** Many production apps enforce single-session-per-user (login from a second browser kicks out the first), or have shared per-account state (cart, order history, profile mutations) that makes two concurrent same-account runs collide. For the kinds of apps where this applies — most stateful business apps — forge's mechanism is what lets you scale parallel testing without contention: a different account per concurrent run, declared in the hint table, picked up by the driver via shell expansion. The shop sample is the worked example you'd transplant.
 
 ### 5. Teach mode — when the agent can't be expected to discover the quirks
 
