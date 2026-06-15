@@ -190,8 +190,15 @@ Between your completion ping and going idle, send the lead a `proposals` message
 
 ### What to observe (spec-writer-specific)
 
+Your proposals are about **how specs are composed** — naming, composition patterns, conventions for this project's spec-mode work. Stay in your lane:
+
+- **Snippet-curation observations** (e.g. "a snippet should exist for this step you had to inline") belong to `snippet-author`. SendMessage them during composition — snippet-author can author the snippet then, which you can compose; don't surface as a proposal here.
+- **SUT observations** (selectors, app quirks) belong to `driver`.
+- **Verification observations** belong to `spec-verifier`.
+
+Observation classes that belong in *your* proposals:
+
 - **Spec composition patterns**. If specs in this session always follow the same shape (`login → create → operate → cleanup`), the pattern is worth documenting.
-- **Library coverage gaps**. Steps you had to inline because no snippet covered them — propose either the snippet that should exist (named) or update `spec-writer.md` to note the gap.
 - **Spec naming conventions** emerging across this session.
 - **Composition idioms** — when you find yourself writing similar plumbing across multiple specs (e.g., always passing eventId returned from createEvent into a chain of follow-ups), the pattern is hint-worthy.
 

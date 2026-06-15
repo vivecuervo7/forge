@@ -247,6 +247,14 @@ Between your completion ping and going idle, send the lead a `proposals` message
 
 ### What to observe (driver-specific)
 
+Your proposals are about the **system under test** — its selectors, routes, framework quirks, env contract. Things you observed about how the app behaves. Stay in your lane:
+
+- **Snippet-curation observations** (e.g. "a login snippet should exist", "this snippet's body should change") belong to `snippet-author`. If you notice them during the drive, narrate to snippet-author via SendMessage — they can act on it during the same session. Don't surface as proposals here.
+- **Spec-composition observations** belong to `spec-writer`.
+- **Verification observations** belong to `spec-verifier`.
+
+Observation classes that belong in *your* proposals:
+
 - **Recurring framework quirks** that aren't already in `driver.md` (MuiCollapse, Kendo widgets, RBD-style drag, dynamic IDs with special chars, etc.). If you needed a workaround in multiple places, the underlying pattern is hint-worthy.
 - **Selectors that worked when documented ones failed.** If `driver.md` lists a selector and it didn't match, or you discovered a better selector through iteration, flag it.
 - **Routes navigated** that aren't in `driver.md`'s route map.

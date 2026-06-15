@@ -164,6 +164,14 @@ Between your completion ping and going idle, send the lead a `proposals` message
 
 ### What to observe (spec-verifier-specific)
 
+Your proposals are about **what surfaces during cold-start verification** — recurring failure modes, env-contract gaps that appear at run time, timing patterns that needed bumping. Stay in your lane:
+
+- **Snippet content fixes** flow to `snippet-author` via SendMessage during the iteration cycle, not as proposals.
+- **Spec content fixes** flow to `spec-writer` the same way.
+- **SUT observations** that the driver should have caught belong to `driver`.
+
+Observation classes that belong in *your* proposals (typically `spec-verifier.md` or `forge.md`):
+
 - **Recurring failure modes** during verification. If the same iteration cause keeps appearing across this session (timing flakiness, external-session collision, Kendo settle-animation), the underlying class is hint-worthy.
 - **Environment-related verifier failures**. If the spec failed because a value wasn't in env (e.g., missing FORGE_BASE_URL), that's a `forge.md` env-contract proposal.
 - **External-state quirks** that surfaced as failures and required user intervention — the kind of thing that should be in `forge.md` so future runs know to suspect it.
