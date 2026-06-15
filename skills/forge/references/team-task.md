@@ -213,7 +213,7 @@ USER_TASK: <user's task verbatim>
 PROJECT_HINT_SPEC_VERIFIER:
 <spec-verifier.md contents from <FORGE_ROOT>/hints/spec-verifier.md, or 'none' if missing>
 
-Your task is referenced as ID <SPEC_VERIFIER_TASK_ID> for the team's records. Wait for spec-writer's 'spec ready' message. Run the spec via `forge-run-spec.mjs --spec <path>`. The verifier runs the spec the way Playwright itself would: fresh browser context, env from `process.env` as set by the user's shell plus whatever the project's playwright config loads. On pass, ping team-lead with verified-from-fresh status. On fail, ask driver (selectors) or spec-writer (assertions) for clarification, iterate up to 3 times, then succeed or escalate."
+Your task is referenced as ID <SPEC_VERIFIER_TASK_ID> for the team's records. Wait for spec-writer's 'spec ready' message. Run the spec via `forge-run-spec.mjs --spec <path>`, mirroring the drive's conditions: fresh browser context, env loaded via forge.md's recipe if present (same prefix the driver used). On pass, ping team-lead with verified-from-fresh status. On fail, ask driver (selectors) or spec-writer (assertions) for clarification, iterate up to 3 times, then succeed or escalate."
 )
 ```
 
