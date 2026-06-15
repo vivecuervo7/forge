@@ -20,3 +20,5 @@ samples/*/.env
 samples/*/forge/.env
 samples/*/.cookies
 samples/*/forge/.cookies
+samples/*/.playwright-cli/
+samples/*/forge/.playwright-cli/
