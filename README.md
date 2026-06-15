@@ -196,6 +196,3 @@ The driver follows one rule: **env values are referenced, never inlined**. It us
 
 For projects with multiple test accounts, document the mapping in `forge.md` in whatever shape fits — a naming convention (admin → `$ADMIN_USERNAME` / `$ADMIN_PASSWORD`, user → `$USER_USERNAME` / `$USER_PASSWORD`), a provisioning recipe, or anything else. The driver reads the hint and follows it.
 
-## License
-
-MIT
