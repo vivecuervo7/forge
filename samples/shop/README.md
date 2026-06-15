@@ -61,14 +61,14 @@ Now the task includes a step the seeded library doesn't cover (login). The drive
 /forge spec checkout a hammer with cash on delivery
 ```
 
-Same surface as before, but spec mode adds `forge:spec-writer` and `forge:spec-verifier` to the team. The driver runs the full checkout, snippet-author authors the new checkout-step snippets that didn't exist yet (billing address, payment, confirmation), spec-writer composes a self-contained `.spec.ts` that imports and calls those snippets, and spec-verifier runs the spec cold to confirm it passes from a fresh browser context.
+Same surface as before, but spec mode adds `forge:spec-writer` and `forge:spec-verifier` to the team. The driver runs the full checkout, snippet-author authors the new checkout-step snippets that didn't exist yet (billing address, payment, confirmation), spec-writer composes a self-contained `.spec.ts` that imports and calls those snippets, and spec-verifier runs the spec cold from a fresh browser context.
 
 **What to look for:**
 - New checkout-related snippets in `forge/snippets/`.
 - A `forge/specs/checkout-hammer-cash-on-delivery.spec.ts` (or similarly-named) lands.
-- Spec-verifier reports a pass; with this hint set first-try verification is realistic.
+- Spec-verifier runs the spec. It may pass first-try, or it may iterate — that's normal. When a snippet's behaviour during the live drive diverges from cold-start behaviour (timing, ordering, hidden form state), the verifier surfaces the failure, asks driver/snippet-author for clarification, applies a patch, and re-runs. Up to 3 iterations before it escalates to the team-lead with the unresolved failure.
 
-**What this demonstrates:** the full pipeline produces a CI-ready artifact. The spec composes the snippet library directly — no inlined steps, no duplicated selectors. Re-running the spec is a single `npx playwright test` against your own project's runner; nothing forge-specific at run time.
+**What this demonstrates:** the full pipeline produces a CI-ready artifact *that has been verified to work from cold*. The verifier's iteration loop is part of the value — it surfaces snippet bugs and SUT quirks that the live drive happened to dodge. Re-running the spec downstream is a single `npx playwright test` against your own project's runner; nothing forge-specific at run time.
 
 ### 4. Teach mode — when the agent can't be expected to discover the quirks
 

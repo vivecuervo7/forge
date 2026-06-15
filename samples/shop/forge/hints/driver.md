@@ -92,6 +92,7 @@ If login fails, `[data-test="login-error"]` renders with the error text. The acc
 - **No public state-reset endpoint.** The deployed demo has whatever state the previous user left. Specs that mutate state (place orders, register users, update profiles) will see drift on re-runs. Design assertions to tolerate this — regex-match `/INV-\d+/` instead of asserting a specific invoice number, etc.
 - **Cash on Delivery is the easiest payment method for specs.** No extra fields, no validation beyond the basic selection. Use it unless your test specifically targets one of the other methods.
 - **The chat widget lives in the bottom-right corner.** It can occlude buttons on smaller viewports — if a click in that region misses, scroll or resize before retrying. The widget is opt-in; ignore it unless your test targets it.
+- **Login form inputs require click-before-fill.** Angular's change detection on `input[data-test="email"]` and `input[data-test="password"]` doesn't fire if `fill()` is called without a preceding `click()` on the same element. The symptom is "Invalid email or password" even with correct credentials. Always call `.click()` then `.fill()` (or invoke the `login` snippet, which already encodes this).
 
 ## Feature surface (for choosing test data)
 
