@@ -109,7 +109,7 @@ Immediately switch to **Session B** and type:
 
 This is the property that lets a team run concurrent test flows against different test accounts. Two flows, two accounts, completely isolated.
 
-**Don't try a third session against the same account.** practicesoftwaretesting.com enforces single-session-per-user; running two `as customer` sessions will boot the first session mid-test when the second logs in. The `forge.md` hint warns about this; the choice of which account per session is yours.
+**Why this matters in real-world testing.** Many production apps enforce single-session-per-user (login from a second browser kicks out the first), or have shared per-account state (cart, order history, profile mutations) that makes two concurrent same-account runs collide. We don't claim to know whether practicesoftwaretesting.com behaves that way — the demo here is the pattern, not a specific constraint claim. But for the kinds of apps where it *does* apply (and that includes most stateful business apps), forge's mechanism is what lets you scale parallel testing without contention: a different account per concurrent run, declared in the hint table, picked up by the driver via shell expansion. The shop sample is the worked example you'd transplant.
 
 ### 5. Teach mode — when the agent can't be expected to discover the quirks
 
