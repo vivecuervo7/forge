@@ -192,9 +192,11 @@ Only `hints/` is tracked. Everything else is local per-machine. `forge-init` reg
 
 Env handling is delegated to your project. Whatever's in `process.env` at run time is what your specs and snippets see — direnv, dotenv-cli, manual shell exports, a secrets manager, or the optional dotenv line in the scaffolded `forge/playwright.config.ts` all work; pick what fits your setup.
 
+**The driver only sees what `forge/hints/forge.md` tells it to load.** If your mechanism is already active in the shell forge spawns from (e.g. direnv on the project directory), nothing more is needed. Otherwise, document the loading recipe in `forge.md` and the driver will prepend it to commands that need env values — see [`samples/shop/forge/hints/forge.md`](./samples/shop/forge/hints/forge.md) for a worked example using `set -a && source .env && set +a`.
+
 The driver follows one rule: **env values are referenced, never inlined**. It uses native shell expansion (`$ADMIN_USERNAME`) inside its Bash commands; the shell expands at exec time; the tool-call transcript records the unexpanded reference. The rule applies uniformly to every env var — predictable hygiene over per-call judgment.
 
-For projects with multiple test accounts, document the mapping in `forge/hints/forge.md` in whatever shape fits — a naming convention (admin → `$ADMIN_USERNAME` / `$ADMIN_PASSWORD`, user → `$USER_USERNAME` / `$USER_PASSWORD`), a provisioning recipe, or anything else. The driver reads the hint and follows it.
+For projects with multiple test accounts, document the mapping in `forge.md` in whatever shape fits — a naming convention (admin → `$ADMIN_USERNAME` / `$ADMIN_PASSWORD`, user → `$USER_USERNAME` / `$USER_PASSWORD`), a provisioning recipe, or anything else. The driver reads the hint and follows it.
 
 ## License
 
