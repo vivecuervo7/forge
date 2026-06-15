@@ -261,25 +261,17 @@ Between your completion ping and going idle, send the lead a `proposals` message
 
 ### What to observe (driver-specific)
 
-Your proposals are **new project knowledge about the SUT** uncovered during this drive — facts about how the app actually behaves that the existing hints don't capture or describe wrongly.
+Your proposals capture SUT facts the hint set didn't already encode — things you learned about how this specific app behaves by actually driving against it. Worked examples of what to propose:
 
-**Default outcome is `proposals: 0`.** A successful drive against well-written hints normally produces no proposals; that's the success case, not a gap. Don't feel obliged to produce something. Most sessions end with `proposals: 0` legitimately.
+- **A framework quirk that bit you.** Plain `.click()` silently failed on the checkout finish button; switching to `dispatchEvent('click')` made it work. Propose an ADD under `driver.md`'s `## Known gotchas` documenting the symptom (button doesn't fire, no error) and the workaround. Future drives bake the workaround into their first attempt.
+- **A selector mismatch.** `driver.md` lists `[data-test="cart-icon"]` for the cart but the actual element is `[data-test="nav-cart"]`. Propose an AMEND on the selectors section with the corrected selector and where you confirmed it.
+- **A route you navigated** that isn't in the route map — single-line ADD.
+- **An env key that expanded empty.** The hint advertises `$ADMIN_USERNAME` but it wasn't populated when you tried to reference it. Propose a `forge.md` clarification.
+- **First-encounter app-shape observations** — only when `driver.md` is empty or skeletal.
 
-Propose only when you uncovered a SUT-level fact the hint set materially misses or gets wrong:
+If the drive went smoothly against the existing hints, no proposals is the natural outcome — a clean run is the success case.
 
-- **A documented selector that didn't match**, and what worked instead. (Hint accuracy.)
-- **A framework quirk** the hint doesn't already note — `dispatchEvent` requirement, settle animation, debounce timing, etc. — that you actually hit during the drive.
-- **A route** you navigated that isn't in the route map.
-- **An env key advertised in the account hints but not populated** in the running env (`$X` expanded empty).
-- **App-shape observations** if and only if `driver.md` is empty or skeletal.
-
-**Out of your lane** — these must not appear as driver proposals, even framed as documentation additions to `driver.md`:
-
-- **Library-shape observations.** "A snippet for X should exist", "if a login snippet exists, invoke it; if not, drive fresh", "this flow is common enough to encode" — these are library-curation calls. Snippet-author's job. If you noticed during the drive that something would be reusable, narrate to snippet-author via SendMessage *during the drive* — they decide whether to author it now or surface as their own proposal. Don't smuggle library observations into `driver.md` as documentation prose.
-- **Spec-composition observations** belong to spec-writer.
-- **Verification observations** belong to spec-verifier.
-
-The litmus test: if your proposal content is essentially "the user should make this reusable," "the library should grow to cover X," or "future drives should invoke Y if available" — it's a library-curation observation, not new SUT knowledge. Drop it. The right channel for those thoughts is a SendMessage to snippet-author at the moment of noticing.
+When something occurs to you that's clearly snippet- or spec-shaped (e.g., "this would be useful as a reusable snippet"), narrate it to snippet-author via SendMessage at the moment you notice — that's the right channel for cross-domain signals during the drive.
 
 ### Heuristics for proposal-worthiness
 

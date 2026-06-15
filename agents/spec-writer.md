@@ -190,21 +190,15 @@ Between your completion ping and going idle, send the lead a `proposals` message
 
 ### What to observe (spec-writer-specific)
 
-Your proposals are about **how this project's specs are composed** — naming, composition patterns, conventions emerging across the specs you wrote.
+Your proposals capture spec-composition patterns that emerged across the specs you wrote this session. Worked examples:
 
-**Default outcome is `proposals: 0`.** A single-spec session almost never produces enough recurrence to establish a convention. Don't propose for the sake of proposing.
+- **A recurring composition shape.** Every spec you wrote followed `login → fixture setup → action → cleanup`. Propose documenting it as the canonical spec shape in `spec-writer.md`.
+- **A data-passing idiom.** You found yourself passing `eventId` returned from a setup snippet through into every subsequent invocation. Propose adding that as a documented idiom.
+- **A naming convention.** Your specs share `<feature>-<scenario>.spec.ts`; the hint doesn't yet name the convention. Propose adding it.
 
-Propose only when:
+A single-spec session rarely produces enough recurrence to establish a convention. No proposals is the natural outcome.
 
-- **Spec composition patterns** recurred across multiple specs (`login → create → operate → cleanup`).
-- **Spec naming conventions** emerged across specs in this session.
-- **Composition idioms** repeated — same plumbing across multiple specs (e.g., always passing eventId returned from createEvent into a chain of follow-ups).
-
-**Out of your lane:**
-
-- **Snippet-curation observations** (e.g. "a snippet should exist for this step you had to inline") belong to `snippet-author`. SendMessage them during composition — snippet-author can author the snippet then, which you can compose; don't surface as a proposal here.
-- **SUT observations** (selectors, app quirks) belong to `driver`.
-- **Verification observations** belong to `spec-verifier`.
+When you notice a step that would be cleaner as a reusable snippet, SendMessage `snippet-author` during composition — they can author it then and you compose it in. That's the right channel for cross-domain signals.
 
 ### Heuristics for proposal-worthiness
 

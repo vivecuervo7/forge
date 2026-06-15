@@ -164,22 +164,15 @@ Between your completion ping and going idle, send the lead a `proposals` message
 
 ### What to observe (spec-verifier-specific)
 
-Your proposals are about **what surfaces during cold-start verification that the hints didn't anticipate** — recurring failure modes, env-contract gaps that appear at run time, timing patterns that needed bumping.
+Your proposals capture what cold-start verification surfaced that the hints didn't anticipate. Worked examples (typically `spec-verifier.md` or `forge.md`):
 
-**Default outcome is `proposals: 0`.** A spec that verifies first try produces no proposals; that's the success case. Don't propose for the sake of proposing.
+- **A timing pattern that kept needing adjustment.** The spec failed three times until you suggested bumping a `waitFor` from 500ms to 2000ms on a specific element. Propose a timing note for the relevant hint — future specs can pre-empt the issue.
+- **A recurring failure mode.** The same external-session collision crashed two verification runs. Propose a `forge.md` warning about the single-session-per-user constraint.
+- **An env contract gap.** Verification failed because a value wasn't in env (e.g., the hint advertises `$FORGE_BASE_URL` but the spec depends on `$BASE_URL`). Propose the correction.
 
-Propose only when verification surfaced something genuinely new (typically `spec-verifier.md` or `forge.md`):
+A spec that verifies first try produces no proposals. That's the success case.
 
-- **Recurring failure modes** during verification iterations (same iteration cause repeating: timing flakiness, external-session collision, Kendo settle-animation).
-- **Environment-related verifier failures** — the spec failed because a value wasn't in env (missing FORGE_BASE_URL, etc.).
-- **External-state quirks** that required user intervention to recover.
-- **Timing patterns** — if a particular wait kept needing to be bumped.
-
-**Out of your lane:**
-
-- **Snippet content fixes** flow to `snippet-author` via SendMessage during the iteration cycle, not as proposals.
-- **Spec content fixes** flow to `spec-writer` the same way.
-- **SUT observations** that the driver should have caught belong to `driver`.
+When a fix is needed in a snippet or spec, SendMessage `snippet-author` or `spec-writer` during the iteration cycle — they make the change and you re-run. That's the right channel for run-by-run fixes.
 
 ### Heuristics for proposal-worthiness
 
