@@ -71,16 +71,6 @@ On first spec run (or first snippet invocation), forge lazy-installs its Playwri
 
 Add `record as <label>` to a run invocation to capture a video at `forge/videos/<spec>-<label>.webm`. `/forge run last spec, record as before` → fix the bug → `/forge run last spec, record as after` produces paired evidence for a PR.
 
-## Three pillars: drive, teach, spec
-
-Each mode does a different job. Pick by what you want out of the session.
-
-**Drive (`/forge <task>`)** — fastest path. Forge does the task; the snippet-author accretes any novel work into the library opportunistically. Best when you want the action performed and any library growth is a side benefit.
-
-**Teach (`/forge teach <topic>`)** — deliberate library building. You pilot forge step-by-step, signal snippet boundaries (`cap that as login`), and bake gotchas into the snippet bodies via your annotations. Best when the app has quirks the agent can't be expected to discover on its own — login flows with fallbacks, conditional UIs, anything where "the obvious approach doesn't work."
-
-**Spec (`/forge spec <task>`)** — pin a verified flow. Forge drives, writes a self-contained `.spec.ts`, and confirms it passes from cold. Best when the flow is worth a CI test artifact and paired before/after evidence (via `/forge run`).
-
 ## See it in action
 
 Try a sample before adopting forge for your own project. Each sample is a project-shaped directory — committed hints, scaffolded config, real-forge-output seed snippets — plus a prompt-by-prompt walkthrough you run yourself.
