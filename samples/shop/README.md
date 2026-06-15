@@ -77,8 +77,8 @@ This step demonstrates the property that makes forge usable for real-world team 
 Open a *second* terminal and start another claude session in this directory:
 
 ```bash
-cd /Users/isaac/repos/forge/samples/shop
-claude --plugin-dir /Users/isaac/repos/forge
+cd /path/to/forge/samples/shop
+claude --plugin-dir /path/to/forge
 ```
 
 You now have two independent claude sessions — call them **Session A** and **Session B** — both bound to the same `samples/shop/` project. In **Session A**, type:

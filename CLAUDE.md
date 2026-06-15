@@ -11,7 +11,7 @@ Sub-agent transcripts live at:
 ~/.claude/projects/<encoded-cwd>/<parent-session-id>/subagents/agent-<hash>.meta.json
 ```
 
-`<encoded-cwd>` is the user's working directory with slashes replaced by dashes (e.g. `-Users-isaac-makerx-ea-nextgen-planner-app`).
+`<encoded-cwd>` is the user's working directory with slashes replaced by dashes (e.g. `-Users-jane-code-my-app`).
 
 The `.meta.json` file declares `agentType` and a short `description`. The `.jsonl` is the full conversation transcript in the same format as a normal Claude Code session — every assistant turn, every tool call, every result.
 
