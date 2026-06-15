@@ -30,7 +30,7 @@ Account-specific behaviour:
 
 - TOTP setup is denied for `customer` and `admin`. Don't try to enable it.
 - `admin` is exempt from the account-lockout policy.
-- Two customer accounts (`customer` + `customer2`) support parallel runs without cart/order collision. A third concurrent session against the same role will collide on backend state.
+- Two customer accounts (`customer` + `customer2`) are provided in case parallel runs are useful. If your target app enforces single-session-per-user or has shared per-account state, running parallel sessions against different accounts avoids the collisions. We don't claim to know practicesoftwaretesting.com's exact concurrency behaviour — the dual accounts are scaffolding for the multi-account pattern, not a constraint that necessarily applies here.
 
 ## Adding another test account
 
