@@ -48,18 +48,28 @@ On first spec run (or first snippet invocation), forge lazy-installs its Playwri
 
 ## Commands
 
+### Core workflow
+
 | Command | What it does |
 |---|---|
-| `/forge init` | Scaffolds the `forge/` directory convention into the current project. Idempotent. The starting point for any new project. |
+| `/forge init` | Scaffolds the `forge/` directory convention into the current project. Idempotent — the starting point for any new project. |
 | `/forge <task>` | **Drive mode.** Driver + snippet-author. Does the task end-to-end, accretes reusable snippets from novel work. The everyday command. |
-| `/forge spec <task>` | **Spec mode.** Adds spec-writer + spec-verifier. Composes a self-contained `.spec.ts` and confirms it passes from a cold start. |
-| `/forge teach <topic>` | **Teach mode.** Driver + snippet-author. User pilots forge turn-by-turn, signals snippet boundaries explicitly, and weaves project-specific gotchas (fallbacks, retries, conditional branches) into snippet bodies. The deliberate library-building channel — useful when the app has quirks the agent can't be expected to discover. |
-| `/forge run <spec\|last\|latest>` | Re-runs a verified spec via the standalone runner. Add `record as <label>` to capture a video at `forge/videos/<spec>-<label>.webm`. No team spawned. |
+| `/forge spec <task>` | **Spec mode.** Adds spec-writer + spec-verifier. Composes a self-contained `.spec.ts` and confirms it passes from a cold start. Also fires on natural-language signals — "create a spec for AE-1775", "write a spec that…", "capture as a spec". |
+
+### Teach mode
+
+| Command | What it does |
+|---|---|
+| `/forge teach <topic>` | User pilots forge turn-by-turn, signals snippet boundaries explicitly, and weaves project-specific gotchas (fallbacks, retries, conditional branches) into snippet bodies. The deliberate library-building channel — useful when the app has quirks the agent can't be expected to discover. Also fires on "teach forge how to …" / "let me show forge how to …" phrasings. |
+
+### Re-running and shipping
+
+| Command | What it does |
+|---|---|
+| `/forge run <spec\|last\|latest>` | Re-runs a verified spec via the standalone runner. No team spawned. |
 | `/forge export <spec-name>` | Exports a composed spec to a self-contained inlined form, suitable for shipping into another test suite. |
 
-Spec mode also fires on natural-language signals — "create a spec for AE-1775", "write a spec that…", "capture as a spec". Teach mode fires on phrasings like "teach forge how to log in" or "let me show forge how to create an event." Plain `/forge <task>` is the unambiguous drive case.
-
-Recording is on demand: `/forge run last spec, record as before` → fix the bug → `/forge run last spec, record as after` → attach both videos to the PR. The same spec produces paired evidence.
+Add `record as <label>` to a run invocation to capture a video at `forge/videos/<spec>-<label>.webm`. `/forge run last spec, record as before` → fix the bug → `/forge run last spec, record as after` produces paired evidence for a PR.
 
 ## Three pillars: drive, teach, spec
 
@@ -67,17 +77,9 @@ Each mode does a different job. Pick by what you want out of the session.
 
 **Drive (`/forge <task>`)** — fastest path. Forge does the task; the snippet-author accretes any novel work into the library opportunistically. Best when you want the action performed and any library growth is a side benefit.
 
-**Teach (`/forge teach <topic>`)** — deliberate library building. You pilot forge step-by-step through the conversation, signal snippet boundaries explicitly, and bake gotchas (auto-login fallback, stuck-loader retry, dispatchEvent quirks) into the snippet bodies. Best when the app has quirks the agent can't be expected to discover on its own — login flows, conditional UIs, anything where "the obvious approach doesn't work."
+**Teach (`/forge teach <topic>`)** — deliberate library building. You pilot forge step-by-step, signal snippet boundaries (`cap that as login`), and bake gotchas into the snippet bodies via your annotations. Best when the app has quirks the agent can't be expected to discover on its own — login flows with fallbacks, conditional UIs, anything where "the obvious approach doesn't work."
 
 **Spec (`/forge spec <task>`)** — pin a verified flow. Forge drives, writes a self-contained `.spec.ts`, and confirms it passes from cold. Best when the flow is worth a CI test artifact and paired before/after evidence (via `/forge run`).
-
-Teach-mode mechanics in brief:
-
-- The user is the snippet curator. The driver doesn't autonomously plan — it executes one user-translated action at a time.
-- **Instructions and snippets are orthogonal.** A user instruction is one browser action; a snippet may span many instructions (or just one, or none). The user walks forge through the work, then caps a snippet when they reach a meaningful boundary — usually after several steps. Most instructions won't be cap-points.
-- The user can take over the browser mid-session for state setup ("I'll create the test event myself"); user-driven actions are not recorded. A bearing-grounding statement ("I'm now on /event/123") gets the agent re-oriented before the next directed step.
-- Snippet boundaries are user-signalled: "cap that as `login`" / "save the last four steps as `create-event`." If the name already exists, the user gets an explicit replace-or-rename choice — overwrite protection is user-driven here, not author-driven.
-- Annotations the user volunteers (or that fall out of the conversation) get woven into the snippet body, not just the description. This is the load-bearing knowledge — the bit the driver would have missed.
 
 ## See it in action
 
@@ -93,29 +95,13 @@ Try a sample before adopting forge for your own project. Each sample is a projec
 
 ## Why forge vs …
 
-Three honest comparisons against the closest alternatives. Each tool is right when its trade-offs match what you need.
+Three honest comparisons. Each alternative is right when its trade-offs match what you need.
 
-### vs Playwright codegen
+**vs Playwright codegen.** Codegen records a flow and emits one `.spec.ts` — one-shot output, no library, no project knowledge persisted across recordings. Forge produces the same kind of test as the byproduct of a workflow that also accretes reusable snippets, captures hint-encoded project knowledge, and verifies the result from cold. Pick codegen for a recording you'll commit once and rarely touch; pick forge when flows will be re-driven, evolved, or composed.
 
-Codegen is a recorder. Click through a flow in a browser, it emits a single `.spec.ts` of the equivalent code. One-shot output — no library, no persisted project knowledge, no awareness across recordings.
+**vs playwright-cli (the bare CLI).** The tool forge wraps — a stateless command interface (`open`, `click`, `fill`, `run-code`) useful for scripting one-off interactions, not designed to accrete a library or hold project knowledge. Forge adds the agent team, snippet library, hint files, and spec pipeline on top. Pick the bare CLI for scripts; pick forge for the durable workflow.
 
-Forge is the durable version of that workflow. The same drive that completes the task also accretes reusable snippets into a library that future drives invoke instead of re-recording the same interactions. Hints capture project-specific selectors and gotchas, so the next person doesn't re-learn them. Spec mode produces a verified `.spec.ts` composed from the library — so the spec stays compact and survives selector drift in any one snippet.
-
-Pick codegen when you need a one-off recording you'll commit and rarely touch. Pick forge when the flows you're testing will be re-driven, evolved, or composed into larger scenarios.
-
-### vs playwright-cli (the bare CLI)
-
-`playwright-cli` is the tool forge wraps. It's a command interface: `open`, `click`, `fill`, `run-code`. Stateless per command. No agents, no library, no hint convention.
-
-Forge layers the agent team, the snippet library, the hint files, and the spec pipeline on top of it. If you're scripting one-off browser interactions and don't need anything to persist between commands, the bare CLI is the right tool. If you want a library that accretes, hint-driven authoring, or verified spec output — that's the work forge does on top.
-
-### vs hand-writing Playwright tests
-
-Hand-writing is the maximum-control option. You read the docs, inspect the DOM, choose selectors, structure tests as you see fit. Quality depends on your discipline and how much project knowledge you've internalised.
-
-Forge takes the "what selector should I use", "what's the right decomposition", "what gotcha did I forget" questions and automates the discovery — combining hints (project knowledge you write once) with agents that drive the real app and verify what they produced. The output is plain Playwright code you'd be happy to write by hand: just authored faster, with selectors verified against the live app, and against a library that grows from real driving.
-
-Pick hand-writing when you have unusual structural requirements (custom fixtures, non-Playwright tooling integration, deeply unusual assertions) that don't fit forge's standard shape. Pick forge when you want the standard shape and would rather have the library accrete from real use than build it up by hand.
+**vs hand-writing Playwright tests.** Hand-writing gives maximum control — you pick selectors, structure tests as you see fit, accept whatever quality your discipline produces. Forge automates the "what selector", "what decomposition", "what gotcha did I forget" questions by combining hints (project knowledge written once) with agents that drive the real app and verify the output. The result is plain Playwright code, authored faster, against a library that grows from real driving. Pick hand-writing for unusual structural requirements (custom fixtures, non-Playwright tooling, exotic assertions); pick forge when the standard shape fits.
 
 ## Architecture
 
@@ -188,36 +174,11 @@ For parallel runs against the same project, the constraint is whatever your back
 
 ### Hints grow during use
 
-Hints don't need to be complete at start. While working, each agent can surface **proposals** — patterns it noticed during a run that would belong in a hint file. The team-lead relays these to you at the end of a session: a short observation, evidence (which snippet, which selector, what behaviour was non-obvious), and a suggested edit. You accept, modify, or reject.
-
-This means a useful hint set can accrete from real driving rather than being front-loaded. Start with the env contract in `forge.md` and the canonical selectors in `driver.md`; the rest grows as the agents surface what they actually find useful. See [`samples/shop/forge/hints/snippet-author.md`](./samples/shop/forge/hints/snippet-author.md) for a worked example — that file was proposed by `forge:snippet-author` during a real drive, not hand-authored, after it noticed a recurring precondition pattern across two snippets.
+Hints don't need to be complete at start. Each agent surfaces **proposals** at the end of a session — patterns it noticed during the run that belong in a hint file. The lead relays them with an observation, evidence, and a suggested edit; you accept, modify, or reject. Start with the env contract in `forge.md` and canonical selectors in `driver.md`; the rest accretes from real driving. See [`samples/shop/forge/hints/snippet-author.md`](./samples/shop/forge/hints/snippet-author.md) for a worked example — proposed by `forge:snippet-author` during a real drive, not hand-authored.
 
 ### Setup / teardown
 
-`forge.md`'s `## Setup before each run` section drives the lead's pre-drive work. Examples:
-
-```markdown
-## Setup before each run
-
-Create a fresh test user:
-
-\`\`\`sql
-INSERT INTO users (email, role)
-VALUES ('test-' || gen_random_uuid() || '@example.com', 'standard')
-\`\`\`
-
-Capture the generated email; the spec needs it as the login identity.
-```
-
-Or simply:
-
-```markdown
-## Setup before each run
-
-Don't reset any state — runs share state intentionally.
-```
-
-Each session launches its own ephemeral chromium profile, so browser-side state stays clean without configuration. `## Setup before each run` is for state forge can't reach on its own — server-side data, account provisioning, anything outside the browser. `## Teardown after each run` is the symmetric hook for end-of-run cleanup (server-side state, logout endpoints).
+Each session launches its own ephemeral chromium profile, so browser-side state stays clean without configuration. `forge.md`'s optional `## Setup before each run` section is for state forge can't reach on its own — server-side data, account provisioning, "wipe the events table" SQL, anything outside the browser. `## Teardown after each run` is the symmetric hook for end-of-run cleanup. The lead executes whatever the hint says in plain prose; there's no DSL.
 
 ## Storage layout
 
