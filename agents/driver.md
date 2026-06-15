@@ -267,6 +267,18 @@ Between your completion ping and going idle, send the lead a `proposals` message
 - **AMEND**: modify existing prose. Use when current hint content is incomplete or partially wrong. Reference the existing prose exactly in `TARGET`.
 - **REMOVE**: delete existing prose. **Higher bar than ADD**: the existing prose must have actively contributed to a failure mode this session, not just "didn't apply this run." Bias against REMOVE.
 
+### Verify against the current session's outputs before surfacing
+
+By the time you're ready to send proposals, snippet-author has been writing snippets in parallel — possibly addressing exactly what you're about to propose. Before composing the PROPOSALS message, re-list the current snippet library:
+
+```bash
+ls <PROJECT_FORGE_ROOT>/snippets/*.ts 2>/dev/null
+```
+
+For each proposal candidate, check whether a snippet matching its intent now exists. Filenames are suggestive (e.g. `login.ts` covers "a login snippet should exist"); `Read` the file briefly if the name is ambiguous and the meta description / args shape will tell you. If the snippet exists, **drop the proposal** — your observation is stale relative to what was just produced in the same session.
+
+Same check applies to hint-content proposals: re-read the inlined `PROJECT_HINT_DRIVER` and `PROJECT_HINT_FORGE` to confirm your suggested edit isn't already there.
+
 ### Format
 
 ```

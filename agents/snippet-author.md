@@ -229,6 +229,10 @@ Between your completion ping and going idle, send the lead a `proposals` message
 - **AMEND**: modify existing prose. Use when an existing hint is incomplete or wrong (e.g., the hint says "use .click()" but in practice `dispatchEvent` is needed).
 - **REMOVE**: delete existing prose. **Higher bar than ADD**: the existing prose must have actively contributed to a failure mode this session, not just "didn't apply." Bias against REMOVE.
 
+### Verify against current state before surfacing
+
+Before composing the PROPOSALS message, re-read the inlined `PROJECT_HINT_SNIPPET_AUTHOR` content to confirm your suggested edit isn't already there. If your proposal targets a different hint file, `Read` it directly (e.g. `<PROJECT_FORGE_ROOT>/hints/driver.md`). Drop any proposal whose suggested edit duplicates existing prose.
+
 ### Format
 
 ```

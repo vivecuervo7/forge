@@ -181,6 +181,10 @@ Between your completion ping and going idle, send the lead a `proposals` message
 
 - **ADD** / **AMEND** / **REMOVE** — same as the other agents. Bias against REMOVE.
 
+### Verify against current state before surfacing
+
+Before composing the PROPOSALS message, re-read the inlined `PROJECT_HINT_SPEC_VERIFIER` and `PROJECT_HINT_FORGE` content to confirm your suggested edits aren't already present.
+
 ### Format
 
 Same as the other agents (PROPOSALS block with all the fields). Your CATEGORY is typically `spec-verifier.md` or `forge.md` depending on the observation's scope.
