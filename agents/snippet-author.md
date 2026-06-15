@@ -211,18 +211,21 @@ Between your completion ping and going idle, send the lead a `proposals` message
 
 ### What to observe (snippet-author-specific)
 
-Your proposals are about **how snippets are written** — conventions, naming, decomposition, defensive patterns. Things you noticed across multiple snippets this session, or library-shape observations. Stay in your lane:
+Your proposals are about **how this project's snippets are written** — conventions, naming, decomposition, defensive patterns observed across the snippets you authored this session.
 
-- **SUT observations** (selectors, routes, app quirks) belong to `driver`. SendMessage them if you notice something cross-domain.
-- **Spec-composition observations** belong to `spec-writer`.
+**Default outcome is `proposals: 0`.** Most sessions don't produce enough new snippets to establish conventions; that's normal. Don't propose for the sake of proposing.
 
-Observation classes that belong in *your* proposals:
+Propose only when a pattern actually emerged across multiple snippets:
 
 - **Code patterns repeated across snippets** authored this session. If 3+ snippets use the same idiom (e.g., `dispatchEvent('click')` on form elements, `if (!X) throw` for credential checks, a specific waitForURL pattern), the pattern is convention-worthy.
 - **Naming convention emerging**. If your snippets have a consistent shape (`<verb>-<resource>(-modifier)`), that's a snippet-author.md hint when not already documented.
 - **Composition patterns**. If snippet X imports snippet Y across multiple new snippets, Y is foundational and worth documenting as such. Same for "always-paired" snippets (create + delete).
 - **Parameterization defaults** that consistently match user intent. If you keep defaulting an arg to the same value across snippets, the convention belongs in the hint.
-- **Library-coverage observations**. If you authored multiple snippets in one namespace, the namespace itself is now established and might be worth documenting.
+
+**Out of your lane:**
+
+- **SUT observations** (selectors, routes, app quirks) belong to `driver`. SendMessage them if you notice something cross-domain.
+- **Spec-composition observations** belong to `spec-writer`.
 
 ### Heuristics for proposal-worthiness
 

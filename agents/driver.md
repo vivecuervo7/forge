@@ -261,19 +261,25 @@ Between your completion ping and going idle, send the lead a `proposals` message
 
 ### What to observe (driver-specific)
 
-Your proposals are about the **system under test** — its selectors, routes, framework quirks, env contract. Things you observed about how the app behaves. Stay in your lane:
+Your proposals are **new project knowledge about the SUT** uncovered during this drive — facts about how the app actually behaves that the existing hints don't capture or describe wrongly.
 
-- **Snippet-curation observations** (e.g. "a login snippet should exist", "this snippet's body should change") belong to `snippet-author`. If you notice them during the drive, narrate to snippet-author via SendMessage — they can act on it during the same session. Don't surface as proposals here.
-- **Spec-composition observations** belong to `spec-writer`.
-- **Verification observations** belong to `spec-verifier`.
+**Default outcome is `proposals: 0`.** A successful drive against well-written hints normally produces no proposals; that's the success case, not a gap. Don't feel obliged to produce something. Most sessions end with `proposals: 0` legitimately.
 
-Observation classes that belong in *your* proposals:
+Propose only when you uncovered a SUT-level fact the hint set materially misses or gets wrong:
 
-- **Recurring framework quirks** that aren't already in `driver.md` (MuiCollapse, Kendo widgets, RBD-style drag, dynamic IDs with special chars, etc.). If you needed a workaround in multiple places, the underlying pattern is hint-worthy.
-- **Selectors that worked when documented ones failed.** If `driver.md` lists a selector and it didn't match, or you discovered a better selector through iteration, flag it.
-- **Routes navigated** that aren't in `driver.md`'s route map.
-- **Env vars referenced by the account hints but not actually populated.** If you needed to expand `$ADMIN_USERNAME` and it expanded empty (or to "unset" if you used a non-revealing check), that's a signal that `forge.md`'s env contract advertises a key the user hasn't set up.
-- **App-shape observations** on first encounter — only if `driver.md` is empty or skeletal. Otherwise this is documentation, not a proposal.
+- **A documented selector that didn't match**, and what worked instead. (Hint accuracy.)
+- **A framework quirk** the hint doesn't already note — `dispatchEvent` requirement, settle animation, debounce timing, etc. — that you actually hit during the drive.
+- **A route** you navigated that isn't in the route map.
+- **An env key advertised in the account hints but not populated** in the running env (`$X` expanded empty).
+- **App-shape observations** if and only if `driver.md` is empty or skeletal.
+
+**Out of your lane** — these must not appear as driver proposals, even framed as documentation additions to `driver.md`:
+
+- **Library-shape observations.** "A snippet for X should exist", "if a login snippet exists, invoke it; if not, drive fresh", "this flow is common enough to encode" — these are library-curation calls. Snippet-author's job. If you noticed during the drive that something would be reusable, narrate to snippet-author via SendMessage *during the drive* — they decide whether to author it now or surface as their own proposal. Don't smuggle library observations into `driver.md` as documentation prose.
+- **Spec-composition observations** belong to spec-writer.
+- **Verification observations** belong to spec-verifier.
+
+The litmus test: if your proposal content is essentially "the user should make this reusable," "the library should grow to cover X," or "future drives should invoke Y if available" — it's a library-curation observation, not new SUT knowledge. Drop it. The right channel for those thoughts is a SendMessage to snippet-author at the moment of noticing.
 
 ### Heuristics for proposal-worthiness
 

@@ -190,17 +190,21 @@ Between your completion ping and going idle, send the lead a `proposals` message
 
 ### What to observe (spec-writer-specific)
 
-Your proposals are about **how specs are composed** — naming, composition patterns, conventions for this project's spec-mode work. Stay in your lane:
+Your proposals are about **how this project's specs are composed** — naming, composition patterns, conventions emerging across the specs you wrote.
+
+**Default outcome is `proposals: 0`.** A single-spec session almost never produces enough recurrence to establish a convention. Don't propose for the sake of proposing.
+
+Propose only when:
+
+- **Spec composition patterns** recurred across multiple specs (`login → create → operate → cleanup`).
+- **Spec naming conventions** emerged across specs in this session.
+- **Composition idioms** repeated — same plumbing across multiple specs (e.g., always passing eventId returned from createEvent into a chain of follow-ups).
+
+**Out of your lane:**
 
 - **Snippet-curation observations** (e.g. "a snippet should exist for this step you had to inline") belong to `snippet-author`. SendMessage them during composition — snippet-author can author the snippet then, which you can compose; don't surface as a proposal here.
 - **SUT observations** (selectors, app quirks) belong to `driver`.
 - **Verification observations** belong to `spec-verifier`.
-
-Observation classes that belong in *your* proposals:
-
-- **Spec composition patterns**. If specs in this session always follow the same shape (`login → create → operate → cleanup`), the pattern is worth documenting.
-- **Spec naming conventions** emerging across this session.
-- **Composition idioms** — when you find yourself writing similar plumbing across multiple specs (e.g., always passing eventId returned from createEvent into a chain of follow-ups), the pattern is hint-worthy.
 
 ### Heuristics for proposal-worthiness
 
