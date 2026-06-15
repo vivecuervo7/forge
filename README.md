@@ -9,7 +9,7 @@ The default mode just does the thing you asked for. Spec mode is opt-in for when
 - **Node.js** — any recent version (tested on 24).
 - **playwright-cli** — `brew install playwright-cli`. Forge wraps it.
 
-Supported on macOS, Linux, and Windows. Forge's scripts are pure Node; cross-platform locking, JSON state, and hashing are handled internally — no `bash`, `jq`, `flock`, or `md5sum` required on the host.
+Supported on macOS, Linux, and Windows.
 
 ## Quick start
 
@@ -43,8 +43,6 @@ Supported on macOS, Linux, and Windows. Forge's scripts are pure Node; cross-pla
    That launches a fresh chromium and goes. For sites with auth or other project-specific behaviour, author hint files in `forge/hints/` (see `forge/hints/README.md` for guidance). All five hints are optional and additive: write only what you need.
 
    **Want to see forge run end-to-end before adopting it?** [Try the samples](./samples) — three project-shaped directories with hints already authored and prompt-by-prompt walkthroughs against public test sites. 5–15 minutes per walkthrough.
-
-On first spec run (or first snippet invocation), forge lazy-installs its Playwright runner directly into the project's `forge/` directory (standard `package.json` + `node_modules/` layout). Self-contained per project, visible in the IDE, removed cleanly by `rm -rf forge/` if you ever want to uninstall.
 
 ## Commands
 
@@ -130,19 +128,17 @@ flowchart LR
 | `forge:spec-writer` *(spec mode)* | Composes a self-contained `.spec.ts` after the drive completes. Imports snippets for invoked steps; inlines code for fresh-drive steps. |
 | `forge:spec-verifier` *(spec mode)* | Runs the spec via `forge-run-spec.mjs` against a fresh browser context, surfaces pass/fail. Iterates with driver / spec-writer on failure. |
 
-Dashed edges fire only in spec mode. Drive mode runs the top two agents (driver + snippet-author) and stops once the task is done; spec mode adds the bottom two for spec composition + verification. Teach mode also runs just driver + snippet-author, but the lead's role is much more active — it pipes user input to the driver turn-by-turn and only writes snippets when the user explicitly caps them.
+Dashed edges fire only in spec mode. Drive mode runs the top two agents (driver + snippet-author) and stops once the task is done; spec mode adds the bottom two for spec composition + verification. Teach mode also runs just driver + snippet-author, but the lead's role is much more active — it pipes user input to the driver turn-by-turn, and snippet-author only writes when the user explicitly caps a snippet.
 
 ## Session model
 
 Each `/forge` invocation is stateless. Launch a fresh chromium with an ephemeral profile, run the user's task, close the chromium at the end. Clean state every time, by design.
 
-Multi-account scenarios are project-owned. If your project has multiple test accounts, document them in `forge/hints/forge.md` in whatever shape fits — an account list, a role table, a SQL minting recipe, a vault-lookup script. The driver reads the hint and follows it.
-
 For parallel runs against the same project, the constraint is whatever your backend imposes (single-session-per-user is common). Document the constraint in `forge.md`; the user respects it when launching parallel sessions.
 
 ## Hints
 
-`forge-init` scaffolds `forge/hints/` with one file per consumer. Hints are natural-language instructions to the agents, not config.
+`/forge init` scaffolds `forge/hints/` with one file per consumer. Hints are natural-language instructions to the agents, not config.
 
 | File | Read by |
 |---|---|
@@ -164,9 +160,9 @@ Hints don't need to be complete at start. Each agent surfaces **proposals** at t
 
 ### Setup / teardown
 
-Each session launches its own ephemeral chromium profile, so browser-side state stays clean without configuration. `forge.md`'s optional `## Setup before each run` section is for state forge can't reach on its own — server-side data, account provisioning, "wipe the events table" SQL, anything outside the browser. `## Teardown after each run` is the symmetric hook for end-of-run cleanup. The lead executes whatever the hint says in plain prose; there's no DSL.
+`forge.md`'s optional `## Setup before each run` section is for state forge can't reach on its own — server-side data, account provisioning, "wipe the events table" SQL, anything outside the browser. `## Teardown after each run` is the symmetric hook for end-of-run cleanup. The lead executes whatever the hint says in plain prose; there's no DSL.
 
-## Storage layout
+## Project scaffolding
 
 ```
 <project>/forge/
@@ -186,7 +182,9 @@ Each session launches its own ephemeral chromium profile, so browser-side state 
 └── README.md               # gitignored — scaffold, explains the layout
 ```
 
-Only `hints/` is tracked. Everything else is local per-machine. `forge-init` regenerates the rest from convention. See the scaffold's inline comments for adapting to projects with their own Playwright runner.
+Only `hints/` is tracked. Everything else is local per-machine. `/forge init` regenerates the rest from convention. See the scaffold's inline comments for adapting to projects with their own Playwright runner.
+
+On first spec run (or first snippet invocation), forge lazy-installs its Playwright runner directly into the project's `forge/` directory (standard `package.json` + `node_modules/` layout). Self-contained per project, visible in the IDE, removed cleanly by `rm -rf forge/` if you ever want to uninstall.
 
 ## Environment variables
 
