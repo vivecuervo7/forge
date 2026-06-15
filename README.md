@@ -83,15 +83,11 @@ Try a sample before adopting forge for your own project. Each sample is a projec
 
 **Start with shop** if your work involves any authenticated app — that walkthrough exercises the most surface area. Each sample's README has the exact commands; budget 5–15 minutes per walkthrough.
 
-## Why forge vs …
+## Why not codegen, playwright-cli, or hand-writing?
 
-Three honest comparisons. Each alternative is right when its trade-offs match what you need.
-
-**vs Playwright codegen.** Codegen records a flow and emits one `.spec.ts` — one-shot output, no library, no project knowledge persisted across recordings. Forge produces the same kind of test as the byproduct of a workflow that also accretes reusable snippets, captures hint-encoded project knowledge, and verifies the result from cold. Pick codegen for a recording you'll commit once and rarely touch; pick forge when flows will be re-driven, evolved, or composed.
-
-**vs playwright-cli (the bare CLI).** The tool forge wraps — a stateless command interface (`open`, `click`, `fill`, `run-code`) useful for scripting one-off interactions, not designed to accrete a library or hold project knowledge. Forge adds the agent team, snippet library, hint files, and spec pipeline on top. Pick the bare CLI for scripts; pick forge for the durable workflow.
-
-**vs hand-writing Playwright tests.** Hand-writing gives maximum control — you pick selectors, structure tests as you see fit, accept whatever quality your discipline produces. Forge automates the "what selector", "what decomposition", "what gotcha did I forget" questions by combining hints (project knowledge written once) with agents that drive the real app and verify the output. The result is plain Playwright code, authored faster, against a library that grows from real driving. Pick hand-writing for unusual structural requirements (custom fixtures, non-Playwright tooling, exotic assertions); pick forge when the standard shape fits.
+- **Codegen** records one flow into one `.spec.ts`. Forge accretes snippets across drives and bakes project knowledge into reusable hints.
+- **playwright-cli** is the stateless command interface forge wraps. Forge adds the agent team, snippet library, hints, and spec pipeline on top.
+- **Hand-writing** is the maximum-control option. Forge trades some control for automated selector / decomposition / gotcha work, with cold-start verification on the output.
 
 ## Architecture
 
