@@ -207,6 +207,10 @@ Between your completion ping and going idle, send the lead a `proposals` message
 
 - **ADD** / **AMEND** / **REMOVE** — same semantics as for the other agents. Bias against REMOVE.
 
+### Verify against current state before surfacing
+
+Before composing the PROPOSALS message, re-list the project's snippets directory (`<PROJECT_FORGE_ROOT>/snippets/*.ts`) and re-read the inlined `PROJECT_HINT_SPEC_WRITER` content. If a proposal recommends a snippet that now exists, or hint prose that's already documented, drop it.
+
 ### Format
 
 Same as the other agents (PROPOSALS block with CATEGORY, ACTION, TARGET, OBSERVATION, EVIDENCE, SUGGESTED_EDIT, plus optional ALTERNATIVES/LEAN/RATIONALE). CATEGORY for your proposals is typically `spec-writer.md`, though observations about the library itself may target `snippet-author.md`.
