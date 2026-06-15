@@ -70,7 +70,48 @@ Same surface as before, but spec mode adds `forge:spec-writer` and `forge:spec-v
 
 **What this demonstrates:** the full pipeline produces a CI-ready artifact *that has been verified to work from cold*. The verifier's iteration loop is part of the value — it surfaces snippet bugs and SUT quirks that the live drive happened to dodge. Re-running the spec downstream is a single `npx playwright test` against your own project's runner; nothing forge-specific at run time.
 
-### 4. Teach mode — when the agent can't be expected to discover the quirks
+### 4. Parallel runs — two accounts, two browsers, side by side
+
+This step demonstrates the property that makes forge usable for real-world team testing: **multiple concurrent runs against different accounts, with zero forge configuration beyond declaring the accounts in `hints/forge.md`**.
+
+Open a *second* terminal and start another claude session in this directory:
+
+```bash
+cd /Users/isaac/repos/forge/samples/shop
+claude --plugin-dir /Users/isaac/repos/forge
+```
+
+You now have two independent claude sessions — call them **Session A** and **Session B** — both bound to the same `samples/shop/` project. In **Session A**, type:
+
+```
+/forge log in as customer and add the first hammer to the cart
+```
+
+Immediately switch to **Session B** and type:
+
+```
+/forge log in as customer2 and add the first hammer to the cart
+```
+
+**What to look for:**
+
+- Two chromium windows open side by side, navigating independently. Each shows a different account's login flow.
+- Each driver's Bash commands reference its own account's env keys — `$PST_CUSTOMER_EMAIL` in Session A, `$PST_CUSTOMER2_EMAIL` in Session B — via the same shell-expansion + `forge-pw` redaction pattern from step 2.
+- Both runs complete cleanly without interfering. Two playwright-cli sessions (different `ft-<id>` names), two ephemeral chromium profiles, two forge agent teams.
+- The same `login.ts` snippet is invoked by both — once with customer's credentials, once with customer2's. The snippet is account-agnostic; the caller chooses.
+
+**What this demonstrates:** parallel multi-account testing requires no special configuration. The mechanism is structural:
+
+- `hints/forge.md` declares all accounts and their env keys (one place).
+- The driver reads the account name from the user's task and looks up the matching env keys per invocation.
+- The login snippet takes `email` + `password` as args — no account knowledge baked in.
+- Each `/forge` invocation gets its own ephemeral chromium session, agent team, and tmux namespace.
+
+This is the property that lets a team run concurrent test flows against different test accounts. Two flows, two accounts, completely isolated.
+
+**Don't try a third session against the same account.** practicesoftwaretesting.com enforces single-session-per-user; running two `as customer` sessions will boot the first session mid-test when the second logs in. The `forge.md` hint warns about this; the choice of which account per session is yours.
+
+### 5. Teach mode — when the agent can't be expected to discover the quirks
 
 ```
 /forge teach login
