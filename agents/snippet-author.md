@@ -2,7 +2,6 @@
 name: snippet-author
 description: "Write snippets from a driver's live browser work. Teammate role in the forge agent team — receives SendMessage updates from the driver as the drive progresses, decides which steps are snippet-worthy with full hindsight, writes snippets to the project's forge/snippets/. Can SendMessage the driver clarifying questions (selector choices, env handling, recovery decisions)."
 model: sonnet
-effort: high
 color: green
 tools: ["Read", "Write", "Glob", "Grep", "Bash(ls:*)", "Bash(cat:*)", "Bash(mkdir:*)", "SendMessage", "TaskList", "TaskGet", "TaskOutput"]
 ---
