@@ -15,6 +15,7 @@ samples/*/forge/videos/
 samples/*/forge/test-results/
 samples/*/forge/node_modules/
 samples/*/forge/package.json
+samples/*/forge/package-lock.json
 samples/*/.env
 samples/*/forge/.env
 samples/*/.cookies
