@@ -34,13 +34,15 @@ Supported on macOS, Linux, and Windows. Forge's scripts are pure Node; cross-pla
 
    This creates `forge/` with a `hints/` directory, a fallback Playwright config, and a self-documenting `.gitignore`.
 
-4. **Drive a task:**
+4. **Drive a task.** For an unauthenticated site, the bare scaffold is enough:
 
    ```
-   /forge add the backpack to the cart
+   /forge <describe what you want done>
    ```
 
-   That's enough to start. For an unauthenticated site, the scaffold alone is sufficient — forge launches a fresh chromium and goes. For sites with auth or other project-specific behaviour, author hint files in `forge/hints/` (see `forge/hints/README.md` for guidance). All five hints are optional and additive: write only what you need.
+   That launches a fresh chromium and goes. For sites with auth or other project-specific behaviour, author hint files in `forge/hints/` (see `forge/hints/README.md` for guidance). All five hints are optional and additive: write only what you need.
+
+   **Want to see forge run end-to-end before adopting it?** [Try the samples](./samples) — three project-shaped directories with hints already authored and prompt-by-prompt walkthroughs against public test sites. 5–15 minutes per walkthrough.
 
 On first spec run (or first snippet invocation), forge lazy-installs its Playwright runner directly into the project's `forge/` directory (standard `package.json` + `node_modules/` layout). Self-contained per project, visible in the IDE, removed cleanly by `rm -rf forge/` if you ever want to uninstall.
 
@@ -76,6 +78,44 @@ Teach-mode mechanics in brief:
 - The user can take over the browser mid-session for state setup ("I'll create the test event myself"); user-driven actions are not recorded. A bearing-grounding statement ("I'm now on /event/123") gets the agent re-oriented before the next directed step.
 - Snippet boundaries are user-signalled: "cap that as `login`" / "save the last four steps as `create-event`." If the name already exists, the user gets an explicit replace-or-rename choice — overwrite protection is user-driven here, not author-driven.
 - Annotations the user volunteers (or that fall out of the conversation) get woven into the snippet body, not just the description. This is the load-bearing knowledge — the bit the driver would have missed.
+
+## See it in action
+
+Try a sample before adopting forge for your own project. Each sample is a project-shaped directory — committed hints, scaffolded config, real-forge-output seed snippets — plus a prompt-by-prompt walkthrough you run yourself.
+
+| Sample | What you'll see |
+|---|---|
+| [`samples/shop/`](./samples/shop) | Authentication, multi-account hint pattern, full spec-mode pipeline with verifier iteration, and **two browsers running in parallel under different accounts** |
+| [`samples/internet/`](./samples/internet) | Variant-arg parameterisation — one snippet covers a family of probe pages |
+| [`samples/widgets/`](./samples/widgets) | Compositional decomposition — fill + read snippets compose into larger flows |
+
+**Start with shop** if your work involves any authenticated app — that walkthrough exercises the most surface area. Each sample's README has the exact commands; budget 5–15 minutes per walkthrough.
+
+## Why forge vs …
+
+Three honest comparisons against the closest alternatives. Each tool is right when its trade-offs match what you need.
+
+### vs Playwright codegen
+
+Codegen is a recorder. Click through a flow in a browser, it emits a single `.spec.ts` of the equivalent code. One-shot output — no library, no persisted project knowledge, no awareness across recordings.
+
+Forge is the durable version of that workflow. The same drive that completes the task also accretes reusable snippets into a library that future drives invoke instead of re-recording the same interactions. Hints capture project-specific selectors and gotchas, so the next person doesn't re-learn them. Spec mode produces a verified `.spec.ts` composed from the library — so the spec stays compact and survives selector drift in any one snippet.
+
+Pick codegen when you need a one-off recording you'll commit and rarely touch. Pick forge when the flows you're testing will be re-driven, evolved, or composed into larger scenarios.
+
+### vs playwright-cli (the bare CLI)
+
+`playwright-cli` is the tool forge wraps. It's a command interface: `open`, `click`, `fill`, `run-code`. Stateless per command. No agents, no library, no hint convention.
+
+Forge layers the agent team, the snippet library, the hint files, and the spec pipeline on top of it. If you're scripting one-off browser interactions and don't need anything to persist between commands, the bare CLI is the right tool. If you want a library that accretes, hint-driven authoring, or verified spec output — that's the work forge does on top.
+
+### vs hand-writing Playwright tests
+
+Hand-writing is the maximum-control option. You read the docs, inspect the DOM, choose selectors, structure tests as you see fit. Quality depends on your discipline and how much project knowledge you've internalised.
+
+Forge takes the "what selector should I use", "what's the right decomposition", "what gotcha did I forget" questions and automates the discovery — combining hints (project knowledge you write once) with agents that drive the real app and verify what they produced. The output is plain Playwright code you'd be happy to write by hand: just authored faster, with selectors verified against the live app, and against a library that grows from real driving.
+
+Pick hand-writing when you have unusual structural requirements (custom fixtures, non-Playwright tooling integration, deeply unusual assertions) that don't fit forge's standard shape. Pick forge when you want the standard shape and would rather have the library accrete from real use than build it up by hand.
 
 ## Architecture
 
@@ -208,15 +248,6 @@ Env handling is delegated to your project. Whatever's in `process.env` at run ti
 The driver follows one rule: **env values are referenced, never inlined**. It uses native shell expansion (`$ADMIN_USERNAME`) inside its Bash commands; the shell expands at exec time; the tool-call transcript records the unexpanded reference. The rule applies uniformly to every env var — predictable hygiene over per-call judgment.
 
 For projects with multiple test accounts, document the mapping in `forge/hints/forge.md` in whatever shape fits — a naming convention (admin → `$ADMIN_USERNAME` / `$ADMIN_PASSWORD`, user → `$USER_USERNAME` / `$USER_PASSWORD`), a provisioning recipe, or anything else. The driver reads the hint and follows it.
-
-## Use cases
-
-- **Routine drudgery.** "Delete all emails from `noreply@noisy-vendor.com`."
-- **PR / GitHub flows.** "Paste the GIF at `~/Desktop/demo.gif` into PR #42's description."
-- **Multi-step forms.** JIRA submissions, expense reports, deploy approval pages.
-- **Triage + verification.** "Open the dashboard, check the error count, screenshot anything > 50."
-- **Bug repro + verification specs.** `/forge spec AE-1775 add backpack` to author the spec, then `/forge run last spec, record as before` → fix bug → `/forge run last spec, record as after`. Paired evidence for the PR.
-- **Library bootstrap on a new app.** `/forge teach login` to walk forge through the auth flow once, encoding the auto-login detection and stuck-loader retry — then every future drive/spec invocation invokes the snippet and never re-discovers the quirks.
 
 ## License
 
