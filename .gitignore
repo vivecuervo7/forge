@@ -22,3 +22,7 @@ samples/*/.cookies
 samples/*/forge/.cookies
 samples/*/.playwright-cli/
 samples/*/forge/.playwright-cli/
+
+# macOS Finder noise.
+.DS_Store
+**/.DS_Store

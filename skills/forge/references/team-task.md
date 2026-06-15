@@ -123,7 +123,7 @@ TaskCreate(
 
 TaskCreate(
   subject="spec-verifier: run spec from a cold context, confirm it passes",
-  description="Wait for spec-writer's 'spec ready' message. Run the spec via `forge-run-spec.mjs --spec <path>`. The verifier mirrors how the spec will be run downstream (CI / `playwright test` directly): fresh browser context, env from whatever's already in `process.env` plus anything the project's `forge/playwright.config.ts` chose to load. On pass: ping team-lead with verified-from-fresh status. On fail: SendMessage driver (selectors) or spec-writer (assertions/imports) for clarification, iterate up to 3 times, then either succeed or escalate. Mark complete when done."
+  description="Wait for spec-writer's 'spec ready' message. Run the spec via `forge-run-spec.mjs --spec <path>`. Mirror the drive's conditions: fresh browser context, env loaded via forge.md's recipe if it has one (same prefix the driver used). On pass: ping team-lead with verified-from-fresh status. On fail: SendMessage driver (selectors) or spec-writer (assertions/imports) for clarification, iterate up to 3 times, then either succeed or escalate. Mark complete when done."
 )
 # Note as SPEC_VERIFIER_TASK_ID.
 ```
