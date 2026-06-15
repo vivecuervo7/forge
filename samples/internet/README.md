@@ -22,7 +22,7 @@ Run these from inside `samples/internet/`.
 /forge load the second dynamic loading variant and capture the rendered text
 ```
 
-The driver finds the seeded snippet and invokes it with `variant: '2'`. No new authoring.
+The driver finds the seeded snippet and invokes it with `variant: 2`. No new authoring.
 
 **What to look for:** one "invoked" step, no new files in `forge/snippets/`.
 

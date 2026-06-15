@@ -10,27 +10,28 @@ This sample is a project shaped like one that's had `/forge init` run on it — 
 |---|---|
 | [`forge/hints/driver.md`](./forge/hints/driver.md) | A 14-widget probe map, an ad-occlusion / `scrollIntoViewIfNeeded` rule, Kendo-intercept warnings for date pickers, the manual-mouse-event pattern for the drag-drop family. **Shows what a `driver.md` looks like when the app's UI library is the source of pain.** |
 | `forge/playwright.config.ts` | Scaffolded by `/forge init`. |
-| `forge/snippets/fill-text-box-form.ts` | **Seeded** — produced by a real forge run. The first half of the text-box pair: fills the form fields. |
+| `forge/snippets/fill-text-box-form.ts` | **Seeded** — produced by a real forge run. Navigates to the text-box page and fills the four form fields from args. |
+| `forge/snippets/submit-text-box-form.ts` | **Seeded** — produced by the same run. Clicks Submit and returns the rendered output panel text. The compositional pair to `fill-text-box-form`. |
 
-## Walkthrough — see compositional decomposition emerge
+## Walkthrough — see compositional decomposition in action
 
 Run these from inside `samples/widgets/`.
 
-### 1. Author the paired snippet — the decomposition emerges
+### 1. Library reuse — both halves of the pair invoke cleanly
 
 ```
 /forge open the text-box page, fill the form, submit, and capture the output
 ```
 
-The driver invokes the seeded `fill-text-box-form` snippet, then authors a complementary snippet for the submit + capture step.
+The driver invokes both seeded snippets in sequence: `fill-text-box-form` for the fill, `submit-text-box-form` for the submit + read. No new authoring.
 
 **What to look for:**
-- A new `forge/snippets/get-text-box-output.ts` (or `submit-and-capture-output.ts`) appears alongside the seeded one.
-- The seeded snippet is invoked, not re-authored — the new snippet covers only the part that wasn't already there.
+- Driver narrates two `invoked …` steps to snippet-author.
+- `forge/snippets/` is unchanged after the run.
 
-**What this demonstrates:** the hint's selector inventory pairs fill and read as separate concerns, so snippet-author treats them as separate snippets rather than fusing them. Future tasks that want to "fill, do something else, then read" can compose the two halves independently.
+**What this demonstrates:** when a UI workflow has natural composable boundaries (fill vs read here), snippet-author writes one snippet per concern, and future tasks compose them. The seeded library already encodes the pair; the user's task is satisfied by invoking, not authoring.
 
-### 2. Drive a different widget — see the same pattern
+### 2. Drive a different widget — see decomposition emerge fresh
 
 ```
 /forge open the autocomplete page, add three colour chips, then capture the chip list
