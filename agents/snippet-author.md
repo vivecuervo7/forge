@@ -209,6 +209,13 @@ Between your completion ping and going idle, send the lead a `proposals` message
 
 ### What to observe (snippet-author-specific)
 
+Your proposals are about **how snippets are written** — conventions, naming, decomposition, defensive patterns. Things you noticed across multiple snippets this session, or library-shape observations. Stay in your lane:
+
+- **SUT observations** (selectors, routes, app quirks) belong to `driver`. SendMessage them if you notice something cross-domain.
+- **Spec-composition observations** belong to `spec-writer`.
+
+Observation classes that belong in *your* proposals:
+
 - **Code patterns repeated across snippets** authored this session. If 3+ snippets use the same idiom (e.g., `dispatchEvent('click')` on form elements, `if (!X) throw` for credential checks, a specific waitForURL pattern), the pattern is convention-worthy.
 - **Naming convention emerging**. If your snippets have a consistent shape (`<verb>-<resource>(-modifier)`), that's a snippet-author.md hint when not already documented.
 - **Composition patterns**. If snippet X imports snippet Y across multiple new snippets, Y is foundational and worth documenting as such. Same for "always-paired" snippets (create + delete).
