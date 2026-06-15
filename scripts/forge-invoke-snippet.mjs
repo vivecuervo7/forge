@@ -49,8 +49,13 @@
 
 import { spawnSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { ensureRunnerDeps, esbuildBinFor, loadFromRunner } from './forge-ensure-runner.mjs'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+const FORGE_PW = join(__dirname, 'forge-pw.mjs')
 
 function die(msg, code = 2) {
   console.error('forge-invoke-snippet:', msg)
@@ -148,15 +153,19 @@ const __args = ${JSON.stringify(parsedArgs)};
 return await run(page, __args);
 }`
 
+// Route the run-code invocation through forge-pw so any env-sourced values
+// that ended up inlined in `wrappedCode` (via JSON.stringify of parsedArgs)
+// get redacted from playwright-cli's "Ran Playwright code" echo before
+// reaching the caller's tool-call transcript.
 const result = spawnSync(
-  'playwright-cli',
-  [`-s=${session}`, 'run-code', wrappedCode],
+  'node',
+  [FORGE_PW, `-s=${session}`, 'run-code', wrappedCode],
   { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 }
 )
 
 if (result.error) {
   if (result.error.code === 'ENOENT') {
-    die('playwright-cli not installed or not on PATH', 4)
+    die('node not on PATH (required to invoke forge-pw)', 4)
   }
   die(`spawn error: ${result.error.message}`, 5)
 }
