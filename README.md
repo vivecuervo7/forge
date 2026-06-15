@@ -17,7 +17,7 @@ Supported on macOS, Linux, and Windows.
 
    ```bash
    claude plugin marketplace add vivecuervo7/forge
-   claude plugin install forge@vive-forge
+   claude plugin install forge@forge
    ```
 
 2. **Enable experimental agent teams** in `~/.claude/settings.json`, then restart Claude Code:
