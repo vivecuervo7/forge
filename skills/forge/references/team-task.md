@@ -155,7 +155,7 @@ PROJECT_HINT_DRIVER:
 
 USER_TASK: <user's task verbatim>
 
-Your task ID is <DRIVE_TASK_ID>. Claim it via TaskUpdate(owner='driver', status='in_progress'), then begin driving. The forge.md hint documents how this project describes its test accounts / credential scheme — read it and follow it when the user names an account or role. SendMessage `snippet-author` with structured summaries after meaningful steps. When SPEC_WRITER_PRESENT=yes, send `spec-writer` a final-state summary at end of drive. When SPEC_WRITER_PRESENT=no, skip that — just TaskUpdate status='completed' and ping team-lead. Then go idle — snippet-author may have follow-up questions."
+Your task is referenced as ID <DRIVE_TASK_ID> for the team's records. Begin driving. The forge.md hint documents how this project describes its test accounts / credential scheme — read it and follow it when the user names an account or role. SendMessage `snippet-author` with structured summaries after meaningful steps. When SPEC_WRITER_PRESENT=yes, send `spec-writer` a final-state summary at end of drive. When SPEC_WRITER_PRESENT=no, skip that — just SendMessage `snippet-author` with summary='drive complete' and SendMessage team-lead. Then go idle — snippet-author may have follow-up questions."
 )
 ```
 
@@ -176,7 +176,7 @@ USER_TASK: <user's task verbatim>
 PROJECT_HINT_SNIPPET_AUTHOR:
 <snippet-author.md contents, or 'none' if missing>
 
-Your task ID is <SNIPPET_AUTHOR_TASK_ID>. Claim it via TaskUpdate(owner='snippet-author', status='in_progress'), then wait for driver messages. Process messages as they arrive; write snippets to <FORGE_ROOT>/snippets/; SendMessage `driver` with clarifying questions if needed. When all snippets are written: if SPEC_WRITER_PRESENT=yes, SendMessage `spec-writer` with summary='snippets ready' BEFORE pinging team-lead — they're waiting on this signal before composing. Then mark task complete and SendMessage team-lead."
+Your task is referenced as ID <SNIPPET_AUTHOR_TASK_ID> for the team's records. Wait for driver messages. Process messages as they arrive; write snippets to <FORGE_ROOT>/snippets/; SendMessage `driver` with clarifying questions if needed. Wait for the driver's `drive complete` signal before wrapping up. When you've received that signal and authored everything: if SPEC_WRITER_PRESENT=yes, SendMessage `spec-writer` with summary='snippets ready' BEFORE pinging team-lead — they're waiting on this signal before composing. Then SendMessage team-lead."
 )
 ```
 
@@ -194,7 +194,7 @@ USER_TASK: <user's task verbatim>
 PROJECT_HINT_SPEC_WRITER:
 <spec-writer.md contents from <FORGE_ROOT>/hints/spec-writer.md, or 'none' if missing>
 
-Your task ID is <SPEC_WRITER_TASK_ID>. Claim it via TaskUpdate(owner='spec-writer', status='in_progress'). Wait for BOTH the driver's final-state message AND snippet-author's 'snippets ready' message before composing — the library may still be accruing when the driver finishes. Once both have arrived, write a self-contained .spec.ts to <FORGE_ROOT>/specs/ that composes snippets for invoked steps and inlines code for fresh-drive steps. Add assertions on captured values. When done, SendMessage `spec-verifier` with the spec path so they can verify it. Mark task complete after."
+Your task is referenced as ID <SPEC_WRITER_TASK_ID> for the team's records. Wait for BOTH the driver's final-state message AND snippet-author's 'snippets ready' message before composing — the library may still be accruing when the driver finishes. Once both have arrived, write a self-contained .spec.ts to <FORGE_ROOT>/specs/ that composes snippets for invoked steps and inlines code for fresh-drive steps. Add assertions on captured values. When done, SendMessage `spec-verifier` with the spec path so they can verify it, then SendMessage team-lead."
 )
 ```
 
@@ -213,7 +213,7 @@ USER_TASK: <user's task verbatim>
 PROJECT_HINT_SPEC_VERIFIER:
 <spec-verifier.md contents from <FORGE_ROOT>/hints/spec-verifier.md, or 'none' if missing>
 
-Your task ID is <SPEC_VERIFIER_TASK_ID>. Claim it via TaskUpdate(owner='spec-verifier', status='in_progress'). Wait for spec-writer's 'spec ready' message. Run the spec via `forge-run-spec.mjs --spec <path>`. The verifier runs the spec the way Playwright itself would: fresh browser context, env from `process.env` as set by the user's shell plus whatever the project's playwright config loads. On pass, ping team-lead with verified-from-fresh status. On fail, ask driver (selectors) or spec-writer (assertions) for clarification, iterate up to 3 times, then succeed or escalate."
+Your task is referenced as ID <SPEC_VERIFIER_TASK_ID> for the team's records. Wait for spec-writer's 'spec ready' message. Run the spec via `forge-run-spec.mjs --spec <path>`. The verifier runs the spec the way Playwright itself would: fresh browser context, env from `process.env` as set by the user's shell plus whatever the project's playwright config loads. On pass, ping team-lead with verified-from-fresh status. On fail, ask driver (selectors) or spec-writer (assertions) for clarification, iterate up to 3 times, then succeed or escalate."
 )
 ```
 
@@ -223,7 +223,7 @@ After spawning, the teammates self-coordinate. You (the lead) wait. Messages fro
 
 **What to watch for:**
 
-- **Completion pings from the spawned teammates** — this is your primary signal that the team is done. Drive mode: wait for driver + snippet-author (2 pings). Spec mode: wait for driver + snippet-author + spec-writer + spec-verifier (4 pings). Each teammate SendMessages `team-lead` with a brief `task <id> complete` summary after marking their task `completed` via TaskUpdate. Proceed to phase 5 only after you've received all expected pings. In spec mode, the natural order is driver/snippet-author → spec-writer → spec-verifier (spec-verifier waits for spec-writer's spec; spec-writer waits for driver's final-state). In drive mode, driver and snippet-author can finish in either order.
+- **Completion pings from the spawned teammates** — this is your primary signal that the team is done. Drive mode: wait for driver + snippet-author (2 pings). Spec mode: wait for driver + snippet-author + spec-writer + spec-verifier (4 pings). Each teammate SendMessages `team-lead` with a brief `task <id> complete` summary when their work is finished. Proceed to phase 5 only after you've received all expected pings. In spec mode, the natural order is driver/snippet-author → spec-writer → spec-verifier (spec-verifier waits for spec-writer's spec; spec-writer waits for driver's final-state). In drive mode, driver and snippet-author can finish in either order.
 - **Messages addressed to you (`team-lead`)** — process them:
   - **STUCK from any teammate** (driver most commonly) — message is plain text with `STUCK` as the first line, then sections `QUESTION:`, `CONTEXT:`, and optionally `OPTIONS:` (each option as `- <label> | value: <value>`). Surface to the user via `AskUserQuestion`:
     - Build the question from the teammate's `QUESTION:` section.
@@ -250,7 +250,7 @@ When the counter reaches 3 for a given teammate, nudge them once:
 SendMessage(
   to="<teammate-name>",
   summary="status check",
-  message="Other teammates have reported work complete. What's your status — done? If your work is finished, please mark your task complete via TaskUpdate and SendMessage team-lead with a completion summary so we can proceed to shutdown."
+  message="Other teammates have reported work complete. What's your status — done? If your work is finished, please SendMessage team-lead with a completion summary so we can proceed to shutdown."
 )
 ```
 

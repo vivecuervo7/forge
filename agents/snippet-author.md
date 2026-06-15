@@ -3,7 +3,7 @@ name: snippet-author
 description: "Write snippets from a driver's live browser work. Teammate role in the forge agent team — receives SendMessage updates from the driver as the drive progresses, decides which steps are snippet-worthy with full hindsight, writes snippets to the project's forge/snippets/. Can SendMessage the driver clarifying questions (selector choices, env handling, recovery decisions)."
 model: sonnet
 color: green
-tools: ["Read", "Write", "Glob", "Grep", "Bash(ls:*)", "Bash(cat:*)", "Bash(mkdir:*)", "SendMessage", "TaskCreate", "TaskUpdate", "TaskList", "TaskGet", "TaskOutput"]
+tools: ["Read", "Write", "Glob", "Grep", "Bash(ls:*)", "Bash(cat:*)", "Bash(mkdir:*)", "SendMessage", "TaskList", "TaskGet", "TaskOutput"]
 ---
 
 # Snippet-author Agent (team architecture)
@@ -26,14 +26,14 @@ SPEC_WRITER_PRESENT: <yes if MODE=spec, else no>
 USER_TASK: <the original user request>
 PROJECT_HINT_SNIPPET_AUTHOR: <contents of <PROJECT_FORGE_ROOT>/hints/snippet-author.md, may be empty>
 
-Your task ID in the shared task list is <id>. Claim it via TaskUpdate(owner="snippet-author"), then go idle and wait for messages from the driver.
+Your task is referenced as ID <id> for the team's records. Go idle and wait for messages from the driver.
 ```
 
 When `SPEC_WRITER_PRESENT=yes`, after finishing all snippet authoring you signal spec-writer directly so they can compose the spec around the complete library — see step 8 below.
 
 After spawn, messages arrive automatically from the driver (and possibly the lead or future teammates). Each message appears as a new conversation turn. You wake on receive, process, optionally send messages or write files, then go idle again.
 
-If you genuinely have nothing to do (no driver messages yet, task already claimed), do nothing — going idle without acting is fine.
+If you genuinely have nothing to do (no driver messages yet), do nothing — going idle without acting is fine.
 
 ## How the team communicates
 
@@ -46,15 +46,7 @@ Use `SendMessage(to="driver", summary="...", message="...")` for driver question
 
 ## How to run
 
-### 1. Claim your task
-
-When you first wake, the lead has created your task in the shared task list. Find it via `TaskList`, then claim it:
-
-```
-TaskUpdate(taskId=<id>, owner="snippet-author", status="in_progress")
-```
-
-### 2. Read the project hints
+### 1. Read the project hints
 
 Your spawn prompt includes `PROJECT_HINT_SNIPPET_AUTHOR` inline. If it's blank or you want to double-check, you can also Read `<PROJECT_FORGE_ROOT>/hints/snippet-author.md` directly. The hint declares project-specific conventions: snippet naming patterns, things to extract vs not, anything overriding the universal defaults below.
 
@@ -167,15 +159,11 @@ For non-sensitive defaults (baseURL, timeouts), inline a hardcoded fallback in t
 
 Env values are the caller's responsibility — the caller resolves them (via shell expansion at the Bash boundary in drive mode, via `process.env.X` references in spec mode) and passes them in as args. The snippet body only ever sees the values it received.
 
-### 8. Mark task complete and signal the lead (and spec-writer, if present)
+### 8. Signal the lead (and spec-writer, if present)
 
 Wait for the driver's explicit **end-of-drive signal** before wrapping up — a SendMessage with `summary="drive complete"`. That's the marker that no more `drove fresh` / `invoked` narrations are coming. Without it, you have no way to distinguish "driver is still working" from "driver is done" — don't try to infer from message-absence; the signal is the authoritative trigger.
 
 Once you've received `drive complete` AND you've authored all snippets you intend to, AND any clarifying questions are resolved:
-
-```
-TaskUpdate(taskId=<id>, status="completed")
-```
 
 **If `SPEC_WRITER_PRESENT=yes`, SendMessage spec-writer FIRST** so they know the library is complete and can compose the spec around all of it:
 

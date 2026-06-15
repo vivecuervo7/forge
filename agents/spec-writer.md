@@ -3,7 +3,7 @@ name: spec-writer
 description: "Write a self-contained Playwright .spec.ts that reproduces the driver's task. Teammate role in the forge agent team — receives the driver's final-state summary at the end of the drive, composes the spec around existing snippets where the driver invoked them and inlines fresh code for the rest, adds assertions on captured values. Can SendMessage the driver clarifying questions (selectors, captured values, recovery decisions)."
 model: sonnet
 color: cyan
-tools: ["Read", "Write", "Glob", "Grep", "Bash(ls:*)", "Bash(cat:*)", "Bash(mkdir:*)", "SendMessage", "TaskCreate", "TaskUpdate", "TaskList", "TaskGet", "TaskOutput"]
+tools: ["Read", "Write", "Glob", "Grep", "Bash(ls:*)", "Bash(cat:*)", "Bash(mkdir:*)", "SendMessage", "TaskList", "TaskGet", "TaskOutput"]
 ---
 
 # Spec-Writer Agent (team architecture)
@@ -22,7 +22,7 @@ PROJECT_FORGE_ROOT: <absolute path to project's forge/ directory>
 USER_TASK: <the original user request>
 PROJECT_HINT_SPEC_WRITER: <contents of <PROJECT_FORGE_ROOT>/hints/spec-writer.md, may be empty>
 
-Your task ID in the shared task list is <id>. Claim it via TaskUpdate(owner="spec-writer"), then go idle and wait for the driver's final-state message.
+Your task is referenced as ID <id> for the team's records. Go idle and wait for the driver's final-state message.
 ```
 
 During the drive, the **driver narrates each meaningful step to `snippet-author`** — you may also receive those messages depending on team config, but treat them as background context. Your real triggers are **two**: the driver's **final-state summary** at end of drive, and snippet-author's **"snippets ready" message** confirming the library is complete. Wait for both before composing — see step 3 below.
@@ -43,15 +43,7 @@ Use `SendMessage(to=<name>, summary="...", message="...")`. Refer to teammates b
 
 ## How to run
 
-### 1. Claim your task
-
-When you first wake, the lead has created your task. Find it via `TaskList`, then:
-
-```
-TaskUpdate(taskId=<id>, owner="spec-writer", status="in_progress")
-```
-
-### 2. Read the project hint (if present)
+### 1. Read the project hint (if present)
 
 Your spawn prompt includes `PROJECT_HINT_SPEC_WRITER` inline. If it's empty, the project hasn't configured spec-writing conventions — fall back to the universal defaults below. If non-empty, follow it: it may declare the project's spec dir layout, naming conventions, fixture patterns, or other project-specific norms.
 
@@ -160,15 +152,9 @@ Run it via forge-run-spec.mjs. I'll be idle in advisor phase — ping me if any 
 
 If no spec-verifier is on the team (pre-Stage-4 configuration), skip this step.
 
-### 9. Mark task complete and signal the lead
+### 9. Signal the lead
 
-Once you've written the spec (or determined no new spec is needed) AND any clarifying questions are resolved AND you've handed off to spec-verifier (if present):
-
-```
-TaskUpdate(taskId=<id>, status="completed")
-```
-
-Then SendMessage `team-lead` with a brief completion signal:
+Once you've written the spec (or determined no new spec is needed) AND any clarifying questions are resolved AND you've handed off to spec-verifier (if present), SendMessage `team-lead` with a brief completion signal:
 
 ```
 SendMessage(

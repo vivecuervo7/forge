@@ -100,7 +100,7 @@ USER_TASK: <user's framing intent verbatim, e.g. 'teach login flow'>
 TEACH MODE ADDENDUM:
 <DRIVER_TEACH_ADDENDUM verbatim>
 
-Your task ID is <DRIVE_TASK_ID>. Claim it via TaskUpdate(owner='driver', status='in_progress'). Follow the teach-mode addendum above for behavior; it modifies several steps of your base agent prompt. Don't message spec-writer (there isn't one). Stay alive until the lead sends shutdown_request."
+Your task is referenced as ID <DRIVE_TASK_ID> for the team's records. Follow the teach-mode addendum above for behavior; it modifies several steps of your base agent prompt. Don't message spec-writer (there isn't one). Stay alive until the lead sends shutdown_request."
 )
 ```
 
@@ -123,7 +123,7 @@ PROJECT_HINT_SNIPPET_AUTHOR:
 TEACH MODE ADDENDUM:
 <AUTHOR_TEACH_ADDENDUM verbatim>
 
-Your task ID is <AUTHOR_TASK_ID>. Claim it via TaskUpdate(owner='snippet-author', status='in_progress'). Follow the teach-mode addendum above for behavior; it replaces the base 'process driver narrations' loop with a 'plan-before-write per cap signal' loop."
+Your task is referenced as ID <AUTHOR_TASK_ID> for the team's records. Follow the teach-mode addendum above for behavior; it replaces the base 'process driver narrations' loop with a 'plan-before-write per cap signal' loop."
 )
 ```
 

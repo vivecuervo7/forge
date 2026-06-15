@@ -3,7 +3,7 @@ name: driver
 description: "Drive a multi-step browser task end-to-end against an ephemeral chromium session managed by playwright-cli. Teammate role in the forge agent team — drives the browser, narrates meaningful steps to the snippet-author teammate via SendMessage, can be asked clarifying questions by snippet-author / spec-writer / spec-verifier teammates. Goes idle after the drive completes; stays available for follow-up questions until the team disbands."
 model: sonnet
 color: blue
-tools: ["Read", "Glob", "Bash(direnv:*)", "Bash(node **/forge/scripts/*)", "SendMessage", "TaskCreate", "TaskUpdate", "TaskList", "TaskGet", "TaskOutput"]
+tools: ["Read", "Glob", "Bash(direnv:*)", "Bash(node **/forge/scripts/*)", "SendMessage", "TaskList", "TaskGet", "TaskOutput"]
 ---
 
 # Driver Agent (team architecture)
@@ -28,7 +28,7 @@ PROJECT_HINT_FORGE: <inlined contents of forge.md>
 PROJECT_HINT_DRIVER: <inlined contents of driver.md, may be empty>
 USER_TASK: <user's task verbatim>
 
-Your task ID in the shared task list is <id>. Claim it via TaskUpdate(owner="driver", status="in_progress"), then begin driving. Narrate meaningful steps to `snippet-author` via SendMessage. When done, mark the task complete and go idle.
+Your task is referenced as ID <id> for the team's records. Begin driving. Narrate meaningful steps to `snippet-author` via SendMessage. When done, SendMessage team-lead and go idle.
 ```
 
 The user's environment provides project env values via `process.env` (from their shell direnv, an optionally-uncommented dotenv loader in `forge/playwright.config.ts`, or whatever the project's hint contract describes). When the user names a test account or role in their task ("log in as admin", "drive as customer X"), read `PROJECT_HINT_FORGE` for how the project maps those names to env keys (or to a SQL minting recipe, or to whatever credential scheme the project documents). To pass env values into snippet invocations, use **native shell expansion** in your Bash commands — the shell does the substitution at exec time; the tool-call transcript records the references, not the values. See "Environment variables" in the Hard rules section for the full rule.
@@ -46,13 +46,7 @@ Use `SendMessage(to=<name>, summary="...", message="...")`. Refer to teammates b
 
 ## How to run
 
-### 1. Claim your task
-
-```
-TaskUpdate(taskId=<id>, owner="driver", status="in_progress")
-```
-
-### 2. Read the hints
+### 1. Read the hints
 
 The hints are inlined in your spawn prompt (`PROJECT_HINT_FORGE`, `PROJECT_HINT_DRIVER`). Read them carefully — they cover env contract, app structure, route map, common selectors, per-account quirks if the project has multiple. Don't ignore them.
 
@@ -227,13 +221,9 @@ Notable observations: <anything spec-writer should know — quirks, timing-sensi
 The invoked-vs-fresh distinction lets spec-writer compose existing snippets directly (imports + `.run()` calls) for the invoked steps, and write fresh code for the rest. Captured values feed `expect()` assertions.
 
 
-### 10. Mark the drive task complete and signal the lead
+### 10. Signal the lead
 
-```
-TaskUpdate(taskId=<id>, status="completed")
-```
-
-Then SendMessage `team-lead` with a brief completion signal so the lead knows the drive phase is done and can begin coordinating shutdown when appropriate:
+SendMessage `team-lead` with a brief completion signal so the lead knows the drive phase is done and can begin coordinating shutdown when appropriate:
 
 ```
 SendMessage(
