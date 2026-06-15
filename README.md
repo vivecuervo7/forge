@@ -192,7 +192,7 @@ Only `hints/` is tracked. Everything else is local per-machine. `forge-init` reg
 
 Env handling is delegated to your project. Whatever's in `process.env` at run time is what your specs and snippets see — direnv, dotenv-cli, manual shell exports, a secrets manager, or the optional dotenv line in the scaffolded `forge/playwright.config.ts` all work; pick what fits your setup.
 
-**The driver only sees what `forge/hints/forge.md` tells it to load.** If your mechanism is already active in the shell forge spawns from (e.g. direnv on the project directory), nothing more is needed. Otherwise, document the loading recipe in `forge.md` and the driver will prepend it to commands that need env values — see [`samples/shop/forge/hints/forge.md`](./samples/shop/forge/hints/forge.md) for a worked example using `set -a && source .env && set +a`.
+**Document the loading recipe in `forge/hints/forge.md`.** Each Bash invocation from a Claude session is a fresh shell — direnv `.envrc` hooks and `.env` files don't auto-load, because there's no interactive `cd` to trigger them. The driver prepends whatever recipe you put in `forge.md` to commands that need env values — see [`samples/shop/forge/hints/forge.md`](./samples/shop/forge/hints/forge.md) for a worked example using `set -a && source .env && set +a`. (If you'd rather pre-export the values into the shell you launch Claude from, that works too — they're inherited.)
 
 The driver follows one rule: **env values are referenced, never inlined**. It uses native shell expansion (`$ADMIN_USERNAME`) inside its Bash commands; the shell expands at exec time; the tool-call transcript records the unexpanded reference. The rule applies uniformly to every env var — predictable hygiene over per-call judgment.
 
