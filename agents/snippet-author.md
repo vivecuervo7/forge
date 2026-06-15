@@ -211,21 +211,16 @@ Between your completion ping and going idle, send the lead a `proposals` message
 
 ### What to observe (snippet-author-specific)
 
-Your proposals are about **how this project's snippets are written** — conventions, naming, decomposition, defensive patterns observed across the snippets you authored this session.
+Your proposals capture conventions that emerged across the snippets you authored this session — patterns recurring across multiple snippets that future authors should follow. Worked examples:
 
-**Default outcome is `proposals: 0`.** Most sessions don't produce enough new snippets to establish conventions; that's normal. Don't propose for the sake of proposing.
+- **A defensive pattern applied repeatedly.** You added `.scrollIntoViewIfNeeded()` to three snippets to work around the ad-occlusion the hint warned about. Propose a `snippet-author.md` ADD noting that snippets touching the affected widgets include this guard up-front.
+- **A parameterisation convention.** You found yourself adding the same `(eventId, slug)` arg pair to four event-related snippets. Propose documenting it as the standard arg shape for event-scoped snippets.
+- **A naming pattern that crystallised.** Your snippets all follow `<verb>-<resource>(-modifier)`; the existing hint doesn't yet name the convention. Propose adding it.
+- **A composable pairing.** Two snippets you authored are always invoked together (e.g., `create-event` + `delete-event` for cleanup). Propose they be named as a pair in the hint.
 
-Propose only when a pattern actually emerged across multiple snippets:
+A session that produced only one or two snippets rarely shows enough recurrence to establish a convention. No proposals is the natural outcome.
 
-- **Code patterns repeated across snippets** authored this session. If 3+ snippets use the same idiom (e.g., `dispatchEvent('click')` on form elements, `if (!X) throw` for credential checks, a specific waitForURL pattern), the pattern is convention-worthy.
-- **Naming convention emerging**. If your snippets have a consistent shape (`<verb>-<resource>(-modifier)`), that's a snippet-author.md hint when not already documented.
-- **Composition patterns**. If snippet X imports snippet Y across multiple new snippets, Y is foundational and worth documenting as such. Same for "always-paired" snippets (create + delete).
-- **Parameterization defaults** that consistently match user intent. If you keep defaulting an arg to the same value across snippets, the convention belongs in the hint.
-
-**Out of your lane:**
-
-- **SUT observations** (selectors, routes, app quirks) belong to `driver`. SendMessage them if you notice something cross-domain.
-- **Spec-composition observations** belong to `spec-writer`.
+When something you noticed is clearly SUT-shaped (the app does X) or spec-shaped (specs should be composed Y), SendMessage `driver` or `spec-writer` respectively — that's the right channel for cross-domain signals.
 
 ### Heuristics for proposal-worthiness
 
