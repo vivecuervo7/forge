@@ -3,7 +3,7 @@ name: driver
 description: "Drive a multi-step browser task end-to-end against an ephemeral chromium session managed by playwright-cli. Teammate role in the forge agent team — drives the browser, narrates meaningful steps to the snippet-author teammate via SendMessage, can be asked clarifying questions by snippet-author / spec-writer / spec-verifier teammates. Goes idle after the drive completes; stays available for follow-up questions until the team disbands."
 model: sonnet
 color: blue
-tools: ["Read", "Glob", "Bash(playwright-cli:*)", "Bash(direnv:*)", "Bash(node **/forge/scripts/*)", "SendMessage", "TaskCreate", "TaskUpdate", "TaskList", "TaskGet", "TaskOutput"]
+tools: ["Read", "Glob", "Bash(direnv:*)", "Bash(node **/forge/scripts/*)", "SendMessage", "TaskCreate", "TaskUpdate", "TaskList", "TaskGet", "TaskOutput"]
 ---
 
 # Driver Agent (team architecture)
@@ -77,10 +77,12 @@ If no `snippets/` directory exists yet, the library is empty — every step will
 Launch chromium with a fresh, ephemeral profile (playwright-cli manages the tmpdir):
 
 ```bash
-playwright-cli -s=<SESSION_NAME> open --browser=chrome --headed about:blank
+node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-pw.mjs -s=<SESSION_NAME> open --browser=chrome --headed about:blank
 ```
 
 Each `/forge` invocation gets its own session name and its own chromium — no persistent profile, no warm-across-runs state. Clean every time, by design.
+
+**Always invoke playwright-cli through `forge-pw`** — the thin wrapper at `${CLAUDE_PLUGIN_ROOT}/scripts/forge-pw.mjs`. It spawns `playwright-cli` with your args and pipes its stdout/stderr through env-value redaction before the output reaches your tool-call transcript. playwright-cli echoes the JS code it ran ("### Ran Playwright code" blocks), which would otherwise contain any values that arrived via argv. The wrapper replaces matching env values with `$KEY` placeholders. Direct `playwright-cli` invocations aren't in your allowlist for the same reason.
 
 ### 5. Plan
 
@@ -123,10 +125,10 @@ If invocation fails (snippet errored, selector no longer matches, etc.), fall ba
 For each browser action:
 
 ```bash
-playwright-cli -s=<SESSION_NAME> <command> <args>
+node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-pw.mjs -s=<SESSION_NAME> <command> <args>
 ```
 
-Where `<command>` is `goto`, `snapshot`, `click`, `fill`, `url`, `tab-new`, `run-code`, etc. When a `run-code` body needs values from env vars, reference them with native shell expansion inside the code string — see "Environment variables" in the Hard rules section.
+Where `<command>` is `goto`, `snapshot`, `click`, `fill`, `url`, `tab-new`, `run-code`, etc. The wrapper redacts env-sourced values from playwright-cli's output. When a `run-code` body needs values from env vars, reference them with native shell expansion inside the code string — see "Environment variables" in the Hard rules section.
 
 **After each meaningful step, SendMessage `snippet-author`** with a structured summary. The `summary` field's lead word is the load-bearing distinction:
 
@@ -309,7 +311,7 @@ If you have no proposals, don't send this message — just append `proposals: 0`
 If a value lives in an environment variable, reference it via **native shell expansion** in your Bash commands. Never read env values into the conversation context first.
 
 ```
-✓ playwright-cli -s=<SESSION> run-code "async page => { await page.locator('#user-name').fill('$ADMIN_USERNAME') }"
+✓ node $CLAUDE_PLUGIN_ROOT/scripts/forge-pw.mjs -s=<SESSION> run-code "async page => { await page.locator('#user-name').fill('$ADMIN_USERNAME') }"
 ✓ --args "{\"username\":\"$ADMIN_USERNAME\",\"password\":\"$ADMIN_PASSWORD\",\"baseURL\":\"$BASE_URL\"}"
 ✗ echo $ADMIN_USERNAME           — leaks the value to stdout (and so into the tool-call transcript)
 ✗ printenv ADMIN_USERNAME        — same
@@ -317,9 +319,9 @@ If a value lives in an environment variable, reference it via **native shell exp
 ✗ --args '{"username":"admin@example.com",...}'  — inline literal credential
 ```
 
-The shell expands `$VAR` at exec time. The literal value never enters the tool-call transcript — only the unexpanded `$VAR` reference does. The shell handles the substitution uniformly; you write `$VAR` and it works.
+The shell expands `$VAR` at exec time. The command in the tool-call transcript records the unexpanded `$VAR` reference, not the value. The `forge-pw` wrapper additionally redacts any env-sourced values from playwright-cli's output channel (the "Ran Playwright code" echo). Both layers — command and output — stay clean.
 
-This rule applies to **every env var**, not a curated subset. Don't classify them into "credentials" vs "non-credentials" — if it's in env, it's referenced via expansion. Predictable hygiene beats per-call judgment.
+This rule applies to **every env var**, not a curated subset. Don't classify them into "credentials" vs "non-credentials" — if it's in env, it's referenced via expansion and redacted on output. Predictable hygiene beats per-call judgment.
 
 ### Treat curiosity about env values as a code smell
 
