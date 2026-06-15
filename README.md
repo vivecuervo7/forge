@@ -121,16 +121,16 @@ flowchart LR
     Verifier -.->|runs| Specs
 ```
 
-| Agent | Model | Effort | Role |
-|---|---|---|---|
-| `forge:driver` | sonnet | high | Drives the browser via `playwright-cli` against a fresh chromium session. Invokes existing snippets where they match; drives fresh otherwise. |
-| `forge:snippet-author` | sonnet | high | Listens to driver narration during the drive. Writes per-step snippets for novel work into `forge/snippets/`. |
-| `forge:spec-writer` *(spec mode)* | sonnet | medium | Composes a self-contained `.spec.ts` after the drive completes. Imports snippets for invoked steps; inlines code for fresh-drive steps. |
-| `forge:spec-verifier` *(spec mode)* | sonnet | medium | Runs the spec via `forge-run-spec.mjs` against a fresh browser context, surfaces pass/fail. Iterates with driver / spec-writer on failure. |
+| Agent | Model | Role |
+|---|---|---|
+| `forge:driver` | sonnet | Drives the browser via `playwright-cli` against a fresh chromium session. Invokes existing snippets where they match; drives fresh otherwise. |
+| `forge:snippet-author` | sonnet | Listens to driver narration during the drive. Writes per-step snippets for novel work into `forge/snippets/`. |
+| `forge:spec-writer` *(spec mode)* | sonnet | Composes a self-contained `.spec.ts` after the drive completes. Imports snippets for invoked steps; inlines code for fresh-drive steps. |
+| `forge:spec-verifier` *(spec mode)* | sonnet | Runs the spec via `forge-run-spec.mjs` against a fresh browser context, surfaces pass/fail. Iterates with driver / spec-writer on failure. |
 
 Dashed edges fire only in spec mode. Drive mode runs the top two agents (driver + snippet-author) and stops once the task is done; spec mode adds the bottom two for spec composition + verification. Teach mode also runs just driver + snippet-author, but the lead's role is much more active — it pipes user input to the driver turn-by-turn, and snippet-author only writes when the user explicitly caps a snippet.
 
-**Token usage:** every agent declares `model: sonnet` in its frontmatter — no Opus tokens are spent on forge work. The `/forge` skill itself also runs on Sonnet (medium effort). Driver and snippet-author run at high effort because selector decisions and library curation need judgment; spec-writer and spec-verifier run at medium because composing imports and running specs is more mechanical.
+**Token usage:** every agent and the `/forge` skill itself declare `model: sonnet` in their frontmatter — no Opus tokens are spent on forge work.
 
 ## Session model
 

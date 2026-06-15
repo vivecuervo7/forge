@@ -2,7 +2,6 @@
 name: driver
 description: "Drive a multi-step browser task end-to-end against an ephemeral chromium session managed by playwright-cli. Teammate role in the forge agent team — drives the browser, narrates meaningful steps to the snippet-author teammate via SendMessage, can be asked clarifying questions by snippet-author / spec-writer / spec-verifier teammates. Goes idle after the drive completes; stays available for follow-up questions until the team disbands."
 model: sonnet
-effort: high
 color: blue
 tools: ["Read", "Glob", "Bash(direnv:*)", "Bash(node **/forge/scripts/*)", "SendMessage", "TaskList", "TaskGet", "TaskOutput"]
 ---

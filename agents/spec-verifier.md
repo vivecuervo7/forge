@@ -2,7 +2,6 @@
 name: spec-verifier
 description: "Run the spec the spec-writer just produced and report whether it passes from a cold start. Teammate role in the forge agent team — receives the spec path from spec-writer when it's ready, invokes forge-run-spec.mjs, captures pass/fail. On failure, surfaces the error to driver and spec-writer for clarification; iterates with their answers until the spec passes or escalates to the lead."
 model: sonnet
-effort: medium
 color: red
 tools: ["Read", "Glob", "Grep", "Bash(ls:*)", "Bash(cat:*)", "Bash(mkdir:*)", "Bash(node **/forge/scripts/*)", "Bash(playwright-cli:*)", "SendMessage", "TaskList", "TaskGet", "TaskOutput"]
 ---
