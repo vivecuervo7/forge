@@ -9,19 +9,15 @@
 // ENV LOADING
 //
 // Forge does NO env handling on its own. Whatever's in `process.env` at
-// run time is what your specs and snippets see. You decide how it gets
-// there:
+// run time is what your specs and snippets see. This sample has dotenv
+// enabled — it loads forge/.env (forge-specific overrides) and the
+// project's root .env (baseline) at config-load time. Comment out the
+// import + loadEnv calls below if you'd rather use direnv / shell exports
+// / dotenv-cli instead.
 //
-//   - direnv / shell exports / dotenv-cli — populate your shell env before
-//     invoking forge; nothing extra needed here.
-//   - dotenv inside this config — uncomment the import + loadEnv calls
-//     below. Loads forge/.env (forge-specific overrides) and the project's
-//     root .env (baseline) at config-load time. Safe to leave commented
-//     out if you don't need it.
-//
-// // import { config as loadEnv } from 'dotenv'
-// // loadEnv({ path: resolve(__dirname, '.env') })
-// // loadEnv({ path: resolve(__dirname, '..', '.env') })
+import { config as loadEnv } from 'dotenv'
+loadEnv({ path: resolve(__dirname, '.env') })
+loadEnv({ path: resolve(__dirname, '..', '.env') })
 //
 // Customize this config when you want forge specs to use a config but
 // don't want a project-wide one. Common additions:

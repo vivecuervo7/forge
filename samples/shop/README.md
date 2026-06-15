@@ -10,7 +10,7 @@ This sample is a project shaped like one that's had `/forge init` run on it — 
 |---|---|
 | [`forge/hints/forge.md`](./forge/hints/forge.md) | The auth + multi-account hint. A three-row account table maps account keywords (`customer`, `customer2`, `admin`) to env-key pairs. **The shape to copy when documenting your project's accounts.** |
 | [`forge/hints/driver.md`](./forge/hints/driver.md) | A doc-grounded selector inventory + known-gotchas list, sourced from the app's [official docs](https://testsmith-io.github.io/practice-software-testing/). Includes the Angular zone.js `dispatchEvent` quirk, the search-box debounce, the two-click payment flow — project-specific knowledge that turns iterate-to-discover into first-try-pass. |
-| [`.env.example`](./.env.example) | The env keys the account table references, with the seeded demo credentials filled in. Copy to `.env` and either uncomment the dotenv import in `forge/playwright.config.ts` or load the same keys via direnv / dotenv-cli / your shell. |
+| [`.env.example`](./.env.example) | The env keys the account table references, with the seeded demo credentials filled in. Copy to `.env`; the dotenv import in `forge/playwright.config.ts` loads it automatically (or load the same keys via direnv / dotenv-cli / your shell if you prefer). |
 | `forge/playwright.config.ts` | Scaffolded by `/forge init`. Fallback Playwright config for forge specs. |
 | `forge/snippets/search-for-product.ts` | **Seeded** — produced by a real forge run against this hint set. Submits a search and waits for the result list. |
 | `forge/snippets/open-first-search-result.ts` | **Seeded** — clicks the first product card on the current page. |
