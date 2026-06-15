@@ -1,4 +1,4 @@
-# forge
+# Forge
 
 A browser-automation team for Claude Code. Forge spawns a small mesh of agents that drive a real browser, capture reusable snippets, and (on request) compose verified Playwright specs from the work.
 
