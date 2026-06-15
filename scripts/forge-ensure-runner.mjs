@@ -15,11 +15,9 @@
 //
 //   2. Otherwise, lazy-install at <forgeRoot>/ so the first spec or snippet
 //      invocation doesn't pay the npm-install cost mid-run. Carries
-//      esbuild (snippet bundling), @playwright/test (spec running), and
-//      dotenv (available if the project opts in via its playwright config)
-//      plus the small helper deps used by the invoke + spec-run scripts
-//      (execa, mri, proper-lockfile, write-file-atomic, tree-kill,
-//      find-process).
+//      esbuild (snippet bundling), @playwright/test (spec running), dotenv
+//      (available if the project opts in via its playwright config), plus
+//      execa and mri (loaded at runtime by the invoke + spec-run scripts).
 //
 // Exposed for callers:
 //   - forge-init.mjs invokes the CLI form at end of scaffold so the cost
@@ -89,11 +87,7 @@ export function ensurePluginRunner(forgeRoot) {
       dotenv: '^16.4.0',
       esbuild: '^0.24.0',
       execa: '^9.5.0',
-      'find-process': '^1.4.0',
       mri: '^1.2.0',
-      'proper-lockfile': '^4.1.0',
-      'tree-kill': '^1.2.0',
-      'write-file-atomic': '^6.0.0',
     },
   }, null, 2) + '\n'
   // Overwrite on every install attempt so version bumps land deterministically.
@@ -122,8 +116,8 @@ export function ensurePluginRunner(forgeRoot) {
 // present, so checking the smallest known artifact is enough.
 //
 // Used independently of project-runner detection: even projects with their
-// own Playwright need forge/node_modules for plugin-side deps (execa, mri,
-// proper-lockfile, etc.) used by the invoke and spec-run scripts.
+// own Playwright need forge/node_modules for plugin-side deps (execa, mri)
+// used by the invoke and spec-run scripts.
 //
 // Triggers a full install if the sentinel is missing. First call per project
 // pays the ~30s cost; subsequent calls are free.
@@ -141,8 +135,8 @@ export function ensureRunnerDeps(forgeRoot) {
 export const ensureBundlerAvailable = ensureRunnerDeps
 
 // Load a runner-installed dep from the plugin script side. Used by the
-// invoke + spec-run scripts to import packages they need (execa, mri,
-// proper-lockfile, etc.) from the project's forge/ install.
+// invoke + spec-run scripts to import packages they need (execa, mri)
+// from the project's forge/ install.
 //
 // Handles both CJS and ESM deps via dynamic import on the resolved file
 // path. Returns the module's namespace object — destructure named exports
