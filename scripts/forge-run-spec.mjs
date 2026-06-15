@@ -10,8 +10,8 @@
 //          npx playwright test <abs-path-to-spec> --config=<project-config>
 //      from the project root. The project's globalSetup, fixtures, baseURL,
 //      custom matchers, etc. all apply. This is the right answer for real
-//      projects (EventsAir, monorepos) where the runner is part of the dev
-//      workflow.
+//      projects (monorepos, apps with existing test suites) where the runner
+//      is part of the dev workflow.
 //
 //   2. PLUGIN-SHIPPED FALLBACK. If no project runner exists, install (lazily)
 //      into the project's forge/ directory itself. The spec's `import

@@ -13,7 +13,7 @@
 //
 //   1. Reads process.env once at startup. Builds a map from any value
 //      >= MIN_LENGTH chars to a `$KEY` placeholder. (Below threshold
-//      values are too noise-prone to redact safely — `USER=isaac` would
+//      values are too noise-prone to redact safely — `USER=alice` would
 //      mangle any output mentioning the user's name.)
 //   2. Spawns playwright-cli with the args it received, piping stdout
 //      and stderr.
