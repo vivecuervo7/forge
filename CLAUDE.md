@@ -15,6 +15,29 @@ Sub-agent transcripts live at:
 
 The `.meta.json` file declares `agentType` and a short `description`. The `.jsonl` is the full conversation transcript in the same format as a normal Claude Code session — every assistant turn, every tool call, every result.
 
+## Team-peer transcripts (not under `subagents/`)
+
+Only orchestrator sub-agents spawned via the `Task` tool land under `subagents/`. The team-mesh peers — `forge:driver`, `forge:snippet-author`, `forge:spec-writer`, `forge:spec-verifier` — are full Claude Code sessions in their own right, and their transcripts live as **top-level** session files alongside the parent:
+
+```
+~/.claude/projects/<encoded-cwd>/<sessionId>.jsonl
+```
+
+Each team-peer transcript carries `agentName` and `teamName` fields in its JSONL header, which is how you tell them apart from a normal user session in the same directory.
+
+```bash
+# List the agents currently or recently active on a given team
+jq -r 'select(.teamName == "<team>") | .agentName' \
+  ~/.claude/projects/<encoded-cwd>/*.jsonl 2>/dev/null \
+  | sort -u
+
+# Find the most recent team-peer transcript across the project
+ls -t ~/.claude/projects/<encoded-cwd>/*.jsonl \
+  | xargs -I{} sh -c 'jq -r "select(.teamName) | input_filename" {} 2>/dev/null | head -1'
+```
+
+If a debug trail is missing from `subagents/`, check the top level for `teamName`-bearing peers before concluding nothing was logged.
+
 ## Practical commands
 
 ```bash
