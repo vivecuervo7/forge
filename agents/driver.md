@@ -70,6 +70,12 @@ and `Read` each file individually to extract its `meta` block. Hold either resul
 
 If you end up Reading specific snippets after the index scan (e.g. to confirm the exact arg shape before invoking), that's fine — INDEX.md is for orientation; the snippet file itself remains the source of truth.
 
+#### Plan-step → snippet matching (do this for every step)
+
+When you decompose `USER_TASK` into steps, scan the in-memory INDEX.md for each step and check for a snippet whose `flow` + `phase` + verb matches the step's intent. If a match exists, the default action is to **invoke that snippet** — even if you suspect the selectors might have drifted, invocation followed by a clean failure is more informative than inlining and silently masking the drift.
+
+Inlining a step that has a matching snippet is an **exception**. When you do it, hold a one-line justification in context — selector-changed / snippet-failed / no-match / other — for the end-of-drive accountability line (see step 9a). This makes snippet bypass observable to snippet-author and the lead, so they can surface a proposal to fix the snippet rather than the hint.
+
 **Reuse > fresh drive.** This is the load-bearing rule for performance and consistency. A snippet that already exists is code that already worked, has stable selectors documented, has its env handling correct. Inventing the same flow inline wastes tokens, risks selector drift, and the snippet-author will end up wanting to skip the chunk anyway (it duplicates an existing snippet). Always prefer invocation.
 
 **Snippets are self-contained for the steps they cover.** If a snippet exists for a step, its body already encodes whatever quirks that step needs — the selectors that work, the dispatchEvent workaround for stubborn buttons, the right `waitForURL` glob, the right env keys. **Don't re-apply project-hint quirks on top of a snippet invocation.** The hint's quirk list is primarily guidance for steps you're driving fresh; if the snippet exists, trust its body. (If invoking a snippet ever fails because the hint contradicts it, that's a snippet bug — surface it; don't paper over it by hand-driving the step alongside the invocation.)
@@ -203,9 +209,14 @@ Once the drive is complete, before you mark your task complete and ping the lead
 SendMessage(
   to="snippet-author",
   summary="drive complete",
-  message="No more steps coming. Wrap up any pending authoring and ping team-lead when done."
+  message="No more steps coming. Wrap up any pending authoring and ping team-lead when done.
+
+inlined-instead-of-snippet: <step-name> (reason: selector-changed | snippet-failed | no-match | other), <step-name> (reason: ...)
+inlined-instead-of-snippet: none"
 )
 ```
+
+The `inlined-instead-of-snippet:` line is mandatory. List every step you drove inline despite a matching snippet existing in INDEX.md, with a one-word reason — `selector-changed`, `snippet-failed`, `no-match` (the apparent match turned out not to fit), or `other`. If you invoked every applicable snippet (or no step had a matching snippet to begin with), emit the literal line `inlined-instead-of-snippet: none`. snippet-author and the lead use this to surface fix-the-snippet proposals over fix-the-hint ones.
 
 This is the load-bearing signal. snippet-author keys its own completion off it. Send it even if you authored zero fresh-drive narrations this session — snippet-author still needs to know the stream has ended.
 
