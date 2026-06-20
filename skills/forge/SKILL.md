@@ -1,14 +1,14 @@
 ---
 name: forge
-description: "Browser-automation agent team for Claude Code. Six routes under one skill: `/forge init` (scaffold the forge/ directory convention in CWD), `/forge <task>` (drive mode — driver + snippet-author do the task end-to-end), `/forge spec <task>` (spec mode — also produces a verified Playwright spec), `/forge teach <topic>` (teach mode — user pilots forge turn-by-turn to curate snippets with project-specific gotchas baked in), `/forge run <spec>` (re-run a verified spec, optionally recording a video for evidence), `/forge export <name>` (inline a composed spec for shipping outside forge/). Each invocation launches a fresh chromium session, runs the user's task, and cleans up. Project-specific conventions (test accounts, env handling, setup/teardown) live in hints/forge.md; forge stays project-agnostic."
+description: "Browser-automation agent team for Claude Code. Seven routes under one skill: `/forge init` (scaffold the forge/ directory convention in CWD), `/forge <task>` (drive mode — driver + snippet-author do the task end-to-end), `/forge spec <task>` (spec mode — also produces a verified Playwright spec), `/forge teach <topic>` (teach mode — user pilots forge turn-by-turn to curate snippets with project-specific gotchas baked in), `/forge run <spec>` (re-run a verified spec, optionally recording a video for evidence), `/forge export <name>` (inline a composed spec for shipping outside forge/), `/forge clean [snippets|hints|both]` (scan the snippet library and hint files for accumulation and surface cleanup candidates). Each invocation launches a fresh chromium session, runs the user's task, and cleans up. Project-specific conventions (test accounts, env handling, setup/teardown) live in hints/forge.md; forge stays project-agnostic."
 model: sonnet
-argument-hint: "[spec|run|init|export] <args>"
+argument-hint: "[spec|run|init|export|clean] <args>"
 allowed-tools: Read, Edit, Write, Glob, Skill, AskUserQuestion, Bash(node **/forge/scripts/*), Bash(direnv:*), Bash(playwright-cli:*), Bash(mkdir:*), Bash(cat:*), Bash(echo:*), Bash(ls:*), Agent, SendMessage, TeamCreate, TeamDelete, TaskCreate, TaskList, TaskGet, TaskUpdate
 ---
 
 # /forge
 
-`/forge` is a single skill with six routes (init, export, run, teach, spec, and the default task route). This SKILL.md is a thin router — it parses the route, captures route-specific context, and dispatches to a reference file that contains the actual instructions for that route. Only the reference for the chosen route is loaded; init/export invocations don't pull in team-orchestration content, and task/spec/teach invocations don't pull in scaffold or export logic.
+`/forge` is a single skill with seven routes (init, export, run, teach, spec, clean, and the default task route). This SKILL.md is a thin router — it parses the route, captures route-specific context, and dispatches to a reference file that contains the actual instructions for that route. Only the reference for the chosen route is loaded; init/export invocations don't pull in team-orchestration content, and task/spec/teach invocations don't pull in scaffold or export logic.
 
 ## Phase 0 — Pick the route
 
@@ -20,6 +20,7 @@ Look at the first word of `$ARGUMENTS` (case-insensitive). The dispatch table:
 | `export` | inline a composed spec for shipping | `references/export.md` | spec name + optional `--output <path>` |
 | `run` | re-run a verified spec, optionally recording | `references/run.md` | spec name / `last` / `latest`, plus optional `record as <label>` |
 | `teach` | teach mode — user pilots forge to curate snippets | `references/teach.md` | optional session-framing topic |
+| `clean` | tidy snippet library + hint files | `references/clean.md` | optional scope: `snippets` \| `hints` \| `both` |
 | `spec` | spec mode — drive + write spec + verify | `references/team-task.md` (with `MODE=spec`) | the actual task description |
 | *(anything else)* | (see natural-language signals below; default fallback is the task route) | `references/team-task.md` (with `MODE=drive`) | the full args = task description |
 
@@ -47,6 +48,16 @@ When the first word isn't a route keyword, check the full args for these natural
 - "I want to teach forge ..." / "I'll pilot forge to capture ..."
 - "show forge how to ..." (intent must clearly be capturing a reusable snippet, not just running the action once)
 
+**Clean route** — a tidy/audit-verb combined with the snippet library or hint files as the object:
+
+- "tidy up the snippet library" / "tidy up forge's snippets"
+- "review hint accumulation" / "review the hint files for cruft"
+- "what's gotten stale in forge?" / "audit the snippet library"
+- "clean up forge's hints" / "prune the snippet library"
+- "scan for cleanup candidates in forge"
+
+Scope inference (when the NL signal matches but doesn't specify): if the phrasing names snippets only → `snippets`; if it names hints only → `hints`; if it's ambiguous or names both → `both`.
+
 If a natural-language signal matches, set the route accordingly and pass the full args (no keyword stripping; the reference handles parsing them).
 
 If neither first-word nor natural-language matches, the route stays task and Phase 0a applies.
@@ -70,6 +81,9 @@ Counter-examples that should NOT match:
 - `/forge teach login flow` → route=teach, args="login flow"
 - `/forge teach forge how to create an event` → route=teach, args="forge how to create an event"
 - `/forge let me show forge how to log in` → route=teach (via NL signal), args="let me show forge how to log in"
+- `/forge clean` → route=clean, args="" (scope defaults to both)
+- `/forge clean snippets` → route=clean, args="snippets"
+- `/forge tidy up the snippet library` → route=clean (via NL signal), args="tidy up the snippet library", scope=snippets
 - `/forge spec AE-1775 add a backpack` → route=spec, args="AE-1775 add a backpack", MODE=spec
 - `/forge add the backpack to cart` → route=task, args="add the backpack to cart", MODE=drive
 - `/forge create a spec for adding the backpack` → route=task, args="create a spec for adding the backpack", MODE=spec (via Phase 0a natural-language signal)
@@ -131,6 +145,7 @@ Where `<reference>` is one of:
 - `init.md` (for init route)
 - `export.md` (for export route)
 - `run.md` (for run route — carries `RECORD_AS` into its instructions)
+- `clean.md` (for clean route — carries the optional scope `snippets|hints|both`)
 
 Then **follow the instructions in the loaded reference**. The reference is the authoritative body for that route; this SKILL.md just got you to the right one.
 
@@ -142,6 +157,7 @@ When passing context into the reference's work, include the captured route-speci
 - For init: optional target directory.
 - For export: spec name + optional `--output <path>` override.
 - For run: spec reference (explicit name / `last` / `latest` / unspecified) + `RECORD_AS`.
+- For clean: the optional scope (default `both`).
 
 ## Hard rules
 
