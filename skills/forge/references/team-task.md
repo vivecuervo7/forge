@@ -63,6 +63,23 @@ echo "ft-$(node -e 'console.log(require("crypto").randomBytes(4).toString("hex")
 
 Capture as `SESSION_NAME`. It's used by the driver to launch and reference the browser, and by phase 5 to close it cleanly at shutdown.
 
+### 1.3a. Check cleanup staleness (silent — surface at end)
+
+Read `<FORGE_ROOT>/.last-cleanup` if it exists:
+
+```bash
+cat <FORGE_ROOT>/.last-cleanup 2>/dev/null || echo ""
+```
+
+The file is JSON of the form `{ "hints": "<ISO timestamp>", "snippets": "<ISO timestamp>" }`. Compute days-since for each key (current time minus the ISO timestamp).
+
+Capture a `CLEANUP_NUDGE` value as one of:
+
+- **empty** if the file doesn't exist and both `forge/hints/` and `forge/snippets/` look sparse (under ~3 files combined) — a fresh project doesn't need a maintenance prompt.
+- **`hints` / `snippets` / `both`** if the file is missing on a non-sparse project, or if the corresponding timestamp is older than 7 days.
+
+Hold the value for Phase 5.4. **Do not surface it now** — maintenance nudges at the start of a task fight the user's actual intent. Surface at end-of-run as a one-line tail under the final report.
+
 ### 1.4. Apply setup instructions (optional)
 
 If `forge.md` has a `## Setup before each run` (or similarly-named) section, follow it literally. The user writes it in their own words; treat it as instructions to you, not config. Examples: SQL seeding, account-reset endpoint, mint a fresh test user via API, "don't reset anything."
@@ -372,6 +389,16 @@ Compose a tight summary. Drive mode is shorter — no spec/spec-verifier lines.
 > Slot released. Team cleaned up.
 
 If anything didn't go to plan (a teammate returned `cannot-drive`, the spec-verifier escalated, snippet invocation failed mid-drive, etc.), surface that prominently — the user wants the truth, not a sanitized success report.
+
+### 5.4a. Append cleanup nudge (if captured in 1.3a)
+
+If `CLEANUP_NUDGE` captured in Phase 1.3a is non-empty, append a one-line tail to the final report. Phrasing by case:
+
+- `CLEANUP_NUDGE=hints` — *"Last hint cleanup was N days ago — consider `/forge clean hints` after this run."* (Use "never" if the staleness file didn't exist.)
+- `CLEANUP_NUDGE=snippets` — *"Last snippet cleanup was N days ago — consider `/forge clean snippets` after this run."*
+- `CLEANUP_NUDGE=both` — *"Hints and snippets haven't been cleaned in over a week — consider `/forge clean` after this run."* (Or, if the staleness file is missing entirely: *"No record of any forge cleanup — consider `/forge clean` to baseline.")
+
+The nudge is non-blocking and once-per-run. Do not surface mid-task, do not gate shutdown on it, and do not repeat it if the user has already invoked clean this session.
 
 ## Hard rules
 
