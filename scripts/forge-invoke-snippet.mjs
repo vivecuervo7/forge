@@ -157,8 +157,38 @@ const jsBody = transpile.stdout
   .replace(/^export\s+default\s+/gm, '')
   .replace(/^export\s+(?=(?:async\s+)?function|const|let|var|class)/gm, '')
 
+// Page-selection prelude: re-target `page` to the most recent tab that matches
+// the snippet's declared precondition, falling back to the most recent
+// non-blank tab. Without this, snippets often run against a stray about:blank
+// the driver left behind during exploration — the 0.16/0.17 rewrite dropped
+// the 0.9.7 prelude and triggered the AE-1793 "all snippets failed" report.
+// Safe by design: if nothing matches, we leave `page` alone (cold-start case
+// where about:blank is the only tab).
+const pageSelectPrelude = `try {
+  const __metaPre = (typeof meta !== 'undefined' && meta) ? meta : {};
+  const __preUrl = __metaPre.preconditions && __metaPre.preconditions.url;
+  const __requires = typeof __metaPre.requires === 'string' ? __metaPre.requires : '';
+  let __urlRe = null;
+  if (__preUrl instanceof RegExp) __urlRe = __preUrl;
+  else if (typeof __preUrl === 'string' && __preUrl.length) __urlRe = new RegExp(__preUrl);
+  else {
+    const __m = __requires.match(/\\/[A-Za-z0-9_\\-\\/]+/);
+    if (__m) __urlRe = new RegExp(__m[0].replace(/[.*+?^\${}()|[\\]\\\\]/g, '\\\\$&'));
+  }
+  const __pages = page.context().pages();
+  const __target = __urlRe
+    ? __pages.findLast(p => __urlRe.test(p.url()))
+    : __pages.findLast(p => !p.url().startsWith('about:'));
+  if (__target && __target !== page) {
+    await __target.bringToFront().catch(() => {});
+    page = __target;
+  }
+} catch {}
+`
+
 const wrappedCode = `async page => {
 ${jsBody}
+${pageSelectPrelude}
 const __args = ${JSON.stringify(parsedArgs)};
 return await run(page, __args);
 }`
