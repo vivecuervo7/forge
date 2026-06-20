@@ -3,7 +3,7 @@ name: snippet-author
 description: "Write snippets from a driver's live browser work. Teammate role in the forge agent team — receives SendMessage updates from the driver as the drive progresses, decides which steps are snippet-worthy with full hindsight, writes snippets to the project's forge/snippets/. Can SendMessage the driver clarifying questions (selector choices, env handling, recovery decisions)."
 model: sonnet
 color: green
-tools: ["Read", "Write", "Glob", "Grep", "Bash(ls:*)", "Bash(cat:*)", "Bash(mkdir:*)", "SendMessage", "TaskList", "TaskGet", "TaskOutput"]
+tools: ["Read", "Write", "Glob", "Grep", "Bash(ls:*)", "Bash(cat:*)", "Bash(mkdir:*)", "Bash(node **/forge/scripts/forge-snippet-index.mjs)", "Bash(node **/forge/scripts/forge-snippet-index.mjs:*)", "SendMessage", "TaskList", "TaskGet", "TaskOutput"]
 ---
 
 # Snippet-author Agent (team architecture)
@@ -129,17 +129,24 @@ Format:
 ```ts
 // Authored by forge:snippet-author on <YYYY-MM-DD>.
 export const meta = {
-  description: "<one sentence — what the snippet does>",
-  preconditions: {
-    // url regex only when the snippet skips an initial goto;
-    // omit entirely when the body's first action is page.goto(...)
+  description: "<one sentence — intent-focused, what the snippet does>",
+  args: {
+    username: { type: 'string', description: 'login email' },
+    password: { type: 'string', description: 'login password' },
+    baseURL:  { type: 'string', optional: true, description: 'defaults to http://localhost:8080' },
   },
-  args: { /* declare parameter shape with type hints */ },
-  tags: ['auto-authored'],
+  tags: ['login', 'auth'],
+  // Optional fields — include them when meaningful:
+  flow:       'is-group-registration',     // groups related snippets in INDEX.md
+  phase:      'summary→payment',           // phase within the flow
+  requires:   'on /Site/Register, summary step active',
+  enters:     'on /Site/Register, payment step active',
+  composes:   ['navigate-is-step-forward'],   // names of snippets this one shells out to
+  supersedes: ['old-submit-group'],            // names of older snippets this replaces
 }
 
 export async function run(page, args) {
-  const { username, password, baseURL = 'https://app.example.com' } = args
+  const { username, password, baseURL = 'http://localhost:8080' } = args
   if (!username) throw new Error('username arg is required')
   if (!password) throw new Error('password arg is required')
 
@@ -148,6 +155,20 @@ export async function run(page, args) {
   // ... etc — all env-sourced values + config come from args, never process.env
 }
 ```
+
+**Schema fields:**
+
+- `description` (required) — one sentence, intent-focused. "Submits a search and leaves the result list visible" beats "Calls page.locator('.search-input').fill(...) then clicks button.submit". A future reader scanning INDEX.md should know whether this snippet matches their step.
+- `args` (required, may be empty `{}`) — each key is an arg name; the value is `{ type, optional?, description }`. Type is a free-form string (`'string'`, `'number'`, `'{ firstName: string, lastName: string }[]'`) — used for display, not validation. Required args have no `optional` field; optional args set `optional: true`.
+- `tags` (optional) — free-form strings. Useful for cross-cutting categories that don't fit `flow`. Avoid generic noise like `'auto-authored'`; pick tags that aid discovery (`'auth'`, `'dnd'`, `'kendo-combobox'`).
+- `flow` (optional but encouraged when applicable) — a string identifying the multi-step flow this snippet participates in (e.g. `'is-group-registration'`, `'event-creation'`). Snippets with the same `flow` are grouped together in INDEX.md, making the library easier to scan.
+- `phase` (optional) — phase within the flow, e.g. `'step1→summary'`, `'summary→payment'`. Optional but useful when multiple snippets cover different points of the same multi-step UI.
+- `requires` (optional) — one-line description of the page state the snippet expects on entry (e.g. `'on /Site/Register, summary step active'`). Replaces the older free-form `preconditions` block — same idea, shorter.
+- `enters` (optional) — one-line description of the state the snippet leaves the page in. Helps future readers decide whether two snippets compose cleanly.
+- `composes` (optional) — array of other snippet names this snippet shells out to internally. Documents the snippet's dependencies; future authors editing the composed snippet can grep for callers.
+- `supersedes` (optional) — array of older snippet names this one replaces. Useful when iterating on the library — keeps a paper trail even after the older snippet is deleted.
+
+Older snippets in the library may still use a `preconditions: { ... }` block instead of `requires`. That's fine; both shapes are tolerated. New authoring uses the new schema.
 
 **Name** — lowercase kebab-case, intent-level, specific. `login` not `login-as-admin` (snippets are account-agnostic — the account/credentials live in the caller's args). `add-item-to-cart` not `add`.
 
@@ -158,6 +179,18 @@ export async function run(page, args) {
 For non-sensitive defaults (baseURL, timeouts), inline a hardcoded fallback in the args destructure (`baseURL = 'https://...'`). Callers can still override by passing a value; the default keeps the snippet usable without one. The rule is uniform: snippets never touch `process.env` — whatever the body needs, it gets through args.
 
 Env values are the caller's responsibility — the caller resolves them (via shell expansion at the Bash boundary in drive mode, via `process.env.X` references in spec mode) and passes them in as args. The snippet body only ever sees the values it received.
+
+### 7a. Refresh the snippet INDEX
+
+After writing or modifying any snippets this session, regenerate the library's INDEX.md so future drivers (and the next session-start scan) see the current state:
+
+```bash
+node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-snippet-index.mjs <PROJECT_FORGE_ROOT>
+```
+
+The generator scans `<PROJECT_FORGE_ROOT>/snippets/*.ts`, extracts each `meta` block, and writes a Markdown table grouped by `flow` to `<PROJECT_FORGE_ROOT>/snippets/INDEX.md`. Idempotent — running twice produces the same file. The INDEX.md file is checked in by the project (it's a contract); your job is just to keep it fresh.
+
+Skip this step if you didn't write or modify any snippets this session — no changes means no refresh needed.
 
 ### 8. Signal the lead (and spec-writer, if present)
 
