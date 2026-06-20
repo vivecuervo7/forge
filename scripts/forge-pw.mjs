@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// forge-pw.mjs — wrapper around playwright-cli with env-value redaction.
+// forge-pw.mjs — wrapper around playwright-cli with env-value redaction
+// and optional structured JSON pass-through.
 //
 // Why this exists: playwright-cli's subcommands (fill, click, run-code,
 // etc.) echo the JavaScript code they ran in their output — a "### Ran
@@ -15,20 +16,36 @@
 //      >= MIN_LENGTH chars to a `$KEY` placeholder. (Below threshold
 //      values are too noise-prone to redact safely — `USER=alice` would
 //      mangle any output mentioning the user's name.)
-//   2. Spawns playwright-cli with the args it received, piping stdout
-//      and stderr.
+//   2. Spawns playwright-cli with the args it received (with `--json`
+//      injected when `--json` or `FORGE_JSON=1` was requested), piping
+//      stdout and stderr.
 //   3. Buffers each stream by line, replaces matching values with their
 //      placeholders, forwards redacted lines to its own stdout/stderr.
 //   4. Exits with playwright-cli's exit code.
+//
+// JSON mode:
+//
+//   Pass `--json` as the first arg to forge-pw, or set FORGE_JSON=1 in
+//   the env. The wrapper strips the flag from forge-pw's own argv and
+//   injects `--json` into playwright-cli's argv right after the session
+//   flag (so it applies globally as a playwright-cli flag, not as a
+//   subcommand arg). playwright-cli's `--json` mode suppresses the
+//   verbose "### Ran Playwright code" echo and emits structured JSON
+//   instead — shapes like `{result: "..."}` for run-code, `{snapshot:
+//   {file: ...}}` for navigations, or `{isError: true, error: "..."}`
+//   on failure. Env-redaction still runs over the JSON output as a
+//   defensive layer in case any env value ended up inside a `result`
+//   field.
+//
+//   Without `--json`, the wrapper behaves exactly as before — text
+//   pass-through with the "Ran Playwright code" echo intact and env
+//   values redacted line-by-line.
 //
 // What the wrapper does NOT do:
 //
 //   - Persist values anywhere. Read at startup, used in-memory only.
 //   - Log values. Errors reference key names where applicable.
 //   - Expose values to the calling process beyond the redaction map.
-//     The Bash tool's tool-call transcript records only this wrapper's
-//     output (already redacted) plus the command it was invoked with
-//     (which uses shell-expansion references, so unexpanded `$VAR`).
 //
 // What the wrapper's caveats are:
 //
@@ -40,10 +57,9 @@
 //     terminal types, etc. The replacement names the source key
 //     (`$PATH`, `$TERM`) so the affected output stays interpretable.
 //   - This is best-effort transcript hygiene, not a security boundary.
-//     Same caveat as Microsoft's playwright-mcp secrets-file feature.
 //
 // Usage:
-//   forge-pw.mjs <playwright-cli args...>
+//   forge-pw.mjs [--json] <playwright-cli args...>
 //
 // Exit codes:
 //   propagated from playwright-cli, except:
@@ -76,9 +92,26 @@ function redact(text, map) {
   return result
 }
 
+// Parse forge-pw's own --json flag out of argv before forwarding to
+// playwright-cli. Also honor FORGE_JSON=1 in env.
+const rawArgs = process.argv.slice(2)
+let jsonMode = process.env.FORGE_JSON === '1'
+const filteredArgs = []
+for (const a of rawArgs) {
+  if (a === '--json') {
+    jsonMode = true
+    continue
+  }
+  filteredArgs.push(a)
+}
+
+// In JSON mode, inject --json into playwright-cli's argv. Global
+// playwright-cli flags work in any position, so prepending is safe.
+const childArgs = jsonMode ? ['--json', ...filteredArgs] : filteredArgs
+
 const redactMap = buildRedactMap()
 
-const child = spawn('playwright-cli', process.argv.slice(2), {
+const child = spawn('playwright-cli', childArgs, {
   stdio: ['inherit', 'pipe', 'pipe'],
   env: process.env,
 })

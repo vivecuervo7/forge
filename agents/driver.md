@@ -88,6 +88,14 @@ Each `/forge` invocation gets its own session name and its own chromium — no p
 
 **Always invoke playwright-cli through `forge-pw`** — the thin wrapper at `${CLAUDE_PLUGIN_ROOT}/scripts/forge-pw.mjs`. It spawns `playwright-cli` with your args and pipes its stdout/stderr through env-value redaction before the output reaches your tool-call transcript. playwright-cli echoes the JS code it ran ("### Ran Playwright code" blocks), which would otherwise contain any values that arrived via argv. The wrapper replaces matching env values with `$KEY` placeholders. Direct `playwright-cli` invocations aren't in your allowlist for the same reason.
 
+**Prefer `--json` mode for invocations that return a value or for any case where you want clean structured output.** Pass `--json` as the first arg to `forge-pw.mjs` (or set `FORGE_JSON=1` in the env). The wrapper injects `--json` into playwright-cli's argv, suppressing the verbose "### Ran Playwright code" echo. stdout becomes:
+
+- `{"result": "<return-value-as-string>"}` on success — the snippet's `return await page.locator(...).count()` (or any other return) lands in `result`.
+- `{"isError": true, "error": "<message>"}` on failure — note: playwright-cli exits 0 in JSON mode even on snippet errors; check `isError` rather than exit code.
+- `{"snapshot": {"file": "..."}}` for navigation commands like `goto` / `click`.
+
+Parse with `jq -r .result` (or `.error`) when you need the value. JSON mode is cheap and keeps the transcript clean; the only reason to omit it is when you want the human-readable echo for narration purposes.
+
 ### 5. Plan
 
 Decompose `USER_TASK` into ordered steps. For each step, in order:
@@ -109,10 +117,13 @@ Use the forge-provided wrapper:
 node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-invoke-snippet.mjs \
   -s=<SESSION_NAME> \
   --snippet <PROJECT_FORGE_ROOT>/snippets/<name>.ts \
-  --args '<args-json>'
+  --args '<args-json>' \
+  --json
 ```
 
-The `--args` value is the JSON-encoded args object matching the snippet's `meta.args` declaration. E.g., for `add-item-to-cart` with `meta.args = { item: 'string' }`, pass `--args '{"item":"sauce-labs-backpack"}'`. For snippets with `args: {}`, pass `--args '{}'` (or omit).
+The `--args` value is the JSON-encoded args object matching the snippet's `meta.args` declaration. E.g., for `add-item-to-cart` with `meta.args = { item: { type: 'string' } }`, pass `--args '{"item":"sauce-labs-backpack"}'`. For snippets with `args: {}`, pass `--args '{}'` (or omit).
+
+**Pass `--json`** (or set `FORGE_JSON=1`) so the invocation returns structured `{result|isError}` instead of the verbose "Ran Playwright code" echo. The snippet's `return` value surfaces as `result`. Drop `--json` only when you specifically want the human-readable echo (rarely).
 
 **For args sourced from env vars: use native shell expansion** (`$ADMIN_USERNAME`) inside the `--args` JSON. The shell expands the reference at exec time; the tool-call transcript records the unexpanded reference. See "Environment variables" in the Hard rules section for the full rule and examples.
 

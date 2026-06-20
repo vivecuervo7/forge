@@ -38,7 +38,15 @@
 // is the only shape the sandbox supports.
 //
 // Usage:
-//   forge-invoke-snippet.mjs -s=<session> --snippet <path> [--args '<json>']
+//   forge-invoke-snippet.mjs -s=<session> --snippet <path> [--args '<json>'] [--json]
+//
+// --json (or FORGE_JSON=1) opts into playwright-cli's structured JSON
+// output mode. Without it, you get the verbose "### Ran Playwright code"
+// echo that wraps the snippet body. With it, stdout is
+// `{result: "<return-value-as-string>"}` on success, or
+// `{isError: true, error: "<message>"}` on failure. The snippet's return
+// value (e.g. `return await page.locator(...).count()`) surfaces as
+// `result`. Recommended for agent-driven invocations.
 //
 // Exit codes:
 //   0   success — playwright-cli output forwarded verbatim
@@ -84,13 +92,15 @@ ensureRunnerDeps(forgeRoot)
 const { default: mri } = await loadFromRunner(forgeRoot, 'mri')
 const args = mri(process.argv.slice(2), {
   string: ['session', 'snippet', 'args'],
+  boolean: ['json'],
   alias: { s: 'session' },
-  default: { args: '{}' },
+  default: { args: '{}', json: false },
 })
 
 const session = args.session ?? null
 const snippetPath = args.snippet
 const argsJson = args.args
+const jsonMode = args.json || process.env.FORGE_JSON === '1'
 
 if (!session) die('missing -s=<session-name>')
 
@@ -156,10 +166,15 @@ return await run(page, __args);
 // Route the run-code invocation through forge-pw so any env-sourced values
 // that ended up inlined in `wrappedCode` (via JSON.stringify of parsedArgs)
 // get redacted from playwright-cli's "Ran Playwright code" echo before
-// reaching the caller's tool-call transcript.
+// reaching the caller's tool-call transcript. In JSON mode, the echo is
+// suppressed entirely and stdout is structured `{result|isError}`; redaction
+// still runs as a defensive layer over the JSON.
+const pwArgs = jsonMode
+  ? ['--json', `-s=${session}`, 'run-code', wrappedCode]
+  : [`-s=${session}`, 'run-code', wrappedCode]
 const result = spawnSync(
   'node',
-  [FORGE_PW, `-s=${session}`, 'run-code', wrappedCode],
+  [FORGE_PW, ...pwArgs],
   { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 }
 )
 
