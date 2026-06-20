@@ -52,6 +52,27 @@ For each proposal with `ACTION=AMEND` or `ACTION=REMOVE`, read the target hint f
 
 If a `TARGET` can't be found in the file, mark the proposal as **stale** — the file has changed since the agent observed. Don't surface it; quietly drop and continue with the rest.
 
+## 2.5. Lint proposals
+
+Before surfacing, walk each surviving proposal through two checks. The checks don't drop proposals — they tag them so step 3 can offer the user an extra reject option that names the real problem.
+
+### 2.5a. Code-shaped content
+
+Inspect the content the proposal would introduce — `SUGGESTED_EDIT` for `ADD`, the replacement text for `AMEND`. Flag the proposal as `code-shaped` if either holds:
+
+- A fenced code block whose body exceeds 3 lines.
+- More than ~80 characters of indented monospace (4-space-indented or tab-indented) code outside a fence.
+
+Code-shaped content almost always belongs in a snippet (or in code a snippet calls), not in a hint file. Hints describe intent and gotchas in prose; snippets carry the executable shape. Don't drop the proposal — step 3 will surface it with an extra option that lets the user reject it on the grounds that the fix belongs in a snippet.
+
+### 2.5b. Cross-file duplication
+
+For each `ADD` proposal, scan the *other* hint files (every `<FORGE_ROOT>/hints/*.md` except the proposal's `CATEGORY`). Look for substantially similar text: a selector string, a named gotcha, or a distinctive phrase from the `OBSERVATION` or `SUGGESTED_EDIT` that already appears elsewhere.
+
+If you find a near-match, flag the proposal as `duplicates-elsewhere` and capture the matching file path + a short verbatim quote (~120 chars) of the existing text. Step 3 will surface this with an extra option letting the user say "the text exists in the other file; move it instead." You don't perform the move — flagging is enough; the user decides.
+
+A proposal can carry both flags. Both surface independently in step 3.
+
 ## 3. Surface to the user
 
 Begin with this intro line (every time, even on repeated runs):
@@ -75,6 +96,13 @@ Then surface the proposals via `AskUserQuestion` with `multiSelect: true`. One o
 - If `ALTERNATIVES` present, list them as sub-bullets in the description
 
 For `AMEND` and `REMOVE` proposals, **always show the existing prose alongside the proposed change** in the option description. The user accepts blind otherwise.
+
+**Lint-flagged proposals get extra options.** A proposal flagged in step 2.5 still gets its normal Accept (and, in multi-select, the implicit unchecked = reject). On top of that, add one extra option *per flag* on the same proposal:
+
+- If flagged `code-shaped`: add a sibling option labelled **"Reject — should be a snippet fix"** with description: *"This proposal carries >3 lines of fenced code (or substantial indented code). Hints carry prose intent; executable shape belongs in a snippet. Selecting this rejects the proposal and signals that the underlying observation should be addressed by editing a snippet instead."*
+- If flagged `duplicates-elsewhere`: add a sibling option labelled **"Move existing text instead"** with description that quotes the matching text and names the file: *"`<other-file>` already contains: \"<verbatim quote up to ~120 chars>\". Selecting this rejects the proposal as-is and signals that the existing text should be moved to `<CATEGORY>` rather than duplicated."* The lead does not perform the move — surfacing the conflict is the contract.
+
+In single-proposal special-case mode (one proposal total), the question is no longer Accept/Reject — it becomes a single-select with Accept + Reject + each applicable lint-flag option (so up to 4 options for a doubly-flagged proposal). In multi-select mode, treat the lint-flag options as mutually exclusive with Accept *for the same proposal* in the user's mind, but technically they're independent checkboxes; if the user ticks both Accept and a lint-flag option for the same proposal, prefer the lint-flag option (it carries more signal) and note the conflict in your application-phase summary.
 
 ## 4. Apply accepted proposals
 
