@@ -1,20 +1,20 @@
 # /forge — teach reference
 
-This reference is loaded by `/forge`'s router for the **teach** route. The router has stripped the `teach` keyword from the args; what remains (if anything) is the user's framing intent for the session ("teach login", "show forge how to create an event"). The intent is just session framing — the real work happens turn-by-turn between you (the lead) and the user.
+Loaded by `/forge`'s router for the **teach** route. The router has stripped the `teach` keyword from the args; what remains (if anything) is the user's framing intent ("teach login", "show forge how to create an event"). Intent is session framing — the real work happens turn-by-turn between you (the lead) and the user.
 
-**Placeholder note.** `<PLUGIN_ROOT>` in the bash commands below is a placeholder — substitute the literal path the router captured in SKILL.md phase 1.0. Do **not** use `${CLAUDE_PLUGIN_ROOT}` here: the env var isn't reliably populated in the bash context that runs from this reference.
+**Placeholder note.** `<PLUGIN_ROOT>` in the bash commands below — substitute the literal path captured in SKILL.md phase 1.0. Do **not** use `${CLAUDE_PLUGIN_ROOT}` here: the env var isn't reliably populated in this bash context.
 
 ## What this route does
 
-Spawns driver + snippet-author against an ephemeral chromium session. No spec-writer, no spec-verifier. You (the lead) run an interactive loop with the user: the user describes what they want forge to do or capture; you translate to the driver; the driver narrates back to the author; the author waits for your explicit "cap this as `<name>`" signals before writing snippets.
+Spawns driver + snippet-author against an ephemeral chromium session. No spec-writer, no spec-verifier. You run an interactive loop with the user: they describe what forge should do or capture; you translate to the driver; the driver narrates to the author; the author waits for explicit "cap this as `<name>`" signals before writing snippets.
 
-The output is curated snippets — entered into the library with the user's gotcha annotations baked into the bodies. (For a spec artifact, use spec mode.)
+Output: curated snippets with gotcha annotations baked into the bodies. (For a spec artifact, use spec mode.)
 
 ## Why teach mode exists
 
-In drive mode the driver discovers project quirks by trial and error — and that knowledge dies with the session unless it happens to land in a snippet. Hint files are wrong for the same knowledge: login-flow quirks placed in `driver.md` get loaded for every agent on every run, even when login isn't relevant.
+In drive mode the driver discovers project quirks by trial and error — knowledge dies with the session unless it happens to land in a snippet. Hint files are wrong for the same knowledge: login-flow quirks in `driver.md` load for every agent on every run, even when login isn't relevant.
 
-Teach mode is the **snippet-internal deposit channel.** The user already knows the quirks; teach mode is the structured way to encode them into snippet bodies where they belong — invoked when relevant, invisible otherwise.
+Teach mode is the **snippet-internal deposit channel.** The user knows the quirks; teach mode encodes them into snippet bodies where they belong — invoked when relevant, invisible otherwise.
 
 ## Prerequisite
 
@@ -28,9 +28,9 @@ Then stop.
 
 Identical to team-task's phase 1 — find forge root, load hints, generate session name, apply setup if `forge.md` declares any. Capture `FORGE_ROOT` and `SESSION_NAME`.
 
-Teach mode uses `forge.md`, `driver.md`, and `snippet-author.md` only — `spec-writer.md` and `spec-verifier.md` are unused.
+Teach mode uses `forge.md`, `driver.md`, and `snippet-author.md` only — `spec-writer.md` and `spec-verifier.md` unused.
 
-See `team-task.md` phases 1.1 through 1.5 for the exact steps; they are byte-for-byte identical here.
+See `team-task.md` phases 1.1 through 1.5 for exact steps; byte-for-byte identical here.
 
 ## Phase 2 — Create the team
 
@@ -67,7 +67,7 @@ TaskCreate(
 
 ### 3.0 Load the teach-mode addenda
 
-Drive and spec spawns send agents lean prompts; teach mode adds protocol that lives in separate addendum files so it only loads when needed. Read both addenda before spawning:
+Drive and spec spawns send lean prompts; teach mode adds protocol that lives in separate addendum files so it loads only when needed. Read both addenda before spawning:
 
 ```bash
 cat <PLUGIN_ROOT>/skills/forge/references/teach-addenda/driver.md
@@ -129,14 +129,14 @@ Your task is referenced as ID <AUTHOR_TASK_ID> for the team's records. Follow th
 
 ## Phase 4 — The teach loop
 
-You (the lead) are the user's interlocutor. Unlike drive/spec modes where you wait passively for completion pings, in teach mode you actively shepherd the conversation. Each loop iteration is one of these.
+You are the user's interlocutor. Unlike drive/spec modes where you wait passively for completion pings, in teach mode you actively shepherd the conversation.
 
-**Two channels, not one.** Instructions drive the browser; cap signals build the library. They are orthogonal:
+**Two channels, not one.** Instructions drive the browser; cap signals build the library. Orthogonal:
 
-- An `[act]` instruction is one browser action — it always produces driver narration but does **not** by itself produce a snippet.
+- An `[act]` instruction is one browser action — produces driver narration but does **not** by itself produce a snippet.
 - A cap signal references a *range* of past narrated steps — usually multiple `[act]`s — and produces a snippet.
 
-The user may walk through many `[act]`s with no cap (exploring, setting context). They may then cap a multi-step snippet covering the last several `[act]`s. They may also cap something narrower than the last instruction (e.g. "cap just the auto-login-check part of those last two steps"). Treat boundaries as fluid and user-driven.
+The user may walk through many `[act]`s with no cap (exploring, setting context), then cap a multi-step snippet covering the last several. They may cap something narrower than the last instruction ("cap just the auto-login-check part of those last two steps"). Boundaries are fluid and user-driven.
 
 ### 4.1 User describes the next instruction
 
@@ -150,9 +150,9 @@ SendMessage(
 )
 ```
 
-Wait for the driver to acknowledge completion (it will narrate to snippet-author, which surfaces in your conversation as an idle notification with the peer-DM summary). Then wait for the user's next signal — that signal might be another `[act]`, a takeover, a cap, or the end of the session. **Don't prompt them for a cap after every action.** Most `[act]`s won't be cap-points; only some will. The user decides.
+Wait for the driver to acknowledge completion (it narrates to snippet-author, surfacing in your conversation as an idle notification with the peer-DM summary). Then wait for the user's next signal — another `[act]`, a takeover, a cap, or session end. **Don't prompt for a cap after every action.** Most `[act]`s won't be cap-points. The user decides.
 
-If the driver hits a snag, surface it to the user verbatim — they're piloting and need to decide how to recover.
+If the driver hits a snag, surface verbatim — the user is piloting and decides recovery.
 
 ### 4.2 User signals takeover
 
@@ -166,9 +166,9 @@ SendMessage(
 )
 ```
 
-The driver acknowledges and goes idle. You then wait for the user to come back.
+The driver acknowledges and goes idle. Wait for the user to come back.
 
-When the user resumes, they should provide a **bearing-grounding statement** — where they ended up, anything that changed about the page state. If they don't volunteer one, ask: "Where did you end up? I need to tell the driver the current state."
+On resume, the user should provide a **bearing-grounding statement** — where they ended up, anything that changed about page state. If they don't volunteer one, ask: "Where did you end up? I need to tell the driver the current state."
 
 Then:
 
@@ -183,13 +183,13 @@ Wait for the next [act] instruction."
 )
 ```
 
-**User-driven actions during takeover are never recorded.** Anything the user wants captured as a snippet, they need to walk the driver through via `[act]` instructions after resumption.
+**User-driven actions during takeover are never recorded.** Anything to capture as a snippet, the user walks the driver through via `[act]` after resumption.
 
 ### 4.3 User signals a snippet boundary
 
 Examples: "cap that as `login`", "make this a snippet called `add-product-to-cart`", "save the last three steps as `create-event`", "save the last five steps but not the search step as `create-event`." This is the load-bearing operation in teach mode.
 
-Cap signals can fire at any time and reference any range of past narrated steps — the last action, the last few, a contiguous chunk further back, or even a non-contiguous selection. Don't assume "cap" means "the most recent step"; if there's ambiguity about which steps the user means, ask before sending the cap to the author.
+Cap signals can fire at any time and reference any range of past narrated steps — the last action, the last few, a contiguous chunk further back, or a non-contiguous selection. Don't assume "cap" means "the most recent step"; if which steps the user means is ambiguous, ask before sending the cap.
 
 #### 4.3.1 Check for collision
 
@@ -217,13 +217,13 @@ On replace → `EDIT_EXISTING = yes`. On rename → capture the new name and re-
 
 #### 4.3.2 Probe sparingly for annotations
 
-Only when there's something worth resolving. Examples of when to ask:
+Only when something's worth resolving. When to ask:
 
-- **Multiple selectors worked during the steps** — "The driver had multiple selectors that matched (`<A>`, `<B>`). Was there one you'd prefer the snippet to use? (If unsure, the driver picked `<X>`.)"
-- **Something failed and was recovered from** — "We recovered from `<Y>` mid-flow. Should the snippet include that recovery (e.g. retry-on-stuck), or treat it as a one-off?"
-- **An action behaved differently than the obvious primitive suggested** — "The driver used `dispatchEvent('click')` because `.click()` didn't fire. Worth noting in the snippet body, or just let it be?"
+- **Multiple selectors worked** — "The driver had multiple selectors that matched (`<A>`, `<B>`). Prefer one? (If unsure, the driver picked `<X>`.)"
+- **Something failed and was recovered from** — "We recovered from `<Y>` mid-flow. Should the snippet include that recovery (retry-on-stuck), or treat as one-off?"
+- **An action behaved unexpectedly** — "The driver used `dispatchEvent('click')` because `.click()` didn't fire. Worth noting in the snippet body?"
 
-Skip probing if none of these apply. Don't run a checklist. Trust user-volunteered annotations; only ask when context surfaced an ambiguity worth resolving.
+Skip probing if none apply. Trust user-volunteered annotations; ask only when context surfaced an ambiguity.
 
 #### 4.3.3 Send the cap signal
 
@@ -247,9 +247,9 @@ Weave annotations into the snippet body as code (waits, conditional branches, re
 
 #### 4.3.4 Receive the author's plan (if non-trivial)
 
-The author drafts a plan and decides whether to surface it. For trivial caps (single concern, no args, no hardcoded values worth flagging) the author writes directly and jumps to 4.3.5. For everything else, the author SendMessages you with `summary: "plan ready: <name>"` and a body describing structure (with alternatives if decomposable), args (with the user-typed values they derived from), hardcoded values (with reasons), and annotations.
+The author drafts a plan and decides whether to surface it. For trivial caps (single concern, no args, nothing worth flagging) the author writes directly and jumps to 4.3.5. Otherwise the author SendMessages with `summary: "plan ready: <name>"` and a body describing structure (with alternatives if decomposable), args (with the values they derived from), hardcoded values (with reasons), and annotations.
 
-Surface the plan to the user via `AskUserQuestion`. The exact options depend on what the author proposed:
+Surface the plan via `AskUserQuestion`. Exact options depend on what the author proposed:
 
 **When the plan includes a structural alternative (multi-element-class case):**
 
@@ -298,7 +298,7 @@ How do you want to proceed?",
 )
 ```
 
-`AskUserQuestion` always also exposes an "Other" path for free-form answers — the user can use that for any structural or arg revision the listed options don't cover.
+`AskUserQuestion` always exposes an "Other" path for free-form answers — the user can use that for any revision the listed options don't cover.
 
 Capture the user's choice and SendMessage the author back:
 
@@ -317,17 +317,17 @@ The author writes per the resolution.
 
 #### 4.3.5 Author confirms; report to user
 
-The author writes (or edits) the snippet and pings you when done — one ping per file in the split case. Report back to the user: *"wrote `<name>.ts`"* or *"updated `<name>.ts` in place"* or *"split: wrote `<X>.ts` and `<Y>.ts`."*
+The author writes (or edits) the snippet and pings you when done — one ping per file in the split case. Report back: *"wrote `<name>.ts`"* or *"updated `<name>.ts` in place"* or *"split: wrote `<X>.ts` and `<Y>.ts`."*
 
 ### 4.4 User ends the session
 
 Examples: "that's enough", "we're done", "wrap up", "ship it." Stop the loop and proceed to phase 5.
 
-If the user has driven actions in the current chunk but not yet capped them, ask once: *"You drove steps `<short list>` but didn't cap them. Want to save them as a snippet, or discard?"* — then proceed based on their answer.
+If the user drove actions but didn't cap them, ask once: *"You drove steps `<short list>` but didn't cap them. Save as a snippet, or discard?"* — then proceed.
 
 ### 4.5 Driver STUCK during a teach step
 
-Same protocol as team-task — driver SendMessages `team-lead` with STUCK, you surface via `AskUserQuestion`, you SendMessage the answer back. The user is already in the loop, so the STUCK is just a slight pause in normal flow rather than a special escalation.
+Same protocol as team-task — driver SendMessages `team-lead` with STUCK, you surface via `AskUserQuestion`, you SendMessage the answer back. The user is already in the loop, so STUCK is a slight pause rather than a special escalation.
 
 ## Phase 5 — Review hint proposals (on-demand)
 
@@ -346,9 +346,9 @@ SendMessage(
 )
 ```
 
-Each teammate replies with either `proposals: 0` (in summary or first line) OR a `PROPOSALS` SendMessage.
+Each teammate replies with `proposals: 0` (in summary or first line) OR a `PROPOSALS` SendMessage.
 
-**If both teammates report `proposals: 0`, skip this phase entirely** and proceed to Phase 6. Do not load the proposal-review reference; do not surface a "no proposals" message. Silence is the right outcome.
+**If both report `proposals: 0`, skip this phase entirely** and proceed to Phase 6. Don't load proposal-review; don't surface a "no proposals" message. Silence is the right outcome.
 
 If any teammate sent a `PROPOSALS` SendMessage:
 
@@ -360,9 +360,9 @@ If any teammate sent a `PROPOSALS` SendMessage:
    ```
 
 3. Follow its instructions for aggregation, user review, and application.
-4. When it hands back its "Hint files updated" summary, hold it for Phase 6.1's final report.
+4. Hold its "Hint files updated" summary for Phase 6.1's final report.
 
-Loading the reference on-demand keeps the lead's prompt lean on sessions where no proposals fire.
+On-demand loading keeps the lead's prompt lean when no proposals fire.
 
 ## Phase 6 — Shut down and clean up
 
@@ -394,15 +394,15 @@ Same as team-task phase 5 (the original Phase 5 here, renumbered):
 
 ## Hard rules
 
-- **You are the user's interlocutor.** Unlike drive/spec modes where you wait for completion pings, in teach mode you actively shepherd the conversation. User input arrives as new turns; translate each into the appropriate `[act]` / `[pause]` / `[resume]` / cap message.
-- **One driver action per `[act]` instruction.** Don't batch user requests into a multi-step prompt. The teach value is the user's per-step supervision.
-- **User actions during takeover are not recorded.** Only steps you forward via `[act]` become candidates for snippet inclusion. Takeover is for state setup, not stealth capture.
-- **Snippet boundaries are user-driven, but informed by the author.** Author only writes on explicit cap signals from you, but caps go through a plan-review step where the author surfaces structure / args / hardcoded values before writing. The user remains the final authority; the author retains judgment that surfaces as a proposal, not a unilateral decision.
-- **Edit consent flows through you.** When the user says "replace `<name>`", you set `EDIT_EXISTING=yes` in the cap message. The author's usual overwrite protection is deliberately suppressed here — the user has already opted in.
-- **No spec artifact.** Teach mode produces snippets, not specs. If the user wants a spec from the resulting library, that's a follow-up `/forge spec <task>`.
+- **You are the user's interlocutor.** Unlike drive/spec modes where you wait for completion pings, in teach mode you actively shepherd. User input arrives as new turns; translate each into the appropriate `[act]` / `[pause]` / `[resume]` / cap message.
+- **One driver action per `[act]` instruction.** Don't batch user requests. The teach value is per-step supervision.
+- **User actions during takeover are not recorded.** Only steps forwarded via `[act]` become candidates for snippet inclusion. Takeover is for state setup, not stealth capture.
+- **Snippet boundaries are user-driven, but informed by the author.** Author writes only on explicit cap signals from you, but caps go through a plan-review step where the author surfaces structure / args / hardcoded values. The user is the final authority; the author's judgment surfaces as a proposal, not a unilateral decision.
+- **Edit consent flows through you.** When the user says "replace `<name>`", you set `EDIT_EXISTING=yes` in the cap message. The author's usual overwrite protection is deliberately suppressed — the user has opted in.
+- **No spec artifact.** Teach mode produces snippets. If the user wants a spec from the resulting library, follow up with `/forge spec <task>`.
 
 ## Failure modes to recover from
 
-- **Driver returns `cannot-drive` mid-loop.** Surface to user; ask whether to retry the last `[act]`, take over manually, or wrap up. The session can continue — teach mode is more forgiving than drive mode because the user is already steering.
-- **Author rejects a cap signal** (e.g. ambiguous step reference, name collision they couldn't resolve). Surface their question to the user and relay the answer back.
-- **User goes quiet for a long stretch.** Idle wait is fine — there's no completion ping to chase. The driver and author can sit idle indefinitely. Resume on the next user message.
+- **Driver returns `cannot-drive` mid-loop.** Surface to user; ask whether to retry the last `[act]`, take over manually, or wrap up. The session can continue — teach mode is more forgiving than drive mode.
+- **Author rejects a cap signal** (ambiguous step reference, name collision). Surface their question to the user and relay the answer back.
+- **User goes quiet.** Idle wait is fine — no completion ping to chase. The driver and author can sit idle indefinitely. Resume on the next user message.
