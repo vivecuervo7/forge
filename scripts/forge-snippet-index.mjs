@@ -180,7 +180,76 @@ function buildIndex(snippetsDir) {
     records.push({ name, meta })
   }
 
+  emitHygieneWarnings(records)
+
   return renderMarkdown(records)
+}
+
+// Heuristic: does the description suggest a multi-step flow?
+// Conservative — false-positive cost is one stderr line, not a failure.
+const FLOW_WORDS = ['step', 'flow', 'phase', 'register', 'submit', 'navigate']
+
+// Snippet names that look like canonical leaf primitives — skip the
+// "missing flow/phase" warning for these even if the description happens
+// to contain a flow-word.
+const LEAF_PRIMITIVE_RE = /^(click|read|count|extract|goto|open|scroll|switch|back|advance)-/
+
+function isLeafPrimitive(name) {
+  return LEAF_PRIMITIVE_RE.test(name)
+}
+
+function descriptionSuggestsFlow(description) {
+  if (!description || typeof description !== 'string') return false
+  const lower = description.toLowerCase()
+  return FLOW_WORDS.some(w => lower.includes(w))
+}
+
+function emitHygieneWarnings(records) {
+  let count = 0
+  const warn = (filename, issue) => {
+    console.error(`forge-snippet-index: ${filename}: ${issue}`)
+    count++
+  }
+
+  for (const r of records) {
+    if (r.error) continue  // parse-level issues already reported
+    const filename = `${r.name}.ts`
+    const meta = r.meta || {}
+
+    // Missing or empty description
+    if (!meta.description || (typeof meta.description === 'string' && meta.description.trim() === '')) {
+      warn(filename, 'meta.description is missing or empty')
+    }
+
+    // Missing, empty, or noise tags
+    if (!('tags' in meta)) {
+      warn(filename, 'meta.tags is missing — supply real tags or compute from flow/phase')
+    } else if (!Array.isArray(meta.tags)) {
+      warn(filename, 'meta.tags is not an array')
+    } else if (meta.tags.length === 0) {
+      warn(filename, 'meta.tags is empty — supply real tags or compute from flow/phase')
+    } else if (meta.tags.includes('auto-authored')) {
+      warn(filename, "meta.tags contains 'auto-authored' — replace with discovery-aiding tags")
+    }
+
+    // Jira-key filename
+    if (/^ae-\d+/i.test(r.name)) {
+      warn(filename, 'filename looks like a Jira key — rename to <verb>-<noun>[-<modifier>]')
+    }
+
+    // Missing flow AND phase, when description suggests a multi-step flow
+    const hasFlow = meta.flow && String(meta.flow).trim() !== ''
+    const hasPhase = meta.phase && String(meta.phase).trim() !== ''
+    if (!hasFlow && !hasPhase
+        && descriptionSuggestsFlow(meta.description)
+        && !isLeafPrimitive(r.name)) {
+      warn(filename, 'description suggests a multi-step flow but neither meta.flow nor meta.phase is set')
+    }
+  }
+
+  if (count > 0) {
+    console.error(`forge-snippet-index: ${count} hygiene warning(s) — review agents/snippet-author.md`)
+  }
 }
 
 function renderMarkdown(records) {
