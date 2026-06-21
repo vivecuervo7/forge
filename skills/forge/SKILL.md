@@ -8,11 +8,11 @@ allowed-tools: Read, Edit, Write, Glob, Skill, AskUserQuestion, Bash(node **/for
 
 # /forge
 
-`/forge` is a single skill with seven routes (init, export, run, teach, spec, clean, and the default task route). This SKILL.md is a thin router — it parses the route, captures route-specific context, and dispatches to a reference file that contains the actual instructions for that route. Only the reference for the chosen route is loaded; init/export invocations don't pull in team-orchestration content, and task/spec/teach invocations don't pull in scaffold or export logic.
+`/forge` is a single skill with seven routes (init, export, run, teach, spec, clean, and the default task route). This SKILL.md is a thin router — it parses the route, captures route-specific context, and dispatches to a reference file. Only the chosen route's reference is loaded.
 
 ## Phase 0 — Pick the route
 
-Look at the first word of `$ARGUMENTS` (case-insensitive). The dispatch table:
+First word of `$ARGUMENTS` (case-insensitive). Dispatch table:
 
 | First word | Route | Loaded reference | Rest of args becomes |
 |---|---|---|---|
@@ -26,7 +26,7 @@ Look at the first word of `$ARGUMENTS` (case-insensitive). The dispatch table:
 
 ### Natural-language route signals (when first word doesn't match)
 
-When the first word isn't a route keyword, check the full args for these natural-language phrasings before falling through to the task route. The phrase has to genuinely express the route's intent — a single keyword in passing isn't enough.
+When the first word isn't a route keyword, check the full args for these phrasings before falling through to the task route. The phrase has to genuinely express the route's intent — a single keyword in passing isn't enough.
 
 **Init route** — an init-verb combined with `forge` as the object:
 
@@ -56,9 +56,9 @@ When the first word isn't a route keyword, check the full args for these natural
 - "clean up forge's hints" / "prune the snippet library"
 - "scan for cleanup candidates in forge"
 
-Scope inference (when the NL signal matches but doesn't specify): if the phrasing names snippets only → `snippets`; if it names hints only → `hints`; if it's ambiguous or names both → `both`.
+Scope inference when the NL signal matches but doesn't specify: phrasing names snippets only → `snippets`; names hints only → `hints`; ambiguous or names both → `both`.
 
-If a natural-language signal matches, set the route accordingly and pass the full args (no keyword stripping; the reference handles parsing them).
+If a natural-language signal matches, set the route and pass the full args (the reference handles parsing).
 
 If neither first-word nor natural-language matches, the route stays task and Phase 0a applies.
 
@@ -90,24 +90,24 @@ Counter-examples that should NOT match:
 
 ## Phase 0a — Mode detection (task/spec route only)
 
-For task and spec routes, you also need to set `MODE` before loading the reference. Skip this section for init / export / run / teach.
+For task and spec routes, set `MODE` before loading the reference. Skip for init / export / run / teach.
 
 **MODE selection** — spec mode is selected when:
 
 - Phase 0 already set `MODE=spec` because the first word was `spec`, OR
-- The remaining task description contains a clear spec-authoring intent in natural language: "create a spec", "write a spec", "spec for AE-XXXX", "produce a spec that…", "capture this as a spec", "build a verification spec". Use judgment — phrases that genuinely ask for a spec artifact, not phrases that incidentally mention specs ("the spec is already correct, just drive…").
+- The task description contains clear spec-authoring intent: "create a spec", "write a spec", "spec for AE-XXXX", "produce a spec that…", "capture this as a spec", "build a verification spec". Use judgment — phrases that genuinely ask for a spec artifact, not incidental mentions ("the spec is already correct, just drive…").
 
-Otherwise → **drive mode**. The user wants the action performed; no spec artifact required. If intent is ambiguous, default to drive — spec creation is an explicit opt-in.
+Otherwise → **drive mode**. If intent is ambiguous, default to drive — spec creation is an explicit opt-in.
 
 ## Phase 0b — Recording label detection (run route only)
 
 For the run route, look for a recording label in the args:
 
-- "record as 'before'" / "record this as after" / "label it before-fix" → capture `RECORD_AS = before` / `after` / `before-fix`
+- "record as 'before'" / "record this as after" / "label it before-fix" → `RECORD_AS = before` / `after` / `before-fix`
 - "record a before video" → `RECORD_AS = before` (extract the adjective)
-- No mention → `RECORD_AS = none` — the run is verification-only, no video produced
+- No mention → `RECORD_AS = none` — verification-only, no video
 
-The persisted recording filename is always `<spec-basename>-<suffix>.webm` under `forge/videos/`. Suffix is the user-supplied label or a timestamp default. Spec context stays attached so multiple specs can each have their own "before" without colliding. Existing files with the same name are overwritten — caller-controlled.
+Persisted recording filename: `<spec-basename>-<suffix>.webm` under `forge/videos/`. Suffix is the user-supplied label or a timestamp default. Spec context stays attached so multiple specs can each have their own "before" without colliding. Existing files with the same name are overwritten — caller-controlled.
 
 Recording is opt-in evidence: the same spec can be run multiple times with different labels for paired before/after videos around a bug fix.
 
@@ -115,17 +115,17 @@ Recording is opt-in evidence: the same spec can be run multiple times with diffe
 
 ### 1.0. Capture `PLUGIN_ROOT`
 
-The harness substitutes `${CLAUDE_PLUGIN_ROOT}` in this SKILL.md before Claude reads it, but **not** in content loaded dynamically via `cat` at runtime (i.e. the reference files in `references/`). Because of that, references can't reliably use `${CLAUDE_PLUGIN_ROOT}` directly — by the time bash sees the command, the env var isn't expanded.
+The harness substitutes `${CLAUDE_PLUGIN_ROOT}` in this SKILL.md before Claude reads it, but **not** in content loaded dynamically via `cat` at runtime (i.e. the reference files). References can't reliably use `${CLAUDE_PLUGIN_ROOT}` directly — by the time bash sees the command, the env var isn't expanded.
 
-The substituted value of `${CLAUDE_PLUGIN_ROOT}` in this paragraph is the literal path the harness wants you to use:
+The substituted value of `${CLAUDE_PLUGIN_ROOT}` in this paragraph is the literal path to use:
 
 ```
 ${CLAUDE_PLUGIN_ROOT}
 ```
 
-Capture that exact path string as `PLUGIN_ROOT`. Substitute it for every `<PLUGIN_ROOT>` placeholder in the references and in any spawn prompts you relay to teammates. Do **not** try to re-derive the path via bash env-var lookup, filesystem search, or `find` — those routes pick up stale installs (e.g., a marketplace copy that exists alongside a `--plugin-dir` install) and silently use the wrong version.
+Capture that exact path string as `PLUGIN_ROOT`. Substitute it for every `<PLUGIN_ROOT>` placeholder in references and spawn prompts. Do **not** try to re-derive the path via bash env-var lookup, filesystem search, or `find` — those routes pick up stale installs (e.g., a marketplace copy alongside a `--plugin-dir` install) and silently use the wrong version.
 
-If the path above shows the literal characters `${CLAUDE_PLUGIN_ROOT}` (unsubstituted), the harness hasn't done its job and forge can't proceed. Surface to the user:
+If the path above shows the literal `${CLAUDE_PLUGIN_ROOT}` (unsubstituted), forge can't proceed. Surface to the user:
 
 > The plugin harness didn't substitute `${CLAUDE_PLUGIN_ROOT}` in SKILL.md, which forge needs to locate its scripts. This usually means the plugin isn't loaded correctly — re-install or re-load with `--plugin-dir <path>`, then re-invoke `/forge`.
 
@@ -147,7 +147,7 @@ Where `<reference>` is one of:
 - `run.md` (for run route — carries `RECORD_AS` into its instructions)
 - `clean.md` (for clean route — carries the optional scope `snippets|hints|both`)
 
-Then **follow the instructions in the loaded reference**. The reference is the authoritative body for that route; this SKILL.md just got you to the right one.
+Then **follow the instructions in the loaded reference** — it's authoritative for that route.
 
 When passing context into the reference's work, include the captured route-specific values AND the resolved `PLUGIN_ROOT`. References use `<PLUGIN_ROOT>` as a placeholder; substitute the captured value when running their bash commands.
 
@@ -161,8 +161,8 @@ When passing context into the reference's work, include the captured route-speci
 
 ## Hard rules
 
-- **You are a router.** Don't attempt to do the route's work from this SKILL.md — load the reference first. The references are where the actual instructions live.
-- **Only load the route's reference(s).** Don't pull in references for routes you didn't dispatch to. The spec route legitimately loads two: `team-task.md` + `team-task-spec.md`. Every other route loads one.
-- **Route keyword recognition is case-insensitive but exact-match on the first word.** `Init` matches `init`. `spec-fixup` does NOT match the `spec` route (it's a fresh task with the word "spec" in it — natural-language detection in phase 0a may still pull it into spec mode, that's fine).
-- **If the user's input is ambiguous about which route they want, ask via AskUserQuestion** rather than guessing. The routes are distinct enough that the user should be definitive.
+- **You are a router.** Don't do the route's work from this SKILL.md — load the reference first.
+- **Only load the route's reference(s).** The spec route legitimately loads two: `team-task.md` + `team-task-spec.md`. Every other route loads one.
+- **Route keyword recognition is case-insensitive but exact-match on the first word.** `Init` matches `init`. `spec-fixup` does NOT match the `spec` route (Phase 0a's natural-language detection may still pull it into spec mode, that's fine).
+- **If the user's input is ambiguous about which route they want, ask via AskUserQuestion** rather than guessing.
 
