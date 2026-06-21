@@ -1,16 +1,16 @@
 # /forge — run reference
 
-This reference is loaded by `/forge`'s router for the **run** route. The router has stripped the `run` keyword from the args and captured `RECORD_AS` (label or `none`). What remains is the spec reference — explicit name, `last` / `latest`, or empty (in which case you'll ask the user).
+Loaded by `/forge`'s router for the **run** route. The router stripped the `run` keyword and captured `RECORD_AS` (label or `none`). What remains is the spec reference — explicit name, `last` / `latest`, or empty (ask the user).
 
-**Placeholder note.** `<PLUGIN_ROOT>` in the bash commands below is a placeholder — substitute the literal path the router captured in SKILL.md phase 1.0. Do **not** use `${CLAUDE_PLUGIN_ROOT}` here: the env var isn't reliably populated in the bash context that runs from this reference.
+**Placeholder note.** `<PLUGIN_ROOT>` in the bash commands below — substitute the literal path captured in SKILL.md phase 1.0. Do **not** use `${CLAUDE_PLUGIN_ROOT}` here: the env var isn't reliably populated in this bash context.
 
 ## What this route does
 
-Re-runs an existing verified spec via `forge-run-spec.mjs`. No team is spawned — no driver, no snippet-author, no spec-writer, no spec-verifier. Just the spec runner against an existing artifact.
+Re-runs an existing verified spec via `forge-run-spec.mjs`. No team is spawned — just the spec runner against an existing artifact.
 
-Optionally records a video (when `RECORD_AS` is set) at `forge/videos/<spec-basename>-<RECORD_AS>.webm`. The recording is evidence — typically used in a before/after workflow where the same spec is run twice against different code states.
+Optionally records a video (when `RECORD_AS` is set) at `forge/videos/<spec-basename>-<RECORD_AS>.webm`. The recording is evidence — typically a before/after workflow where the same spec runs twice against different code states.
 
-The script uses Playwright's ephemeral browser context. Env values come from whatever's already in `process.env` at invocation time — the user's shell env (direnv, manual exports, etc.) plus anything the project's `forge/playwright.config.ts` chose to load. To use a different test account, the user overrides via shell env before invoking, e.g. `SAUCE_USERNAME=problem_user /forge run last spec, record as problem-flow`.
+The script uses Playwright's ephemeral browser context. Env values come from `process.env` at invocation time — user's shell env (direnv, manual exports) plus anything the project's `forge/playwright.config.ts` loads. To use a different test account, override via shell env: `SAUCE_USERNAME=problem_user /forge run last spec, record as problem-flow`.
 
 ## Phase 1 — Discovery
 
@@ -30,29 +30,29 @@ Capture as `FORGE_ROOT`.
 ls -t <FORGE_ROOT>/specs/*.spec.ts 2>/dev/null
 ```
 
-The `-t` flag sorts by modification time, most recent first — useful for resolving `last` / `latest`.
+The `-t` flag sorts by modification time, most recent first — useful for `last` / `latest`.
 
 If no specs exist, surface: *"No specs found in `<FORGE_ROOT>/specs/`. Run `/forge spec <task>` to produce one first."* and stop.
 
 ## Phase 2 — Resolve the target spec
 
-Three input shapes the user might give you:
+Three input shapes:
 
 ### 2.1. Explicit spec name
 
 Examples: `add-backpack-to-cart-standard`, `add-backpack-to-cart-standard.spec.ts`, `/absolute/path/.../specs/<name>.spec.ts`.
 
-Normalize to an absolute path under `<FORGE_ROOT>/specs/`. If the file doesn't exist, surface "spec not found" with the list of available specs.
+Normalize to an absolute path under `<FORGE_ROOT>/specs/`. If the file doesn't exist, surface "spec not found" with the available list.
 
 ### 2.2. `last` / `latest`
 
-Resolve to the most recently modified spec from the `ls -t` output above. Take the first line. Tell the user which spec you picked so they can correct you if it's not what they meant:
+Most recently modified spec from `ls -t` above. Tell the user which one so they can correct you:
 
 > Resolved `last` → `add-backpack-to-cart-standard.spec.ts` (modified <when>).
 
-### 2.3. No spec reference (empty args after route + RECORD_AS extraction)
+### 2.3. No spec reference (empty args after RECORD_AS extraction)
 
-Use `AskUserQuestion` to let the user pick from the available specs. Build a question with the available specs as options (up to 4):
+Use `AskUserQuestion` to let the user pick (up to 4 options):
 
 ```
 AskUserQuestion(
@@ -69,7 +69,7 @@ AskUserQuestion(
 )
 ```
 
-If there are more than 4, include the most-recently-modified 3 plus "Other (specify by name)". Take the user's pick, normalize to an absolute path, then proceed.
+For more than 4, include the most-recent 3 plus "Other (specify by name)". Normalize to an absolute path and proceed.
 
 ## Phase 3 — Run
 
@@ -81,9 +81,9 @@ node <PLUGIN_ROOT>/scripts/forge-run-spec.mjs \
 # If RECORD_AS is set, append: --record-as <RECORD_AS>
 ```
 
-The script handles project-runner detection vs plugin-fallback (lazy-installs the plugin runner on first use). When `--record-as` is passed, it persists the resulting `video.webm` to `<FORGE_ROOT>/videos/<spec-basename>-<RECORD_AS>.webm`.
+The script handles project-runner detection vs plugin-fallback (lazy-installs on first use). With `--record-as`, it persists `video.webm` to `<FORGE_ROOT>/videos/<spec-basename>-<RECORD_AS>.webm`.
 
-Capture the exit code and stderr output. Exit 0 = pass. Anything else = fail.
+Capture exit code and stderr. Exit 0 = pass; else fail.
 
 ## Phase 4 — Report
 
@@ -101,32 +101,32 @@ Capture the exit code and stderr output. Exit 0 = pass. Anything else = fail.
 
 > Ran `<spec-name>.spec.ts` — **FAILED** after <duration>. <script-error-summary>.
 >
-> The spec needs investigation. Suggest `/forge spec <original-task>` to re-author from scratch, or open the spec and inspect the failure.
+> The spec needs investigation. Suggest `/forge spec <original-task>` to re-author, or open the spec and inspect the failure.
 
-Surface the script's actual error output verbatim — the user needs to see exactly what Playwright reported.
+Surface the script's error output verbatim — the user needs to see exactly what Playwright reported.
 
 ## Hard rules
 
-- **No team involved.** This route is a thin script invocation. Don't spawn driver, snippet-author, spec-writer, or spec-verifier. If the spec's authoring needs re-doing, that's `/forge spec`'s job.
-- **Thin script invocation.** Playwright launches its own browser; env comes from `process.env` as set by the user's shell plus whatever the project's `forge/playwright.config.ts` loads. The spec runs as a standalone Playwright test.
-- **Default to verification-only.** When `RECORD_AS = none`, do NOT pass `--record` to the script. Recordings are an explicit user request; silent recording bloats `forge/videos/` and wastes time.
-- **Surface script errors verbatim.** If `forge-run-spec.mjs` fails, the user needs to see Playwright's actual report (which selector failed, which assertion mismatched, etc.) — don't paraphrase.
+- **No team involved.** Thin script invocation. Don't spawn driver, snippet-author, spec-writer, or spec-verifier. Re-authoring is `/forge spec`'s job.
+- **Thin script invocation.** Playwright launches its own browser; env comes from `process.env` (user's shell + `forge/playwright.config.ts`). The spec runs as a standalone Playwright test.
+- **Default to verification-only.** When `RECORD_AS = none`, do NOT pass `--record`. Recordings are explicit; silent recording bloats `forge/videos/`.
+- **Surface script errors verbatim.** Playwright's report (which selector failed, which assertion mismatched) — don't paraphrase.
 
 ## Failure modes
 
-- **Spec doesn't exist under `forge/specs/`** — surface "spec not found" with the list of available specs.
-- **No `forge/` directory** — surface forge-find-root.mjs's error and instruct user to run `/forge init`.
-- **Plugin runner missing** — the script lazy-installs on first use, but if installation fails, surface the npm error.
-- **Ambiguous "last"** — if `ls -t` returns multiple specs and the user's intent isn't clear from context, prefer the most-recent and tell them which one you picked.
+- **Spec doesn't exist under `forge/specs/`** — surface "spec not found" with available specs.
+- **No `forge/` directory** — surface forge-find-root.mjs's error and instruct `/forge init`.
+- **Plugin runner missing** — lazy-installs on first use; if install fails, surface the npm error.
+- **Ambiguous "last"** — if intent isn't clear, prefer the most-recent and tell the user which.
 
 ## Why recording is here, not in spec mode
 
-Recording is **evidence** — typically used to document a bug fix by capturing before/after videos around the same spec. If recording lived in spec mode, you'd have to re-author the spec each time you wanted fresh evidence, which is wasteful and conflates two distinct user intents:
+Recording is **evidence** — typically before/after videos around the same spec to document a bug fix. If recording lived in spec mode, you'd re-author each time you wanted fresh evidence, conflating two distinct intents:
 
-- **Spec mode**: "I want to capture this behavior as a runnable test." (One-time author + verify.)
-- **Run mode**: "I want to re-run this test, optionally with a label for evidence." (Repeatable.)
+- **Spec mode**: "Capture this behavior as a runnable test." (One-time author + verify.)
+- **Run mode**: "Re-run this test, optionally with a label for evidence." (Repeatable.)
 
-The dream-state workflow this enables:
+The workflow this enables:
 
 ```
 /forge spec AE-1775 add backpack to cart
