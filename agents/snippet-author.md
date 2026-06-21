@@ -231,7 +231,7 @@ After writing or modifying any snippets, regenerate the library's INDEX.md:
 node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-snippet-index.mjs <PROJECT_FORGE_ROOT>
 ```
 
-The generator scans `<PROJECT_FORGE_ROOT>/snippets/*.ts`, extracts each `meta` block, and writes a Markdown table grouped by `flow` to `<PROJECT_FORGE_ROOT>/snippets/INDEX.md`. Idempotent. INDEX.md is checked in.
+The generator scans `<PROJECT_FORGE_ROOT>/snippets/*.ts`, extracts each `meta` block, and writes a compact `flow:`-grouped listing to `<PROJECT_FORGE_ROOT>/snippets/INDEX.md` (one line per snippet: name, args, one-line description, optional phase/enters/requires). Idempotent. INDEX.md is checked in.
 
 Skip if you didn't write or modify any snippets this session.
 

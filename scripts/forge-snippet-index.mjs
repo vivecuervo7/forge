@@ -15,8 +15,11 @@
 //      a sandboxed JS context. We don't esbuild — meta is always the first
 //      export and is a plain object literal; a regex + new Function() round
 //      handles 100% of the real-world snippet shapes cheaply.
-//   4. Writes a Markdown table to <forge>/snippets/INDEX.md. Snippets are
-//      grouped by `meta.flow` if set; ungrouped land under "Misc."
+//   4. Writes a compact, flow-grouped listing to <forge>/snippets/INDEX.md.
+//      Snippets are grouped by `meta.flow`; ungrouped snippets land in a
+//      `misc` group at the bottom. Each line is
+//        `  - <name>(<args>)  → <description> [phase: ...] [enters: ...] [requires: ...]`
+//      Optional metadata bracket-suffixes are only emitted when present.
 //   5. Idempotent — running twice produces the same file.
 //
 // Schema (see agents/snippet-author.md for the canonical doc):
@@ -128,27 +131,35 @@ function evalMeta(metaSrc, snippetName) {
   }
 }
 
+// Compact arg shorthand: just the names, comma-separated. Returns `()` for
+// zero-arg snippets so the entry shape stays uniform. The full arg metadata
+// (types, optionality, descriptions) lives in the snippet's own meta block
+// — the index is for orientation, not signature lookup.
 function formatArgs(args) {
-  if (!args || typeof args !== 'object') return ''
+  if (!args || typeof args !== 'object') return '()'
   const keys = Object.keys(args)
-  if (keys.length === 0) return '(none)'
-  return keys.map(k => {
-    const v = args[k]
-    if (typeof v === 'string') return `\`${k}\`: ${v}`
-    if (v && typeof v === 'object') {
-      const parts = []
-      if (v.type) parts.push(v.type)
-      if (v.optional) parts.push('optional')
-      if (v.description) parts.push(v.description)
-      return `\`${k}\`${parts.length ? ` (${parts.join(', ')})` : ''}`
-    }
-    return `\`${k}\``
-  }).join('; ')
+  if (keys.length === 0) return '()'
+  return `(${keys.join(', ')})`
 }
 
-function escapeCell(s) {
-  if (s === undefined || s === null) return ''
-  return String(s).replace(/\|/g, '\\|').replace(/\n/g, ' ')
+// Take the first sentence (up to the first period) of a description and cap
+// it at ~120 chars. Newlines collapse to spaces. Returns '' for empty input.
+function compactDescription(desc) {
+  if (desc === undefined || desc === null) return ''
+  let s = String(desc).replace(/\s+/g, ' ').trim()
+  if (s === '') return ''
+  const dotIdx = s.indexOf('.')
+  if (dotIdx !== -1) s = s.slice(0, dotIdx)
+  if (s.length > 120) s = s.slice(0, 117).trimEnd() + '…'
+  return s
+}
+
+// Bracket-suffix only when the field is set and reasonably short.
+function bracketSuffix(label, value, maxLen = 80) {
+  if (value === undefined || value === null) return ''
+  const s = String(value).replace(/\s+/g, ' ').trim()
+  if (s === '' || s.length > maxLen) return ''
+  return ` [${label}: ${s}]`
 }
 
 function buildIndex(snippetsDir, opts = {}) {
@@ -285,16 +296,10 @@ function emitHygieneWarnings(records, opts = {}) {
 
 function renderMarkdown(records) {
   const lines = []
-  lines.push('<!--')
-  lines.push('  AUTO-GENERATED — do not edit by hand.')
-  lines.push('  Refresh with:')
-  lines.push('    node <plugin-root>/scripts/forge-snippet-index.mjs')
-  lines.push('  (or pass an explicit forge root as the first arg)')
-  lines.push('-->')
+  lines.push('# Snippet INDEX (auto-generated)')
+  lines.push('# Refresh: node <plugin-root>/scripts/forge-snippet-index.mjs')
   lines.push('')
-  lines.push('# Snippet library')
-  lines.push('')
-  lines.push(`${records.length} snippet(s) in this library.`)
+  lines.push(`# ${records.length} snippet(s) — grouped by flow:; ungrouped land in misc`)
   lines.push('')
 
   // Group by flow
@@ -305,33 +310,48 @@ function renderMarkdown(records) {
     byFlow.get(flow).push(r)
   }
 
-  // Sort: named flows first (alphabetical), Misc last
+  // Sort: named flows first (alphabetical), misc last.
   const flows = [...byFlow.keys()].sort((a, b) => {
     if (a === '' && b !== '') return 1
     if (b === '' && a !== '') return -1
     return a.localeCompare(b)
   })
 
+  // Pad name(args) within each section so the `→` columns line up loosely.
+  // No global alignment — keeps small sections tight.
   for (const flow of flows) {
-    const heading = flow === '' ? 'Misc.' : `Flow: \`${flow}\``
-    lines.push(`## ${heading}`)
-    lines.push('')
-    lines.push('| Name | Description | Args | Phase |')
-    lines.push('|------|-------------|------|-------|')
-    for (const r of byFlow.get(flow)) {
+    const heading = flow === '' ? 'misc' : `flow: ${flow}`
+    lines.push(heading)
+
+    const section = byFlow.get(flow)
+    const heads = section.map(r => `${r.name}${formatArgs(r.meta.args)}`)
+    const widest = heads.reduce((m, h) => Math.max(m, h.length), 0)
+    // Cap padding so a single long arg list doesn't blow out the section.
+    const padTo = Math.min(widest, 56)
+
+    for (let i = 0; i < section.length; i++) {
+      const r = section[i]
+      const head = heads[i]
+      const padded = head.length >= padTo ? head : head + ' '.repeat(padTo - head.length)
+
       const description = r.error
-        ? `_(${r.error})_`
-        : (r.meta.description || '')
-      const args = formatArgs(r.meta.args)
-      const phase = r.meta.phase || ''
-      lines.push(
-        `| \`${r.name}\` | ${escapeCell(description)} | ${escapeCell(args)} | ${escapeCell(phase)} |`
-      )
+        ? `(${r.error})`
+        : compactDescription(r.meta.description)
+
+      const phase = bracketSuffix('phase', r.meta && r.meta.phase)
+      const enters = bracketSuffix('enters', r.meta && r.meta.enters)
+      const requires = bracketSuffix('requires', r.meta && r.meta.requires)
+
+      const tail = description
+        ? `  → ${description}${phase}${enters}${requires}`
+        : `${phase}${enters}${requires}`
+
+      lines.push(`  - ${padded}${tail}`)
     }
     lines.push('')
   }
 
-  return lines.join('\n')
+  return lines.join('\n').replace(/\n+$/, '\n')
 }
 
 // --- main ---
