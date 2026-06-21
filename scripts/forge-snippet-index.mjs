@@ -42,6 +42,8 @@
 // Usage:
 //   forge-snippet-index.mjs                  # from PWD's forge root
 //   forge-snippet-index.mjs <forge-root>     # explicit forge dir
+//   forge-snippet-index.mjs --verbose        # one stderr line per hygiene issue
+//                                            # (default is a per-category summary)
 //
 // Exit codes:
 //   0   INDEX.md written (or no-op if no snippets directory exists)
@@ -149,7 +151,7 @@ function escapeCell(s) {
   return String(s).replace(/\|/g, '\\|').replace(/\n/g, ' ')
 }
 
-function buildIndex(snippetsDir) {
+function buildIndex(snippetsDir, opts = {}) {
   const entries = readdirSync(snippetsDir)
     .filter(f => f.endsWith('.ts'))
     .sort()
@@ -180,7 +182,7 @@ function buildIndex(snippetsDir) {
     records.push({ name, meta })
   }
 
-  emitHygieneWarnings(records)
+  emitHygieneWarnings(records, opts)
 
   return renderMarkdown(records)
 }
@@ -204,11 +206,24 @@ function descriptionSuggestsFlow(description) {
   return FLOW_WORDS.some(w => lower.includes(w))
 }
 
-function emitHygieneWarnings(records) {
-  let count = 0
-  const warn = (filename, issue) => {
-    console.error(`forge-snippet-index: ${filename}: ${issue}`)
-    count++
+// Category labels — keep short, summary-friendly.
+const HYGIENE_CATEGORIES = {
+  missingDescription: 'snippets with missing or empty description',
+  missingTags: 'snippets with missing meta.tags',
+  tagsNotArray: 'snippets with meta.tags that is not an array',
+  emptyTags: 'snippets with empty tags',
+  noiseTags: "snippets with 'auto-authored' in tags",
+  jiraFilename: 'snippets with Jira-key filename',
+  multiStepNoFlow: 'snippets with multi-step descriptions but no flow/phase',
+}
+
+function emitHygieneWarnings(records, opts = {}) {
+  const { verbose = false } = opts
+  const buckets = Object.fromEntries(
+    Object.keys(HYGIENE_CATEGORIES).map(k => [k, []])
+  )
+  const record = (category, filename, issue) => {
+    buckets[category].push({ filename, issue })
   }
 
   for (const r of records) {
@@ -216,39 +231,55 @@ function emitHygieneWarnings(records) {
     const filename = `${r.name}.ts`
     const meta = r.meta || {}
 
-    // Missing or empty description
     if (!meta.description || (typeof meta.description === 'string' && meta.description.trim() === '')) {
-      warn(filename, 'meta.description is missing or empty')
+      record('missingDescription', filename, 'meta.description is missing or empty')
     }
 
-    // Missing, empty, or noise tags
     if (!('tags' in meta)) {
-      warn(filename, 'meta.tags is missing — supply real tags or compute from flow/phase')
+      record('missingTags', filename, 'meta.tags is missing — supply real tags or compute from flow/phase')
     } else if (!Array.isArray(meta.tags)) {
-      warn(filename, 'meta.tags is not an array')
+      record('tagsNotArray', filename, 'meta.tags is not an array')
     } else if (meta.tags.length === 0) {
-      warn(filename, 'meta.tags is empty — supply real tags or compute from flow/phase')
+      record('emptyTags', filename, 'meta.tags is empty — supply real tags or compute from flow/phase')
     } else if (meta.tags.includes('auto-authored')) {
-      warn(filename, "meta.tags contains 'auto-authored' — replace with discovery-aiding tags")
+      record('noiseTags', filename, "meta.tags contains 'auto-authored' — replace with discovery-aiding tags")
     }
 
-    // Jira-key filename
     if (/^ae-\d+/i.test(r.name)) {
-      warn(filename, 'filename looks like a Jira key — rename to <verb>-<noun>[-<modifier>]')
+      record('jiraFilename', filename, 'filename looks like a Jira key — rename to <verb>-<noun>[-<modifier>]')
     }
 
-    // Missing flow AND phase, when description suggests a multi-step flow
     const hasFlow = meta.flow && String(meta.flow).trim() !== ''
     const hasPhase = meta.phase && String(meta.phase).trim() !== ''
     if (!hasFlow && !hasPhase
         && descriptionSuggestsFlow(meta.description)
         && !isLeafPrimitive(r.name)) {
-      warn(filename, 'description suggests a multi-step flow but neither meta.flow nor meta.phase is set')
+      record('multiStepNoFlow', filename, 'description suggests a multi-step flow but neither meta.flow nor meta.phase is set')
     }
   }
 
-  if (count > 0) {
-    console.error(`forge-snippet-index: ${count} hygiene warning(s) — review agents/snippet-author.md`)
+  // In verbose mode, emit every per-snippet warning before the summary.
+  if (verbose) {
+    for (const category of Object.keys(buckets)) {
+      for (const { filename, issue } of buckets[category]) {
+        console.error(`forge-snippet-index: ${filename}: ${issue}`)
+      }
+    }
+  }
+
+  // Summary: one line per non-empty category, then the review pointer.
+  let total = 0
+  for (const category of Object.keys(buckets)) {
+    const count = buckets[category].length
+    if (count === 0) continue
+    total += count
+    const label = HYGIENE_CATEGORIES[category]
+    console.error(`forge-snippet-index: ${count} ${label}`)
+  }
+  if (total > 0 && !verbose) {
+    console.error('forge-snippet-index: re-run with --verbose for per-snippet detail; see agents/snippet-author.md for hygiene guidance')
+  } else if (total > 0) {
+    console.error('forge-snippet-index: review hygiene warnings — see agents/snippet-author.md')
   }
 }
 
@@ -305,7 +336,10 @@ function renderMarkdown(records) {
 
 // --- main ---
 
-const explicitRoot = process.argv[2]
+const args = process.argv.slice(2)
+const verbose = args.includes('--verbose')
+const positional = args.filter(a => !a.startsWith('--'))
+const explicitRoot = positional[0]
 let forgeRoot
 if (explicitRoot) {
   const resolved = resolve(explicitRoot)
@@ -332,7 +366,7 @@ if (!existsSync(snippetsDir) || !statSync(snippetsDir).isDirectory()) {
   process.exit(0)
 }
 
-const md = buildIndex(snippetsDir)
+const md = buildIndex(snippetsDir, { verbose })
 const outPath = join(snippetsDir, 'INDEX.md')
 writeFileSync(outPath, md + '\n', 'utf8')
 console.log(`forge-snippet-index: wrote ${outPath}`)
