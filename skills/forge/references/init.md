@@ -1,12 +1,12 @@
 # /forge — init reference
 
-This reference is loaded by `/forge`'s router for the **init** route. The router has stripped the `init` keyword from the args; the remaining text (possibly empty) is an optional target directory.
+Loaded by `/forge`'s router for the **init** route. The router stripped the `init` keyword; the remaining text (possibly empty) is an optional target directory.
 
-**Placeholder note.** `<PLUGIN_ROOT>` in the bash commands below is a placeholder — substitute the literal path the router captured in SKILL.md phase 1.0. Do **not** use `${CLAUDE_PLUGIN_ROOT}` here: the env var isn't reliably populated in the bash context that runs from this reference.
+**Placeholder note.** `<PLUGIN_ROOT>` in the bash commands below — substitute the literal path captured in SKILL.md phase 1.0. Do **not** use `${CLAUDE_PLUGIN_ROOT}` here: the env var isn't reliably populated in this bash context.
 
 ## What this route does
 
-Scaffolds the canonical `forge/` directory layout into a project. Run this once at the start of using forge against any new project; it sets up the directory structure and writes the hint-authoring guidance the user will need.
+Scaffolds the canonical `forge/` layout into a project. Run once at the start of using forge against a new project; sets up the directory and writes hint-authoring guidance.
 
 ## What gets created
 
@@ -20,9 +20,9 @@ Scaffolds the canonical `forge/` directory layout into a project. Run this once 
         └── README.md       # gitignored: local guidance for authoring hints
 ```
 
-Everything else under `forge/` (snippets, specs, videos, transcripts) is created lazily by other routes as they write into it. After scaffolding, the user authors hint files in `forge/hints/` describing their project's specifics.
+Everything else under `forge/` (snippets, specs, videos, transcripts) is created lazily by other routes. After scaffolding, the user authors hint files in `forge/hints/`.
 
-Env handling is delegated to the user. The scaffolded playwright config has a commented-out dotenv-loading line — uncomment it to have forge load `forge/.env` on each spec run, or leave it commented and use direnv / dotenv-cli / shell exports / whatever fits the project.
+Env handling is delegated to the user. The scaffolded playwright config has a commented-out dotenv-loading line — uncomment to load `forge/.env` on each spec run, or leave it commented and use direnv / dotenv-cli / shell exports.
 
 ## Invocation
 
@@ -36,13 +36,13 @@ Where `$ARGUMENTS` is the route-stripped remainder (possibly empty).
 
 ## Idempotency
 
-The script preserves existing files. If `forge/.gitignore` already exists, it's left alone (the user may have customized it). Same for `README.md`, the hints README, the playwright config, and `.env`. Re-running after authoring custom hints is safe — it'll only fill in anything missing.
+The script preserves existing files (`.gitignore`, `README.md`, hints README, playwright config, `.env`). Re-running is safe — only fills in what's missing.
 
 ## Hard rules
 
-- **Invoke the script, don't write files yourself.** It's the source of truth for the scaffold contents and ensures idempotency.
-- **Surface the script's output verbatim.** It reports what it created and what it preserved; that's the information the user wants.
-- **Hint authoring is the user's job.** The script creates the scaffold; authoring `forge.md`, `driver.md`, etc. is the user's responsibility (with optional help from forge in subsequent invocations).
+- **Invoke the script; don't write files yourself.** It's the source of truth for scaffold contents and ensures idempotency.
+- **Surface the script's output verbatim.** It reports what it created and preserved.
+- **Hint authoring is the user's job.** The script creates the scaffold; authoring `forge.md`, `driver.md`, etc. is the user's responsibility (with optional help in subsequent invocations).
 
 ## Output expected
 
