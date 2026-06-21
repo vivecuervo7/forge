@@ -1,6 +1,6 @@
-# /forge — team-task reference (drive + spec modes)
+# /forge — team-task reference (base, drive mode)
 
-This reference is loaded by `/forge`'s router for **task** and **spec** routes. The router has already:
+This reference is loaded by `/forge`'s router for the **task** and **spec** routes. The router has already:
 
 - Decided `MODE` (one of `drive` | `spec`)
 - Stripped any leading `spec` keyword from the task description
@@ -8,16 +8,20 @@ This reference is loaded by `/forge`'s router for **task** and **spec** routes. 
 
 **Placeholder note.** `<PLUGIN_ROOT>` in the bash commands below is a placeholder — substitute the literal path captured by the router. Do **not** use `${CLAUDE_PLUGIN_ROOT}` here: the env var isn't reliably populated in the bash context that runs from this reference.
 
+**If `MODE=spec`, also load `references/team-task-spec.md`** — it adds Phase 2.3 spec tasks, Phase 3.3/3.4 spec spawns, and the spec-mode final report shape. Otherwise skip; this base file is sufficient for drive mode.
+
 Below is the full lifecycle for running an agent team against an ephemeral chromium session. You are the **team lead**: you manage lifecycle (session creation, team creation, task coordination, shutdown, cleanup) while teammates do the actual work via mesh communication. **You do not relay content between teammates — they SendMessage each other directly.** Your job is setup, lifecycle, and the user channel.
 
-`MODE` shapes everything:
+Drive-mode lifecycle at a glance:
 
-| Step | drive mode | spec mode |
-|---|---|---|
-| Tasks created in phase 2.3 | 2 (driver, snippet-author) | 4 (driver, snippet-author, spec-writer, spec-verifier) |
-| Teammates spawned in phase 3 | driver, snippet-author | driver, snippet-author, spec-writer, spec-verifier |
-| Completion pings to wait for in phase 4 | 2 | 4 |
-| Final report | "drove the task" | "drove the task + verified spec" |
+| Step | drive mode |
+|---|---|
+| Tasks created in phase 2.3 | 2 (driver, snippet-author) |
+| Teammates spawned in phase 3 | driver, snippet-author |
+| Completion pings to wait for in phase 4 | 2 |
+| Final report | "drove the task" |
+
+Spec mode adds two more teammates, two more pings, and a verified-spec line — see the spec addendum.
 
 ## Prerequisite
 
@@ -107,7 +111,7 @@ Creates the team config at `~/.claude/teams/<TEAM_NAME>/config.json` and task li
 
 ### 2.3. Create the tasks
 
-Always create the driver + snippet-author tasks. Add the spec-writer + spec-verifier tasks **only in spec mode**.
+Create the driver + snippet-author tasks.
 
 ```
 TaskCreate(
@@ -123,38 +127,13 @@ TaskCreate(
 # Note as SNIPPET_AUTHOR_TASK_ID.
 ```
 
-**If MODE == spec**, also create:
-
-```
-TaskCreate(
-  subject="spec-writer: produce self-contained spec from drive",
-  description="Wait for driver's final-state summary at end of drive. Compose a self-contained .spec.ts in <FORGE_ROOT>/specs/ that reproduces the user task: import + compose snippets for invoked steps, inline code for fresh-drive steps, assert on captured values. Spec must be runnable from cold start. SendMessage `spec-verifier` the spec path when done. Mark complete after."
-)
-# Note as SPEC_WRITER_TASK_ID.
-
-TaskCreate(
-  subject="spec-verifier: run spec from a cold context, confirm it passes",
-  description="Wait for spec-writer's 'spec ready' message. Run the spec via `forge-run-spec.mjs --spec <path>`. Mirror the drive's conditions: fresh browser context, env loaded via forge.md's recipe if it has one (same prefix the driver used). On pass: ping team-lead with verified-from-fresh status. On fail: SendMessage driver (selectors) or spec-writer (assertions/imports) for clarification, iterate up to 3 times, then either succeed or escalate. Mark complete when done."
-)
-# Note as SPEC_VERIFIER_TASK_ID.
-```
+**If MODE == spec**, also create the spec-writer + spec-verifier tasks (see `team-task-spec.md` Phase 2.3).
 
 Don't set ownership in TaskCreate — teammates claim their own tasks.
 
 ## Phase 3 — Spawn the teammates
 
-Always spawn driver + snippet-author. In spec mode, also spawn spec-writer + spec-verifier.
-
-### 3.0. Load spec-mode addenda (spec mode only — skip in drive mode)
-
-Drive spawns send agents lean prompts; spec mode adds protocol that lives in separate addendum files so it only loads when needed. **If `MODE == spec`**, read both addenda before spawning:
-
-```bash
-cat <PLUGIN_ROOT>/skills/forge/references/spec-addenda/driver.md
-cat <PLUGIN_ROOT>/skills/forge/references/spec-addenda/snippet-author.md
-```
-
-Capture each as `DRIVER_SPEC_ADDENDUM` and `AUTHOR_SPEC_ADDENDUM`. Inline them into the driver and snippet-author spawn prompts below. **In drive mode, skip this step entirely** — the addendum block is omitted from the spawn prompts.
+Spawn driver + snippet-author. **If `MODE == spec`**, follow `team-task-spec.md` Phase 3.0 to load agent-level spec addenda, then 3.3/3.4 to spawn the spec-writer + spec-verifier after the two below.
 
 ### 3.1. Spawn the driver
 
@@ -204,38 +183,7 @@ Your task is referenced as ID <SNIPPET_AUTHOR_TASK_ID> for the team's records. R
 )
 ```
 
-### 3.3. Spawn the spec-writer (spec mode only — skip in drive mode)
-
-```
-Agent(
-  description="Compose spec",
-  subagent_type="forge:spec-writer",
-  team_name="<TEAM_NAME>",
-  name="spec-writer",
-  prompt="TEAM_NAME: <TEAM_NAME>
-PROJECT_FORGE_ROOT: <FORGE_ROOT>
-USER_TASK: <user's task verbatim>
-
-Your task is referenced as ID <SPEC_WRITER_TASK_ID> for the team's records. Read your hints (forge.md + spec-writer.md from <FORGE_ROOT>/hints/) as step 1, then wait for BOTH the driver's final-state message AND snippet-author's 'snippets ready' message before composing."
-)
-```
-
-### 3.4. Spawn the spec-verifier (spec mode only — skip in drive mode)
-
-```
-Agent(
-  description="Verify spec from cold",
-  subagent_type="forge:spec-verifier",
-  team_name="<TEAM_NAME>",
-  name="spec-verifier",
-  prompt="TEAM_NAME: <TEAM_NAME>
-PROJECT_FORGE_ROOT: <FORGE_ROOT>
-PLUGIN_ROOT: <PLUGIN_ROOT>
-USER_TASK: <user's task verbatim>
-
-Your task is referenced as ID <SPEC_VERIFIER_TASK_ID> for the team's records. Read your hints (forge.md + spec-verifier.md from <FORGE_ROOT>/hints/) as step 1, then wait for spec-writer's 'spec ready' message."
-)
-```
+In spec mode, follow `team-task-spec.md` Phase 3.3 (spawn spec-writer) and 3.4 (spawn spec-verifier) before proceeding to Phase 4.
 
 ## Phase 4 — Wait for team to finish
 
@@ -243,7 +191,7 @@ After spawning, teammates self-coordinate. You wait. Messages auto-deliver as ne
 
 **What to watch for:**
 
-- **Completion pings from spawned teammates** — primary signal that the team is done. Drive mode: 2 pings (driver + snippet-author). Spec mode: 4 pings. Each teammate SendMessages `team-lead` with `task <id> complete` when finished. Proceed to phase 5 only after all expected pings. Spec mode natural order: driver/snippet-author → spec-writer → spec-verifier.
+- **Completion pings from spawned teammates** — primary signal that the team is done. Drive mode: 2 pings (driver + snippet-author). In spec mode the count rises — see `team-task-spec.md` Phase 4. Each teammate SendMessages `team-lead` with `task <id> complete` when finished. Proceed to phase 5 only after all expected pings.
 - **Messages addressed to you (`team-lead`)** — process them:
   - **STUCK from any teammate** — plain text with `STUCK` as first line, then `QUESTION:`, `CONTEXT:`, optionally `OPTIONS:` (`- <label> | value: <value>`). Surface via `AskUserQuestion`:
     - Build the question from `QUESTION:`.
@@ -305,7 +253,7 @@ On-demand loading keeps the lead's prompt lean on happy-path runs.
 
 ## Phase 5 — Shut down and clean up
 
-Once all spawned teammates' completion pings have arrived (drive mode: 2; spec mode: 4):
+Once all spawned teammates' completion pings have arrived (drive mode: 2; spec mode adds two more — see `team-task-spec.md`):
 
 ### 5.1. Request shutdown
 
@@ -357,9 +305,7 @@ Best-effort. If `playwright-cli close` errors or chromium survives, fall back to
 
 ### 5.4. Report to the user
 
-Compose a tight summary.
-
-**Drive mode:**
+Compose a tight summary. Drive-mode shape:
 
 > <driver's final-result one-liner>
 >
@@ -372,26 +318,9 @@ Compose a tight summary.
 >
 > Browser session closed. Team cleaned up.
 
-**Spec mode:**
+In spec mode, use the extended shape in `team-task-spec.md` Phase 5.4 — it adds the spec-writer and spec-verifier lines.
 
-> <driver's final-result one-liner>
->
-> Snippet-author wrote N snippet(s):
->   - <name1> — <description>
-> (or: "Snippet-author wrote 0 snippets — drive's work was covered by existing library.")
->
-> Spec-writer wrote `<name>.spec.ts` composing <list of snippets> and asserting <one-liner>.
-> (or: "Spec-writer updated `<name>.spec.ts` in place" / "No new spec — existing one covers this.")
->
-> Spec-verifier ran `<name>.spec.ts` — **passed** in <duration>.
-> (or: "Spec-verifier ran spec, FAILED after 3 iterations — escalated. See <details>.")
->
-> Hint files updated: <one line per file with summary>.
-> (Omit this header entirely if no proposals were surfaced or all were rejected.)
->
-> Slot released. Team cleaned up.
-
-If anything didn't go to plan (a teammate returned `cannot-drive`, spec-verifier escalated, snippet invocation failed mid-drive), surface prominently — the user wants the truth, not a sanitized success report.
+If anything didn't go to plan (a teammate returned `cannot-drive`, snippet invocation failed mid-drive, etc.), surface prominently — the user wants the truth, not a sanitized success report.
 
 ### 5.4a. Append cleanup nudge (if captured in 1.3a)
 

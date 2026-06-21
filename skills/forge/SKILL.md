@@ -21,7 +21,7 @@ Look at the first word of `$ARGUMENTS` (case-insensitive). The dispatch table:
 | `run` | re-run a verified spec, optionally recording | `references/run.md` | spec name / `last` / `latest`, plus optional `record as <label>` |
 | `teach` | teach mode — user pilots forge to curate snippets | `references/teach.md` | optional session-framing topic |
 | `clean` | tidy snippet library + hint files | `references/clean.md` | optional scope: `snippets` \| `hints` \| `both` |
-| `spec` | spec mode — drive + write spec + verify | `references/team-task.md` (with `MODE=spec`) | the actual task description |
+| `spec` | spec mode — drive + write spec + verify | `references/team-task.md` + `references/team-task-spec.md` (with `MODE=spec`) | the actual task description |
 | *(anything else)* | (see natural-language signals below; default fallback is the task route) | `references/team-task.md` (with `MODE=drive`) | the full args = task description |
 
 ### Natural-language route signals (when first word doesn't match)
@@ -140,7 +140,7 @@ cat <PLUGIN_ROOT>/skills/forge/references/<reference>.md
 (Substitute the literal value captured in 1.0 for `<PLUGIN_ROOT>`.)
 
 Where `<reference>` is one of:
-- `team-task.md` (for task/spec routes — carries `MODE` into its instructions)
+- `team-task.md` (for task/spec routes — carries `MODE` into its instructions). In spec mode, also load `team-task-spec.md` after it — the addendum carries Phase 2.3 spec tasks, Phase 3.3/3.4 spec spawns, and the spec-mode final-report shape.
 - `teach.md` (for teach route — carries the optional session-framing topic)
 - `init.md` (for init route)
 - `export.md` (for export route)
@@ -162,7 +162,7 @@ When passing context into the reference's work, include the captured route-speci
 ## Hard rules
 
 - **You are a router.** Don't attempt to do the route's work from this SKILL.md — load the reference first. The references are where the actual instructions live.
-- **Only load one reference per invocation.** Don't pull in references for routes you didn't dispatch to.
+- **Only load the route's reference(s).** Don't pull in references for routes you didn't dispatch to. The spec route legitimately loads two: `team-task.md` + `team-task-spec.md`. Every other route loads one.
 - **Route keyword recognition is case-insensitive but exact-match on the first word.** `Init` matches `init`. `spec-fixup` does NOT match the `spec` route (it's a fresh task with the word "spec" in it — natural-language detection in phase 0a may still pull it into spec mode, that's fine).
 - **If the user's input is ambiguous about which route they want, ask via AskUserQuestion** rather than guessing. The routes are distinct enough that the user should be definitive.
 
