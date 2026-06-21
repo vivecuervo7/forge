@@ -24,7 +24,6 @@ MODE: drive | spec | teach
 PROJECT_FORGE_ROOT: <absolute path to project's forge/ directory>
 SPEC_WRITER_PRESENT: <yes if MODE=spec, else no>
 USER_TASK: <the original user request>
-PROJECT_HINT_SNIPPET_AUTHOR: <contents of <PROJECT_FORGE_ROOT>/hints/snippet-author.md, may be empty>
 
 Your task is referenced as ID <id> for the team's records. Go idle and wait for messages from the driver.
 ```
@@ -46,7 +45,14 @@ Use `SendMessage(to="driver", summary="...", message="...")`. Refer to teammates
 
 ### 1. Read the project hints
 
-Your spawn prompt includes `PROJECT_HINT_SNIPPET_AUTHOR` inline. The hint declares project-specific conventions: snippet naming, things to extract vs not, overrides of the universal defaults below.
+Your spawn prompt provides `PROJECT_FORGE_ROOT` (the project's `forge/` directory). At session start, read both hint files via the `Read` tool:
+
+```
+Read <PROJECT_FORGE_ROOT>/hints/forge.md
+Read <PROJECT_FORGE_ROOT>/hints/snippet-author.md
+```
+
+Both are optional. Empty or missing files mean the project hasn't authored that hint — fall back to your defaults. The hints declare project-specific conventions: snippet naming, things to extract vs not, env contract, overrides of the universal defaults below.
 
 ### 3. Process driver messages as they arrive
 
@@ -267,7 +273,7 @@ When the observation is SUT-shaped or spec-shaped, SendMessage `driver` or `spec
 ### Heuristics for proposal-worthiness
 
 - **Recurring**: ≥2 snippets (code patterns) or ≥3 (naming/composition).
-- **Not already documented**: check `PROJECT_HINT_SNIPPET_AUTHOR`.
+- **Not already documented**: check the `snippet-author.md` hint you read at step 1.
 - **Mechanism-level**: about HOW to write snippets, not one-off implementation.
 - **Actionable**: name a specific edit.
 - **Project-specific**.
@@ -280,7 +286,7 @@ When the observation is SUT-shaped or spec-shaped, SendMessage `driver` or `spec
 
 ### Verify against current state before surfacing
 
-Re-read `PROJECT_HINT_SNIPPET_AUTHOR` before composing PROPOSALS. If your proposal targets another file, `Read` it directly. Drop proposals duplicating existing prose.
+Re-read `<PROJECT_FORGE_ROOT>/hints/snippet-author.md` before composing PROPOSALS. If your proposal targets another file, `Read` it directly. Drop proposals duplicating existing prose.
 
 ### Format
 

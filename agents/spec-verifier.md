@@ -45,7 +45,18 @@ Use `SendMessage(to=<name>, summary="...", message="...")`.
 
 ## How to run
 
-### 1. Wait for the spec
+### 1. Read the project hints
+
+Your spawn prompt provides `PROJECT_FORGE_ROOT` (the project's `forge/` directory). At session start, read both hint files via the `Read` tool:
+
+```
+Read <PROJECT_FORGE_ROOT>/hints/forge.md
+Read <PROJECT_FORGE_ROOT>/hints/spec-verifier.md
+```
+
+Both are optional. Empty or missing files mean the project hasn't authored that hint — fall back to your defaults. The hints encode project-specific knowledge (env contract, recurring failure modes, timing patterns).
+
+### 2. Wait for the spec
 
 While driver + snippet-author + spec-writer phases run, you are mostly idle. When spec-writer sends "spec ready", proceed.
 
@@ -164,7 +175,7 @@ For snippet/spec fixes, SendMessage `snippet-author` or `spec-writer` during the
 ### Heuristics for proposal-worthiness
 
 - **Recurring**: ≥2 occurrences OR a high-signal one-off (e.g. redirect-to-login external-collision).
-- **Not already documented**: check `PROJECT_HINT_SPEC_VERIFIER` and `PROJECT_HINT_FORGE`.
+- **Not already documented**: check the `spec-verifier.md` and `forge.md` hints you read at step 1.
 - **Mechanism-level**, **actionable**, **project-specific**.
 
 ### Discipline before emitting an ADD
@@ -172,7 +183,7 @@ For snippet/spec fixes, SendMessage `snippet-author` or `spec-writer` during the
 Walk every ADD through three checks. They catch the common drift mode here — proposing a verifier-hint when the real problem is a snippet needing patch:
 
 - **Is the content code-shaped?** If `SUGGESTED_EDIT` carries more than 3 lines of fenced code, it belongs *inside* a snippet. Narrate to `snippet-author` as an AMEND target, or skip.
-- **Does another hint file already cover this?** Skim `PROJECT_HINT_SPEC_VERIFIER`, `PROJECT_HINT_FORGE`, and (via `Read`) other `<PROJECT_FORGE_ROOT>/hints/*.md` before emitting.
+- **Does another hint file already cover this?** Skim the `spec-verifier.md` and `forge.md` hints you read at step 1, and (via `Read`) other `<PROJECT_FORGE_ROOT>/hints/*.md` before emitting.
 - **Is this a snippet-bug symptom?** When verification failed because a snippet behaved differently than the drive captured, the FIRST candidate fix is a snippet AMEND, not a verifier hint. Surface via the iteration cycle (step 4b). Only propose a verifier-hint when the issue is **verification-level**: cold-start timing the drive didn't hit, env setup the snippet shouldn't own, test isolation gaps (parallel-run collisions, shared-fixture cleanup). If a snippet could absorb the fix, it should.
 
 ### Action types
@@ -181,7 +192,7 @@ Walk every ADD through three checks. They catch the common drift mode here — p
 
 ### Verify against current state before surfacing
 
-Re-read `PROJECT_HINT_SPEC_VERIFIER` and `PROJECT_HINT_FORGE` to confirm suggested edits aren't already present.
+Re-read `<PROJECT_FORGE_ROOT>/hints/spec-verifier.md` and `<PROJECT_FORGE_ROOT>/hints/forge.md` to confirm suggested edits aren't already present.
 
 ### Format
 

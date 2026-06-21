@@ -39,19 +39,15 @@ If it fails (exit non-zero), relay verbatim and stop. The user needs `/forge ini
 
 Capture as `FORGE_ROOT`.
 
-### 1.2. Load the hints
+### 1.2. Load the forge.md hint (lead-only)
 
 ```bash
-cat <FORGE_ROOT>/hints/forge.md          2>/dev/null || echo ""
-cat <FORGE_ROOT>/hints/driver.md         2>/dev/null || echo ""
-cat <FORGE_ROOT>/hints/snippet-author.md 2>/dev/null || echo ""
-cat <FORGE_ROOT>/hints/spec-writer.md    2>/dev/null || echo ""
-cat <FORGE_ROOT>/hints/spec-verifier.md  2>/dev/null || echo ""
+cat <FORGE_ROOT>/hints/forge.md 2>/dev/null || echo ""
 ```
 
-Capture each. Inline whatever you got in the spawn prompts so teammates don't read the files themselves. Empty string is fine — teammates fall back to defaults.
+You need `forge.md` for persona/account resolution and the optional setup/teardown sections in Phases 1.4 and 5.2b. The other hint files (`driver.md`, `snippet-author.md`, `spec-writer.md`, `spec-verifier.md`) are each read by their respective agent — the lead doesn't carry them. Empty string is fine; teammates fall back to defaults.
 
-All five hints are optional. A bare `/forge init` scaffold drives correctly; hints encode project-specific knowledge agents can't derive from the app itself.
+All hints are optional. A bare `/forge init` scaffold drives correctly; hints encode project-specific knowledge agents can't derive from the app itself.
 
 ### 1.3. Generate a session name
 
@@ -173,12 +169,6 @@ MODE: <MODE>
 SPEC_WRITER_PRESENT: <yes if MODE=spec, else no>
 SESSION_NAME: <SESSION_NAME>
 PROJECT_FORGE_ROOT: <FORGE_ROOT>
-PROJECT_HINT_FORGE:
-<forge.md contents>
-
-PROJECT_HINT_DRIVER:
-<driver.md contents, or 'none' if missing>
-
 USER_TASK: <user's task verbatim>
 
 <if MODE == spec, include the block:>
@@ -186,7 +176,7 @@ SPEC MODE ADDENDUM:
 <DRIVER_SPEC_ADDENDUM verbatim>
 <end conditional block — omit entirely in drive mode>
 
-Your task is referenced as ID <DRIVE_TASK_ID> for the team's records. Begin driving. The forge.md hint documents how this project describes its test accounts / credential scheme — read it and follow it when the user names an account or role. SendMessage `snippet-author` with structured summaries after meaningful steps. When done, SendMessage `snippet-author` with summary='drive complete', then SendMessage team-lead, then go idle — snippet-author may have follow-up questions."
+Your task is referenced as ID <DRIVE_TASK_ID> for the team's records. Read your hints (forge.md + driver.md from <FORGE_ROOT>/hints/) as step 1, then begin driving."
 )
 ```
 
@@ -204,15 +194,13 @@ Agent(
 PROJECT_FORGE_ROOT: <FORGE_ROOT>
 SPEC_WRITER_PRESENT: <yes if MODE=spec, else no>
 USER_TASK: <user's task verbatim>
-PROJECT_HINT_SNIPPET_AUTHOR:
-<snippet-author.md contents, or 'none' if missing>
 
 <if MODE == spec, include the block:>
 SPEC MODE ADDENDUM:
 <AUTHOR_SPEC_ADDENDUM verbatim>
 <end conditional block — omit entirely in drive mode>
 
-Your task is referenced as ID <SNIPPET_AUTHOR_TASK_ID> for the team's records. Wait for driver messages. Process messages as they arrive; write snippets to <FORGE_ROOT>/snippets/; SendMessage `driver` with clarifying questions if needed. Wait for the driver's `drive complete` signal before wrapping up. When you've received that signal and authored everything, SendMessage team-lead."
+Your task is referenced as ID <SNIPPET_AUTHOR_TASK_ID> for the team's records. Read your hints (forge.md + snippet-author.md from <FORGE_ROOT>/hints/) as step 1, then wait for driver messages."
 )
 ```
 
@@ -227,10 +215,8 @@ Agent(
   prompt="TEAM_NAME: <TEAM_NAME>
 PROJECT_FORGE_ROOT: <FORGE_ROOT>
 USER_TASK: <user's task verbatim>
-PROJECT_HINT_SPEC_WRITER:
-<spec-writer.md contents from <FORGE_ROOT>/hints/spec-writer.md, or 'none' if missing>
 
-Your task is referenced as ID <SPEC_WRITER_TASK_ID> for the team's records. Wait for BOTH the driver's final-state message AND snippet-author's 'snippets ready' message before composing — the library may still be accruing when the driver finishes. Once both have arrived, write a self-contained .spec.ts to <FORGE_ROOT>/specs/ that composes snippets for invoked steps and inlines code for fresh-drive steps. Add assertions on captured values. When done, SendMessage `spec-verifier` with the spec path so they can verify it, then SendMessage team-lead."
+Your task is referenced as ID <SPEC_WRITER_TASK_ID> for the team's records. Read your hints (forge.md + spec-writer.md from <FORGE_ROOT>/hints/) as step 1, then wait for BOTH the driver's final-state message AND snippet-author's 'snippets ready' message before composing."
 )
 ```
 
@@ -246,10 +232,8 @@ Agent(
 PROJECT_FORGE_ROOT: <FORGE_ROOT>
 PLUGIN_ROOT: <PLUGIN_ROOT>
 USER_TASK: <user's task verbatim>
-PROJECT_HINT_SPEC_VERIFIER:
-<spec-verifier.md contents from <FORGE_ROOT>/hints/spec-verifier.md, or 'none' if missing>
 
-Your task is referenced as ID <SPEC_VERIFIER_TASK_ID> for the team's records. Wait for spec-writer's 'spec ready' message. Run the spec via `forge-run-spec.mjs --spec <path>`, mirroring the drive's conditions: fresh browser context, env loaded via forge.md's recipe if present (same prefix the driver used). On pass, ping team-lead with verified-from-fresh status. On fail, ask driver (selectors) or spec-writer (assertions) for clarification, iterate up to 3 times, then succeed or escalate."
+Your task is referenced as ID <SPEC_VERIFIER_TASK_ID> for the team's records. Read your hints (forge.md + spec-verifier.md from <FORGE_ROOT>/hints/) as step 1, then wait for spec-writer's 'spec ready' message."
 )
 ```
 

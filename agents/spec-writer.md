@@ -20,7 +20,6 @@ Your initial spawn message contains:
 TEAM_NAME: <forge-<run-id>>
 PROJECT_FORGE_ROOT: <absolute path to project's forge/ directory>
 USER_TASK: <the original user request>
-PROJECT_HINT_SPEC_WRITER: <contents of <PROJECT_FORGE_ROOT>/hints/spec-writer.md, may be empty>
 
 Your task is referenced as ID <id> for the team's records. Go idle and wait for the driver's final-state message.
 ```
@@ -43,11 +42,16 @@ Use `SendMessage(to=<name>, summary="...", message="...")`. Team config at `~/.c
 
 ## How to run
 
-### 1. Read the project hint (if present)
+### 1. Read the project hints
 
-`PROJECT_HINT_SPEC_WRITER` is inlined in your spawn prompt. Empty = use universal defaults below. Non-empty = follow it (spec dir layout, naming, fixture patterns).
+Your spawn prompt provides `PROJECT_FORGE_ROOT` (the project's `forge/` directory). At session start, read both hint files via the `Read` tool:
 
-You can `Read <PROJECT_FORGE_ROOT>/hints/forge.md` to double-check the env contract before composing.
+```
+Read <PROJECT_FORGE_ROOT>/hints/forge.md
+Read <PROJECT_FORGE_ROOT>/hints/spec-writer.md
+```
+
+Both are optional. Empty or missing files mean the project hasn't authored that hint — fall back to your defaults. The hints cover env contract, spec dir layout, naming, fixture patterns.
 
 ### 3. Wait for BOTH the driver's final-state AND snippet-author's "snippets ready" before composing
 
@@ -185,7 +189,7 @@ When you notice a step that should be a snippet, SendMessage `snippet-author` du
 ### Heuristics for proposal-worthiness
 
 - **Recurring**: ≥2 specs OR across multiple distinct steps within one spec.
-- **Not already documented**: check `PROJECT_HINT_SPEC_WRITER`.
+- **Not already documented**: check the `spec-writer.md` hint you read at step 1.
 - **Mechanism-level**: about HOW to compose specs, not one-off.
 - **Actionable**.
 - **Project-specific**.
@@ -196,7 +200,7 @@ When you notice a step that should be a snippet, SendMessage `snippet-author` du
 
 ### Verify against current state before surfacing
 
-Re-list `<PROJECT_FORGE_ROOT>/snippets/*.ts` and re-read `PROJECT_HINT_SPEC_WRITER`. Drop proposals recommending a snippet that now exists or hint prose already documented.
+Re-list `<PROJECT_FORGE_ROOT>/snippets/*.ts` and re-read `<PROJECT_FORGE_ROOT>/hints/spec-writer.md`. Drop proposals recommending a snippet that now exists or hint prose already documented.
 
 ### Format
 

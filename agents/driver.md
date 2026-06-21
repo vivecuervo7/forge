@@ -24,14 +24,12 @@ MODE: drive | spec | teach
 SPEC_WRITER_PRESENT: yes | no
 SESSION_NAME: <playwright-cli session name, e.g. ft-4bff4b36>
 PROJECT_FORGE_ROOT: <absolute path to project's forge/ directory>
-PROJECT_HINT_FORGE: <inlined contents of forge.md>
-PROJECT_HINT_DRIVER: <inlined contents of driver.md, may be empty>
 USER_TASK: <user's task verbatim>
 
 Your task is referenced as ID <id> for the team's records. Begin driving. Narrate meaningful steps to `snippet-author` via SendMessage. When done, SendMessage team-lead and go idle.
 ```
 
-The user's environment provides project env values via `process.env` (from their shell direnv, an optionally-uncommented dotenv loader in `forge/playwright.config.ts`, or whatever the project's hint contract describes). When the user names a test account or role ("log in as admin", "drive as customer X"), read `PROJECT_HINT_FORGE` for how the project maps those names to env keys (SQL minting recipe, vault, whatever scheme the project documents). To pass env values into snippet invocations, use **native shell expansion** in your Bash commands — see "Environment variables" in the Hard rules section.
+The user's environment provides project env values via `process.env` (from their shell direnv, an optionally-uncommented dotenv loader in `forge/playwright.config.ts`, or whatever the project's hint contract describes). When the user names a test account or role ("log in as admin", "drive as customer X"), read `<PROJECT_FORGE_ROOT>/hints/forge.md` for how the project maps those names to env keys (SQL minting recipe, vault, whatever scheme the project documents). To pass env values into snippet invocations, use **native shell expansion** in your Bash commands — see "Environment variables" in the Hard rules section.
 
 If the prompt is genuinely underspecified, SendMessage `team-lead` rather than driving blind.
 
@@ -47,7 +45,14 @@ Use `SendMessage(to=<name>, summary="...", message="...")`. Refer to teammates b
 
 ### 1. Read the hints
 
-The hints are inlined in your spawn prompt (`PROJECT_HINT_FORGE`, `PROJECT_HINT_DRIVER`). They cover env contract, app structure, route map, common selectors, per-account quirks.
+Your spawn prompt provides `PROJECT_FORGE_ROOT` (the project's `forge/` directory). At session start, read both hint files via the `Read` tool:
+
+```
+Read <PROJECT_FORGE_ROOT>/hints/forge.md
+Read <PROJECT_FORGE_ROOT>/hints/driver.md
+```
+
+Both are optional. Empty or missing files mean the project hasn't authored that hint — fall back to your defaults. The hints encode project-specific knowledge (env contract, app structure, route map, common selectors, per-account quirks). Read them carefully before driving.
 
 ### 3. Scan the project's snippet library
 
@@ -132,9 +137,9 @@ The `--args` value is the JSON-encoded args object matching the snippet's `meta.
 
 **For args sourced from env vars: use native shell expansion** (`$ADMIN_USERNAME`) inside the `--args` JSON. See "Environment variables" in the Hard rules section.
 
-For **account / role resolution**: when the user names an account ("log in as admin"), read `PROJECT_HINT_FORGE` for how the project describes its accounts (env keys, SQL minting recipe, vault, whatever). Reference any env keys via shell expansion.
+For **account / role resolution**: when the user names an account ("log in as admin"), consult the `forge.md` hint you read at step 1 for how the project describes its accounts (env keys, SQL minting recipe, vault, whatever). Reference any env keys via shell expansion.
 
-If `PROJECT_HINT_FORGE` doesn't document accounts and the user names one, STUCK to team-lead — user needs to add it to the hint or rephrase.
+If `forge.md` doesn't document accounts and the user names one, STUCK to team-lead — user needs to add it to the hint or rephrase.
 
 If invocation succeeds, SendMessage `snippet-author` with an **invoked** summary.
 
@@ -264,7 +269,7 @@ When something is clearly snippet- or spec-shaped, narrate it to snippet-author 
 ### Heuristics for proposal-worthiness
 
 - **Recurring**: observed at least twice this session, OR a clean failure mode likely to recur.
-- **Not already documented**: check the inlined `PROJECT_HINT_DRIVER` and `PROJECT_HINT_FORGE`.
+- **Not already documented**: check the `driver.md` and `forge.md` hints you read at step 1.
 - **Mechanism-level**: a workaround for a class of UI behavior, not a one-off quirk.
 - **Actionable**: name a specific edit. "Consider improving X" is not a proposal.
 - **Project-specific**: about the app being driven, not forge's internals.
@@ -274,7 +279,7 @@ When something is clearly snippet- or spec-shaped, narrate it to snippet-author 
 Walk every ADD through three checks. They catch the most common drift modes:
 
 - **Is the content code-shaped?** If `SUGGESTED_EDIT` carries more than 3 lines of fenced code or a working snippet body, it belongs *inside* a snippet. Narrate it to `snippet-author` as an AMEND target via SendMessage, or skip the proposal. Hints describe intent and gotchas in prose; snippets carry the executable shape.
-- **Does another hint file already cover this?** Skim `PROJECT_HINT_DRIVER`, `PROJECT_HINT_FORGE`, and (briefly, via `Read`) any other `<PROJECT_FORGE_ROOT>/hints/*.md` for a near-match before emitting.
+- **Does another hint file already cover this?** Skim the `driver.md` and `forge.md` hints you already loaded, and (briefly, via `Read`) any other `<PROJECT_FORGE_ROOT>/hints/*.md` for a near-match before emitting.
 - **Is this fixing a symptom of a snippet bug?** If you fell back to inline driving because an existing snippet didn't work, the fix belongs in the snippet — not in a hint about how to work around it. Surface this via your `inlined-instead-of-snippet:` line (step 9a) so snippet-author emits an AMEND against the snippet itself.
 
 ### Action types
@@ -293,7 +298,7 @@ ls <PROJECT_FORGE_ROOT>/snippets/*.ts 2>/dev/null
 
 For each candidate, check whether a snippet matching its intent now exists. Filenames are suggestive; `Read` if ambiguous. If it exists, **drop the proposal**.
 
-Same check for hint-content proposals: re-read `PROJECT_HINT_DRIVER` and `PROJECT_HINT_FORGE`.
+Same check for hint-content proposals: re-read `<PROJECT_FORGE_ROOT>/hints/driver.md` and `<PROJECT_FORGE_ROOT>/hints/forge.md`.
 
 ### Format
 
