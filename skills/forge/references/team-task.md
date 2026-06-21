@@ -149,6 +149,17 @@ Don't set ownership in TaskCreate — teammates claim their own tasks.
 
 Always spawn driver + snippet-author. In spec mode, also spawn spec-writer + spec-verifier.
 
+### 3.0. Load spec-mode addenda (spec mode only — skip in drive mode)
+
+Drive spawns send agents lean prompts; spec mode adds protocol that lives in separate addendum files so it only loads when needed. **If `MODE == spec`**, read both addenda before spawning:
+
+```bash
+cat <PLUGIN_ROOT>/skills/forge/references/spec-addenda/driver.md
+cat <PLUGIN_ROOT>/skills/forge/references/spec-addenda/snippet-author.md
+```
+
+Capture each as `DRIVER_SPEC_ADDENDUM` and `AUTHOR_SPEC_ADDENDUM`. Inline them into the driver and snippet-author spawn prompts below. **In drive mode, skip this step entirely** — the addendum block is omitted from the spawn prompts.
+
 ### 3.1. Spawn the driver
 
 ```
@@ -170,7 +181,12 @@ PROJECT_HINT_DRIVER:
 
 USER_TASK: <user's task verbatim>
 
-Your task is referenced as ID <DRIVE_TASK_ID> for the team's records. Begin driving. The forge.md hint documents how this project describes its test accounts / credential scheme — read it and follow it when the user names an account or role. SendMessage `snippet-author` with structured summaries after meaningful steps. When SPEC_WRITER_PRESENT=yes, send `spec-writer` a final-state summary at end of drive. When SPEC_WRITER_PRESENT=no, skip that — just SendMessage `snippet-author` with summary='drive complete' and SendMessage team-lead. Then go idle — snippet-author may have follow-up questions."
+<if MODE == spec, include the block:>
+SPEC MODE ADDENDUM:
+<DRIVER_SPEC_ADDENDUM verbatim>
+<end conditional block — omit entirely in drive mode>
+
+Your task is referenced as ID <DRIVE_TASK_ID> for the team's records. Begin driving. The forge.md hint documents how this project describes its test accounts / credential scheme — read it and follow it when the user names an account or role. SendMessage `snippet-author` with structured summaries after meaningful steps. When done, SendMessage `snippet-author` with summary='drive complete', then SendMessage team-lead, then go idle — snippet-author may have follow-up questions."
 )
 ```
 
@@ -191,7 +207,12 @@ USER_TASK: <user's task verbatim>
 PROJECT_HINT_SNIPPET_AUTHOR:
 <snippet-author.md contents, or 'none' if missing>
 
-Your task is referenced as ID <SNIPPET_AUTHOR_TASK_ID> for the team's records. Wait for driver messages. Process messages as they arrive; write snippets to <FORGE_ROOT>/snippets/; SendMessage `driver` with clarifying questions if needed. Wait for the driver's `drive complete` signal before wrapping up. When you've received that signal and authored everything: if SPEC_WRITER_PRESENT=yes, SendMessage `spec-writer` with summary='snippets ready' BEFORE pinging team-lead — they're waiting on this signal before composing. Then SendMessage team-lead."
+<if MODE == spec, include the block:>
+SPEC MODE ADDENDUM:
+<AUTHOR_SPEC_ADDENDUM verbatim>
+<end conditional block — omit entirely in drive mode>
+
+Your task is referenced as ID <SNIPPET_AUTHOR_TASK_ID> for the team's records. Wait for driver messages. Process messages as they arrive; write snippets to <FORGE_ROOT>/snippets/; SendMessage `driver` with clarifying questions if needed. Wait for the driver's `drive complete` signal before wrapping up. When you've received that signal and authored everything, SendMessage team-lead."
 )
 ```
 
