@@ -6,9 +6,9 @@ This reference is loaded by `/forge`'s router for **task** and **spec** routes. 
 - Stripped any leading `spec` keyword from the task description
 - Resolved `PLUGIN_ROOT` to the plugin's install path (see SKILL.md phase 1.0)
 
-**Placeholder note.** `<PLUGIN_ROOT>` in the bash commands below is a placeholder — substitute the literal path captured by the router. Do **not** use `${CLAUDE_PLUGIN_ROOT}` here: the env var isn't reliably populated in the bash context that runs from this reference, and the placeholder pattern sidesteps that bug.
+**Placeholder note.** `<PLUGIN_ROOT>` in the bash commands below is a placeholder — substitute the literal path captured by the router. Do **not** use `${CLAUDE_PLUGIN_ROOT}` here: the env var isn't reliably populated in the bash context that runs from this reference.
 
-Below is the full lifecycle for running an agent team against an ephemeral chromium session. You are the **team lead**: you manage the team's lifecycle (session creation, team creation, task coordination, shutdown, cleanup) while teammates do the actual work via mesh communication. **You do not relay content between teammates — they SendMessage each other directly.** Your job is setup, lifecycle, and the user channel.
+Below is the full lifecycle for running an agent team against an ephemeral chromium session. You are the **team lead**: you manage lifecycle (session creation, team creation, task coordination, shutdown, cleanup) while teammates do the actual work via mesh communication. **You do not relay content between teammates — they SendMessage each other directly.** Your job is setup, lifecycle, and the user channel.
 
 `MODE` shapes everything:
 
@@ -49,19 +49,19 @@ cat <FORGE_ROOT>/hints/spec-writer.md    2>/dev/null || echo ""
 cat <FORGE_ROOT>/hints/spec-verifier.md  2>/dev/null || echo ""
 ```
 
-Capture each. Inline whatever you got in the spawn prompts so teammates don't need to read the files themselves. Empty string is fine — teammates fall back to their defaults.
+Capture each. Inline whatever you got in the spawn prompts so teammates don't read the files themselves. Empty string is fine — teammates fall back to defaults.
 
-All five hints are optional. A bare `/forge init` scaffold (no hint files authored) drives correctly; hints exist purely to encode project-specific knowledge that the agents can't derive from the app itself.
+All five hints are optional. A bare `/forge init` scaffold drives correctly; hints encode project-specific knowledge agents can't derive from the app itself.
 
 ### 1.3. Generate a session name
 
-Forge runs are stateless — each invocation gets its own chromium with a fresh, ephemeral profile. Generate a unique playwright-cli session name to reference throughout this run:
+Forge runs are stateless — each invocation gets its own chromium with a fresh, ephemeral profile. Generate a unique playwright-cli session name:
 
 ```bash
 echo "ft-$(node -e 'console.log(require("crypto").randomBytes(4).toString("hex"))')"
 ```
 
-Capture as `SESSION_NAME`. It's used by the driver to launch and reference the browser, and by phase 5 to close it cleanly at shutdown.
+Capture as `SESSION_NAME`. Used by the driver to launch/reference the browser and by phase 5 to close it.
 
 ### 1.3a. Check cleanup staleness (silent — surface at end)
 
@@ -71,30 +71,30 @@ Read `<FORGE_ROOT>/.last-cleanup` if it exists:
 cat <FORGE_ROOT>/.last-cleanup 2>/dev/null || echo ""
 ```
 
-The file is JSON of the form `{ "hints": "<ISO timestamp>", "snippets": "<ISO timestamp>" }`. Compute days-since for each key (current time minus the ISO timestamp).
+JSON of the form `{ "hints": "<ISO timestamp>", "snippets": "<ISO timestamp>" }`. Compute days-since for each key.
 
-Capture a `CLEANUP_NUDGE` value as one of:
+Capture `CLEANUP_NUDGE` as one of:
 
-- **empty** if the file doesn't exist and both `forge/hints/` and `forge/snippets/` look sparse (under ~3 files combined) — a fresh project doesn't need a maintenance prompt.
-- **`hints` / `snippets` / `both`** if the file is missing on a non-sparse project, or if the corresponding timestamp is older than 7 days.
+- **empty** if the file doesn't exist and both `forge/hints/` and `forge/snippets/` are sparse (under ~3 files combined).
+- **`hints` / `snippets` / `both`** if the file is missing on a non-sparse project, or the corresponding timestamp is older than 7 days.
 
-Hold the value for Phase 5.4. **Do not surface it now** — maintenance nudges at the start of a task fight the user's actual intent. Surface at end-of-run as a one-line tail under the final report.
+Hold for Phase 5.4. **Do not surface now** — maintenance nudges at task start fight the user's actual intent. Surface at end-of-run as a one-line tail.
 
 ### 1.4. Apply setup instructions (optional)
 
-If `forge.md` has a `## Setup before each run` (or similarly-named) section, follow it literally. The user writes it in their own words; treat it as instructions to you, not config. Examples: SQL seeding, account-reset endpoint, mint a fresh test user via API, "don't reset anything."
+If `forge.md` has a `## Setup before each run` section, follow it literally. Examples: SQL seeding, account-reset endpoint, mint a fresh test user, "don't reset anything."
 
-If `forge.md` is empty or has no setup section, skip — each session's chromium profile is fresh, so browser-side state starts clean without configuration.
+If absent, skip — each session's chromium profile is fresh.
 
-If setup needs to capture values (e.g. a freshly-minted user's credentials), hold them in your context for the duration of the session — you'll pass them to the driver via the spawn prompt or by appending to the project's env contract documented in `forge.md`. The driver will then resolve credentials per the hint when invoking snippets that need them.
+If setup captures values (e.g. minted credentials), hold them in your context — pass to the driver via spawn prompt or append to the env contract in `forge.md`.
 
-If setup fails (SQL error, endpoint timeout, etc.), surface to the user and stop — don't proceed with a half-initialized environment.
+If setup fails, surface to the user and stop.
 
 ## Phase 2 — Create the team
 
 ### 2.1. Generate a team name
 
-Use `forge-<run-id>` where `<run-id>` is a short identifier — derive from `SESSION_NAME` (already short and session-bound) plus the current timestamp's last 4 digits to avoid collisions across reclaims:
+Use `forge-<run-id>`:
 
 ```bash
 RUN_ID="${SESSION_NAME#ft-}-$(date +%s | tail -c 5)"
@@ -103,13 +103,11 @@ TEAM_NAME="forge-${RUN_ID}"
 
 ### 2.2. Create the team
 
-Invoke `TeamCreate`:
-
 ```
 TeamCreate(team_name="<TEAM_NAME>", description="Forge agent team for: <USER_TASK>")
 ```
 
-This creates the team config at `~/.claude/teams/<TEAM_NAME>/config.json` and shared task list directory at `~/.claude/tasks/<TEAM_NAME>/`.
+Creates the team config at `~/.claude/teams/<TEAM_NAME>/config.json` and task list directory at `~/.claude/tasks/<TEAM_NAME>/`.
 
 ### 2.3. Create the tasks
 
@@ -176,7 +174,7 @@ Your task is referenced as ID <DRIVE_TASK_ID> for the team's records. Begin driv
 )
 ```
 
-`description` is required by the Agent tool — keep it short (a few words is enough; it's just a label for the spawned agent in transcripts).
+`description` is required by the Agent tool — keep it short.
 
 ### 3.2. Spawn the snippet-author
 
@@ -236,59 +234,59 @@ Your task is referenced as ID <SPEC_VERIFIER_TASK_ID> for the team's records. Wa
 
 ## Phase 4 — Wait for team to finish
 
-After spawning, the teammates self-coordinate. You (the lead) wait. Messages from teammates auto-deliver as new conversation turns.
+After spawning, teammates self-coordinate. You wait. Messages auto-deliver as new conversation turns.
 
 **What to watch for:**
 
-- **Completion pings from the spawned teammates** — this is your primary signal that the team is done. Drive mode: wait for driver + snippet-author (2 pings). Spec mode: wait for driver + snippet-author + spec-writer + spec-verifier (4 pings). Each teammate SendMessages `team-lead` with a brief `task <id> complete` summary when their work is finished. Proceed to phase 5 only after you've received all expected pings. In spec mode, the natural order is driver/snippet-author → spec-writer → spec-verifier (spec-verifier waits for spec-writer's spec; spec-writer waits for driver's final-state). In drive mode, driver and snippet-author can finish in either order.
+- **Completion pings from spawned teammates** — primary signal that the team is done. Drive mode: 2 pings (driver + snippet-author). Spec mode: 4 pings. Each teammate SendMessages `team-lead` with `task <id> complete` when finished. Proceed to phase 5 only after all expected pings. Spec mode natural order: driver/snippet-author → spec-writer → spec-verifier.
 - **Messages addressed to you (`team-lead`)** — process them:
-  - **STUCK from any teammate** (driver most commonly) — message is plain text with `STUCK` as the first line, then sections `QUESTION:`, `CONTEXT:`, and optionally `OPTIONS:` (each option as `- <label> | value: <value>`). Surface to the user via `AskUserQuestion`:
-    - Build the question from the teammate's `QUESTION:` section.
-    - If `OPTIONS:` is present, parse each `- <label> | value: <value>` line and map to an AskUserQuestion option (use the label as the AskUserQuestion option label, remember the value for the relay step). AskUserQuestion always also allows "Other" for free-form answers.
-    - If no `OPTIONS:` section, ask the question open-ended — the user types their answer via "Other".
-    - When the user responds, SendMessage the originating teammate with summary `stuck_response` and a plain-text body like `stuck_response — answer: <chosen-value-or-free-text>`. They'll wake on receive, parse out the answer, and continue. (SendMessage's `message` field accepts only strings, so send a plain-text body.)
-    - The team is effectively paused while you wait for the user — don't try to do anything else. Once you relay the response, they resume on their own.
-  - **`cannot-drive` from driver** — terminal failure. Surface to user as part of the final report; proceed to phase 5 cleanup (team's done).
-  - **Status updates / questions from teammates** — answer concisely or relay relevant context.
+  - **STUCK from any teammate** — plain text with `STUCK` as first line, then `QUESTION:`, `CONTEXT:`, optionally `OPTIONS:` (`- <label> | value: <value>`). Surface via `AskUserQuestion`:
+    - Build the question from `QUESTION:`.
+    - Parse `OPTIONS:` lines to AskUserQuestion options (label as option label, remember value for relay). AskUserQuestion always allows "Other".
+    - If no `OPTIONS:`, ask open-ended.
+    - On user response, SendMessage the originating teammate with summary `stuck_response` and body `stuck_response — answer: <chosen-value-or-free-text>`. (SendMessage's `message` accepts only strings.)
+    - Team is paused while waiting for the user; resume on relay.
+  - **`cannot-drive` from driver** — terminal failure. Surface in final report; proceed to phase 5 cleanup.
+  - **Status updates / questions** — answer concisely or relay context.
   - **Anything you can't handle** — ask the user.
-- **Idle notifications** — informational only. They fire after every turn including ones where the teammate is still working. Treat the explicit `task <id> complete` SendMessage as the authoritative signal — not idle notifications. The idle-notification stall watchdog below handles the case where a teammate finishes work but forgets to ping.
+- **Idle notifications** — informational only; fire after every turn including ones still working. Treat `task <id> complete` as authoritative — not idle notifications. The watchdog below handles teammates that finish but forget to ping.
 
-> **Note on `TaskList()`:** calling `TaskList` from the lead session does NOT surface team tasks reliably — completed tasks often report as `No tasks found`. Treat lead-pings as authoritative; don't gate phase 5 on TaskList status.
+> **Note on `TaskList()`:** calling `TaskList` from the lead session does NOT surface team tasks reliably — completed tasks often report as `No tasks found`. Treat lead-pings as authoritative; don't gate phase 5 on TaskList.
 
 ### 4.1. Idle-notification stall watchdog
 
-A teammate that has finished its work but forgotten to ping `team-lead` will appear as a stream of idle notifications with no completion summary. Don't wait indefinitely — apply this heuristic:
+A teammate that finished work but forgot to ping will appear as a stream of idle notifications with no completion summary. Don't wait indefinitely.
 
-For each teammate you're still expecting a completion ping from, keep a mental counter of consecutive idle notifications received from them with no progress. A notification *with* a peer-DM summary (e.g. `[to driver] confirm cart selector`) counts as progress and resets the counter; a notification with no summary, or only the bare `idleReason: available`, increments it.
+For each teammate you're still expecting a completion ping from, keep a counter of consecutive idle notifications with no progress. A notification *with* a peer-DM summary (e.g. `[to driver] confirm cart selector`) counts as progress and resets the counter; a bare `idleReason: available` increments it.
 
-When the counter reaches 3 for a given teammate, nudge them once:
+When the counter reaches 3, nudge once:
 
 ```
 SendMessage(
   to="<teammate-name>",
   summary="status check",
-  message="Other teammates have reported work complete. What's your status — done? If your work is finished, please SendMessage team-lead with a completion summary so we can proceed to shutdown."
+  message="Other teammates have reported work complete. What's your status — done? If finished, please SendMessage team-lead with a completion summary so we can proceed to shutdown."
 )
 ```
 
-If they respond with a completion summary, treat it as the missing ping and proceed.
+If they respond with a completion summary, treat it as the missing ping.
 
-If 2 more idle notifications arrive after the nudge with no response, the teammate is genuinely stuck or has exited without a clean shutdown. Inspect whatever artifacts exist on disk (`ls <FORGE_ROOT>/snippets/` for snippet-author, `ls <FORGE_ROOT>/specs/` for spec-writer), surface the state to the user, and proceed with force-cleanup: skip the shutdown_request for the stalled teammate, call `TeamDelete()` (which may fail if the teammate process is still attached — in that case `rm -rf ~/.claude/teams/<TEAM_NAME> ~/.claude/tasks/<TEAM_NAME>` removes the directories directly), and continue to phase 5.3 to close the chromium session.
+If 2 more idle notifications arrive after the nudge with no response, the teammate is stuck or has exited uncleanly. Inspect on-disk artifacts (`ls <FORGE_ROOT>/snippets/`, `ls <FORGE_ROOT>/specs/`), surface state to the user, force-cleanup: skip shutdown_request for the stalled teammate, call `TeamDelete()` (which may fail if the teammate process is still attached — fall back to `rm -rf ~/.claude/teams/<TEAM_NAME> ~/.claude/tasks/<TEAM_NAME>`), continue to phase 5.3.
 
-**Bounded waiting**: independently of the per-teammate watchdog, if 10+ minutes pass overall without all expected completion pings AND no STUCK / cannot-drive escalations, surface to user and prepare for force-cleanup.
+**Bounded waiting**: if 10+ minutes pass overall without all expected pings AND no STUCK / cannot-drive escalations, surface to user and prepare for force-cleanup.
 
 ## Phase 4.5 — Review hint proposals (on-demand)
 
-Each teammate's completion ping ends with `proposals: <N>`. The `N` tells you whether to wait for a follow-up proposals message:
+Each teammate's completion ping ends with `proposals: <N>`:
 
-- `proposals: 0` — nothing to wait for; that teammate has no proposals.
+- `proposals: 0` — nothing to wait for.
 - `proposals: <N>` where `N > 0` — wait for a separate `PROPOSALS` SendMessage before proceeding.
 
-**If every teammate reported `proposals: 0`, skip this phase entirely** and proceed to Phase 5. Do not load the proposal-review reference; do not surface a "no proposals" message. Silence is the right outcome.
+**If every teammate reported `proposals: 0`, skip this phase entirely** and proceed to Phase 5. Don't load the proposal-review reference; don't surface "no proposals". Silence is the right outcome.
 
 If any teammate reported `proposals: N > 0`:
 
-1. Wait for that teammate's `PROPOSALS` SendMessage. Capture each body verbatim — you'll need them.
+1. Wait for that teammate's `PROPOSALS` SendMessage. Capture each body verbatim.
 2. Load the proposal-review reference:
 
    ```bash
@@ -296,17 +294,17 @@ If any teammate reported `proposals: N > 0`:
    ```
 
 3. Follow its instructions for aggregation, user review, and application.
-4. When it hands back its "Hint files updated" summary, hold it for Phase 5.4's final report.
+4. Hold its "Hint files updated" summary for Phase 5.4's final report.
 
-Loading the reference on-demand keeps the lead's prompt lean on happy-path runs where no proposals fire.
+On-demand loading keeps the lead's prompt lean on happy-path runs.
 
 ## Phase 5 — Shut down and clean up
 
-Once all spawned teammates' tasks are `completed` (drive mode: driver + snippet-author; spec mode: driver + snippet-author + spec-writer + spec-verifier — you've received the matching completion pings):
+Once all spawned teammates' completion pings have arrived (drive mode: 2; spec mode: 4):
 
 ### 5.1. Request shutdown
 
-For each teammate you actually spawned (drive mode: driver + snippet-author; spec mode: all four):
+For each spawned teammate:
 
 ```
 SendMessage(
@@ -316,7 +314,7 @@ SendMessage(
 )
 ```
 
-Wait for each to respond with `{"type": "shutdown_response", "approve": true, ...}`. The response includes a `paneId` field (e.g. `"%105"`) when the backend is tmux — capture these for the pane-cleanup step below. If a teammate rejects with `approve: false`, surface the rejection reason to the user — they may want to keep iterating before tearing down.
+Wait for each to respond with `{"type": "shutdown_response", "approve": true, ...}`. The response includes a `paneId` (e.g. `"%105"`) when the backend is tmux — capture for pane-cleanup. If a teammate rejects with `approve: false`, surface the reason to the user.
 
 ### 5.2. TeamDelete
 
@@ -326,23 +324,23 @@ After all teammates have approved shutdown:
 TeamDelete()
 ```
 
-This removes the team config and task list directories.
+Removes the team config and task list directories.
 
 ### 5.2a. Kill the leftover tmux panes
 
-The Claude sessions exit cleanly on shutdown_approved, but tmux keeps each pane open with the shell underneath and the agent-set title still applied. To a user looking at their tmux window, it appears the agents "survived" shutdown. Clean them up using the `paneId` values captured from each `shutdown_response`:
+Claude sessions exit cleanly on shutdown_approved, but tmux keeps panes open with the shell underneath and the agent-set title applied. To a user looking at their tmux window, it appears agents "survived" shutdown. Clean up using `paneId` values from each `shutdown_response`:
 
 ```bash
 tmux kill-pane -t <paneId>
 ```
 
-Run this once per spawned teammate. Best-effort: if a pane is already gone (user closed it manually, tmux server restarted, etc.) the command exits non-zero and that's fine — `tmux kill-pane` failures should not block the rest of cleanup. Skip this step if the backend wasn't tmux (no `paneId` in the shutdown responses).
+Once per spawned teammate. Best-effort — `tmux kill-pane` failures (pane already gone) should not block cleanup. Skip if backend wasn't tmux (no `paneId` in responses).
 
 ### 5.2b. Apply teardown instructions (optional)
 
-Look for a `## Teardown after each run` (or similarly-named) section in `forge.md`. If present, execute its instructions as you would for setup: SQL queries, endpoint calls, whatever the user asked for. Examples: delete the test event/user that setup created, call a logout endpoint, reset server-side state.
+Look for a `## Teardown after each run` section in `forge.md`. If present, execute its instructions (SQL queries, endpoint calls, etc.).
 
-If the hint has no teardown section, skip.
+If absent, skip.
 
 ### 5.3. Close the chromium session
 
@@ -350,11 +348,11 @@ If the hint has no teardown section, skip.
 playwright-cli -s=<SESSION_NAME> close
 ```
 
-Best-effort. If `playwright-cli close` errors or the chromium process survives, fall back to identifying and killing the process tree. The driver may have already done this if it cleaned up after itself, in which case the close call is a no-op.
+Best-effort. If `playwright-cli close` errors or chromium survives, fall back to killing the process tree. Driver may have already done this — close call is a no-op then.
 
 ### 5.4. Report to the user
 
-Compose a tight summary. Drive mode is shorter — no spec/spec-verifier lines.
+Compose a tight summary.
 
 **Drive mode:**
 
@@ -388,17 +386,17 @@ Compose a tight summary. Drive mode is shorter — no spec/spec-verifier lines.
 >
 > Slot released. Team cleaned up.
 
-If anything didn't go to plan (a teammate returned `cannot-drive`, the spec-verifier escalated, snippet invocation failed mid-drive, etc.), surface that prominently — the user wants the truth, not a sanitized success report.
+If anything didn't go to plan (a teammate returned `cannot-drive`, spec-verifier escalated, snippet invocation failed mid-drive), surface prominently — the user wants the truth, not a sanitized success report.
 
 ### 5.4a. Append cleanup nudge (if captured in 1.3a)
 
-If `CLEANUP_NUDGE` captured in Phase 1.3a is non-empty, append a one-line tail to the final report. Phrasing by case:
+If `CLEANUP_NUDGE` from Phase 1.3a is non-empty, append a one-line tail:
 
 - `CLEANUP_NUDGE=hints` — *"Last hint cleanup was N days ago — consider `/forge clean hints` after this run."* (Use "never" if the staleness file didn't exist.)
 - `CLEANUP_NUDGE=snippets` — *"Last snippet cleanup was N days ago — consider `/forge clean snippets` after this run."*
-- `CLEANUP_NUDGE=both` — *"Hints and snippets haven't been cleaned in over a week — consider `/forge clean` after this run."* (Or, if the staleness file is missing entirely: *"No record of any forge cleanup — consider `/forge clean` to baseline.")
+- `CLEANUP_NUDGE=both` — *"Hints and snippets haven't been cleaned in over a week — consider `/forge clean` after this run."* (Or, if staleness file missing entirely: *"No record of any forge cleanup — consider `/forge clean` to baseline.")
 
-The nudge is non-blocking and once-per-run. Do not surface mid-task, do not gate shutdown on it, and do not repeat it if the user has already invoked clean this session.
+Non-blocking and once-per-run. Don't surface mid-task; don't gate shutdown on it; don't repeat if user already invoked clean this session.
 
 ## Hard rules
 
@@ -411,7 +409,7 @@ The nudge is non-blocking and once-per-run. Do not surface mid-task, do not gate
 
 ## Failure modes to recover from
 
-- **`TeamCreate` fails because a team already exists.** Call `TeamDelete()` first, then retry. (Note: `TeamDelete` fails if active teammates exist — you may need to shut them down first via SendMessage.)
-- **Driver returns `cannot-drive` before doing meaningful work.** Snippet-author has nothing to author. Mark snippet-author's task complete with note "drive failed; no work to author"; proceed to shutdown and cleanup.
-- **A teammate goes idle and never responds to your SendMessage.** It may have errored mid-turn. Try a follow-up nudge. If still no response, surface to user with the team's current state.
-- **Credentials missing.** If the driver reports STUCK because a referenced env key isn't in process.env (e.g. `$ADMIN_USERNAME` expanded empty because ADMIN_USERNAME isn't set in the user's shell env), surface the missing key to the user with a clear request to set it before retrying.
+- **`TeamCreate` fails because a team already exists.** Call `TeamDelete()` first, then retry. (`TeamDelete` fails if active teammates exist — shut them down first via SendMessage.)
+- **Driver returns `cannot-drive` before doing meaningful work.** Snippet-author has nothing to author. Mark its task complete with note "drive failed; no work to author"; proceed to cleanup.
+- **A teammate goes idle and never responds to your SendMessage.** May have errored mid-turn. Follow-up nudge. If still no response, surface to user with the team's current state.
+- **Credentials missing.** Driver reports STUCK because an env key expanded empty (e.g. `$ADMIN_USERNAME` not set). Surface the missing key to the user.
