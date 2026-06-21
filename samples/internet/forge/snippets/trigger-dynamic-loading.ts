@@ -5,7 +5,8 @@ export const meta = {
     variant: "/** 1 | 2 — which dynamic-loading example to use */ number",
     baseURL: "/** base URL of the site */ string",
   },
-  tags: ['auto-authored'],
+  tags: ['probe', 'variant'],
+  enters: 'dynamic-loading page with finish element visible',
 }
 
 export async function run(page, args) {

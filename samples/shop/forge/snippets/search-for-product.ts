@@ -1,14 +1,15 @@
 // Authored by forge:snippet-author on 2026-06-15.
 export const meta = {
   description: "Fills the search input with a query and submits the form, waiting for search results to appear in the product grid.",
-  preconditions: {
-    url: /practicesoftwaretesting\.com\/?$/,
-  },
   args: {
     /** Search query string */
     query: 'string',
   },
-  tags: ['auto-authored'],
+  tags: ['search'],
+  flow: 'shop-checkout',
+  phase: 'discover',
+  requires: 'home page (/)',
+  enters: 'search results visible on home page',
 }
 
 export async function run(page, args) {

@@ -11,7 +11,10 @@ export const meta = {
     /** Permanent address to enter in the Permanent Address field */
     permanentAddress: "string",
   },
-  tags: ['auto-authored'],
+  tags: ['form', 'fill'],
+  flow: 'widgets-text-box',
+  phase: 'fill',
+  enters: 'demoqa text-box page with all fields populated',
 }
 
 export async function run(page, args) {
