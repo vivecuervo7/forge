@@ -171,6 +171,14 @@ When a fix is needed in a snippet or spec, SendMessage `snippet-author` or `spec
 - **Actionable**.
 - **Project-specific**.
 
+### Discipline before emitting an ADD
+
+Before you emit any ADD proposal, walk it through three checks. They catch the most common drift mode here — proposing a verifier-hint when the real problem is a snippet that needs to be patched:
+
+- **Is the content code-shaped?** If `SUGGESTED_EDIT` carries more than 3 lines of fenced code or a working snippet body, the content almost always belongs *inside* a snippet, not in a hint file. Narrate it to `snippet-author` as an AMEND target instead, or skip the proposal.
+- **Does another hint file already cover this?** Skim `PROJECT_HINT_SPEC_VERIFIER`, `PROJECT_HINT_FORGE`, and (briefly, via `Read`) any other `<PROJECT_FORGE_ROOT>/hints/*.md` for a near-match before emitting.
+- **Is this fixing a symptom of a snippet bug?** When verification failed because a snippet behaved differently than the drive captured, the FIRST candidate fix is a snippet AMEND, not a `spec-verifier.md` hint. Surface the snippet fix through the iteration cycle (you already do this in step 4b — that's the right channel). Only propose a verifier-hint when the issue is a **verification-level concern** that no snippet could reasonably encapsulate: cold-start timing the drive didn't hit, env setup the spec needs but the snippet shouldn't own, test isolation gaps (parallel-run collisions, shared-fixture cleanup). If a snippet body could absorb the fix, it should.
+
 ### Action types
 
 - **ADD** / **AMEND** / **REMOVE** — same as the other agents. Bias against REMOVE.

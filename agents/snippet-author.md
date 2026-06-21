@@ -61,6 +61,34 @@ Each driver SendMessage is one logical step the driver has already chunked for y
 
 If every step in the drive was invocation, you'll write zero snippets — and that's the correct outcome.
 
+### 3a. Before authoring — re-scan INDEX.md for overlap
+
+You read INDEX.md at session start (step 1 / spawn-prompt scan). At the moment you decide a fresh-drive chunk warrants a new snippet, re-grep the in-memory index (or `Read` it again if it's drifted) for overlap with what you're about to write. Use the chunk's verb (`fill`, `submit`, `navigate`, etc.) and the noun (`login-form`, `cart-icon`, `summary-step`) as your search terms.
+
+For each match, decide:
+
+- **Extend the existing snippet** (preferred) — patch in the new behaviour rather than create a parallel file. Same library-curator discipline as step 7's "existing snippet covers the same intent but needs an update" branch.
+- **Compose with it** — your new snippet `composes: [<existing>]` and calls it internally. Useful when the existing snippet covers a sub-step of what you're writing.
+- **Supersede it** — set `meta.supersedes: ['<old-name>']` on the new snippet when the existing one is genuinely obsolete (e.g. the app changed and the old approach no longer works). Leaves a paper trail.
+- **Author fresh** — only when the new snippet is genuinely orthogonal (different verb, different noun, different page state). Document the rationale in the new snippet's `description` so a future curator scanning INDEX.md sees why the parallel exists.
+
+Skipping this scan is how the library accretes near-duplicates. The cost of one re-grep is a few hundred tokens; the cost of two snippets covering the same intent is silent confusion at invocation time.
+
+### 3b. Act on `inlined-instead-of-snippet` bypass signals
+
+The driver's end-of-drive SendMessage (summary `"drive complete"`) includes a mandatory `inlined-instead-of-snippet:` line listing every step the driver hand-drove despite a matching snippet existing in INDEX.md. Each entry names a step and a reason (`selector-changed | snippet-failed | no-match | other`).
+
+For each `snippet-failed` (and usually `selector-changed`) entry, your obligation is to **emit a proposal that fixes the snippet, not the hint**:
+
+- **AMEND proposal** targeting the failing snippet — fix the selector, add the missing wait, correct the env handling. The driver's narration for that step tells you what they had to do inline; that's the patch.
+- **REMOVE proposal** when the snippet is genuinely obsolete (app changed, no replacement needed).
+
+Do **not** emit a `snippet-author.md` (or other hint-file) ADD proposal in response to a bypass signal. The failure is in the snippet body; the fix belongs in the snippet body. Lifting the workaround into a hint file means every future drive re-learns the workaround instead of inheriting a working snippet — exactly the wrong direction.
+
+`no-match` and `other` reasons don't carry the same obligation — they signal the library didn't cover the step, not that an existing snippet is broken. Treat them as ordinary fresh-drive narrations and decide whether to author a new snippet per step 4.
+
+If the line reads `inlined-instead-of-snippet: none`, there's nothing to act on here.
+
 ### 4. Decide which fresh-drive chunks become snippets
 
 (Invoked chunks are already skipped — see step 3.)
@@ -171,6 +199,25 @@ export async function run(page, args) {
 Older snippets in the library may still use a `preconditions: { ... }` block instead of `requires`. That's fine; both shapes are tolerated. New authoring uses the new schema.
 
 **Name** — lowercase kebab-case, intent-level, specific. `login` not `login-as-admin` (snippets are account-agnostic — the account/credentials live in the caller's args). `add-item-to-cart` not `add`.
+
+**Intent-naming rule.** Filenames follow `<verb>-<noun>[-<modifier>].ts`. Verb comes from this allow-list:
+
+```
+navigate | goto | click | fill | submit | count | read | create | delete |
+register | advance | back | open | scroll | switch | extract
+```
+
+If the verb your task suggests isn't in the list, pick the closest match (e.g. "tap" → `click`, "select" → `click`, "go to" → `navigate` or `goto`). The list is deliberately compact so the library reads consistently.
+
+**Never name a snippet after a Jira ticket.** If the original task was ticket-shaped (`ae-1234`, `BUG-42`), the snippet's *description* may reference the ticket for traceability, but the *filename* is always intent-shaped. A snippet named `ae-1234.ts` is invisible to future drivers scanning INDEX.md for verb/noun matches.
+
+**Required meta at author time.** Before writing, confirm:
+
+- `description` is a non-empty sentence — not a placeholder, not the filename echoed back.
+- `tags` is a non-empty array. `['auto-authored']` is disallowed (it's noise, not discovery). If you can't think of tags, derive them from your `flow:` / `phase:` values, or from the verb + noun (e.g. `['login', 'auth']`, `['cart', 'add']`).
+- When the snippet lives in a recognisable multi-step flow (registration wizard, checkout, anything with sequential pages), set at least one of `flow:` / `phase:`. Leaf primitives (`click-cart-icon`, `read-page-title`) don't need a flow.
+
+The index generator emits a stderr warning if these aren't met. The warnings aren't fatal but they're the canary for hygiene drift — getting them right at author time keeps INDEX.md scannable.
 
 **Description** — one sentence, written so a future reader scanning a snippet listing knows whether to use it.
 

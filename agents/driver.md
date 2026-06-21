@@ -303,6 +303,14 @@ When something occurs to you that's clearly snippet- or spec-shaped (e.g., "this
 - **Actionable**: name a specific edit. "Consider improving X" is not a proposal.
 - **Project-specific**: about the app being driven, not about forge's internals.
 
+### Discipline before emitting an ADD
+
+Before you emit any ADD proposal, walk it through three checks. They're cheap and they catch the most common drift modes — proposals that should have been snippet edits, proposals that duplicate existing hints, proposals that paper over a snippet bug:
+
+- **Is the content code-shaped?** If `SUGGESTED_EDIT` carries more than 3 lines of fenced code or a working snippet body, the content almost always belongs *inside* a snippet, not in a hint file. Either narrate it to `snippet-author` as an AMEND target on a specific snippet (via SendMessage), or skip the proposal entirely. Hints describe intent and gotchas in prose; snippets carry the executable shape.
+- **Does another hint file already cover this?** Skim `PROJECT_HINT_DRIVER`, `PROJECT_HINT_FORGE`, and (briefly, via `Read`) any other `<PROJECT_FORGE_ROOT>/hints/*.md` for a near-match on the same selector, gotcha, or phrase before emitting. Duplicating across files is the most common downstream lint flag.
+- **Is this fixing a symptom of a snippet bug?** If the observation came from a step where you fell back to inline driving because an existing snippet didn't work, the underlying fix is in the snippet — not in a hint about how to work around the broken snippet. Surface this via your `inlined-instead-of-snippet:` line (see step 9a) so snippet-author can emit an AMEND proposal against the snippet itself. Bias toward letting the snippet carry the fix.
+
 ### Action types
 
 - **ADD**: new section or new prose under an existing heading. The default for first observations.
