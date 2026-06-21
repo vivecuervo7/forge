@@ -69,6 +69,12 @@ Supported on macOS, Linux, and Windows.
 
 Add `record as <label>` to a run invocation to capture a video at `forge/videos/<spec>-<label>.webm`. `/forge run last spec, record as before` → fix the bug → `/forge run last spec, record as after` produces paired evidence for a PR.
 
+### Maintenance
+
+| Command | What it does |
+|---|---|
+| `/forge clean [snippets\|hints\|both]` | Periodic sweep over `forge/snippets/` and `forge/hints/`. Regenerates `snippets/INDEX.md`, surfaces snippet overlaps, hint sections that should be snippets or scripts, Jira-keyed snippet names, and stale meta. Findings surface via `AskUserQuestion` — nothing is applied without your approval. |
+
 ## See it in action
 
 Try a sample before adopting forge for your own project. Each sample is a project-shaped directory — committed hints, scaffolded config, real-forge-output seed snippets — plus a prompt-by-prompt walkthrough you run yourself.
@@ -86,6 +92,38 @@ Try a sample before adopting forge for your own project. Each sample is a projec
 - **Codegen** records one flow into one `.spec.ts`. Forge accretes snippets across drives and bakes project knowledge into reusable hints.
 - **playwright-cli** is the stateless command interface forge wraps. Forge adds the agent team, snippet library, hints, and spec pipeline on top.
 - **Hand-writing** is the maximum-control option. Forge trades some control for automated selector / decomposition / gotcha work, with cold-start verification on the output.
+
+## Maintenance
+
+Forge accretes — snippets, hints, proposals — and that accretion needs a light periodic sweep to stay clean. Two mechanisms keep the library healthy without manual policing:
+
+- **Proposal-review lint.** When sub-agents emit end-of-session hint proposals, the lead lints them before relaying. Code-shaped proposals (TypeScript / Playwright snippets disguised as hint prose) and cross-file duplicates are caught before they bloat `forge/hints/`. Hint files stay lean by construction.
+- **`/forge clean`.** The periodic sweep — run it weekly or whenever a session feels like it accreted noise. The cleanup-scan script surfaces snippet overlaps, hint sections that should be snippets or scripts, Jira-keyed snippet names (which date fast), and stale meta. Each finding surfaces via `AskUserQuestion`; nothing is applied without your approval. `/forge clean snippets` also regenerates `forge/snippets/INDEX.md`.
+- **Phase 0 staleness nudge.** After any `/forge` run, if the last `/forge clean` was more than 7 days ago, the lead adds a one-line tail nudge to its summary. Non-blocking — you can ignore it and keep working.
+
+Sub-agent discipline supports the lint from the authoring side. Driver, snippet-author, and spec-verifier each scan `forge/snippets/INDEX.md` before authoring to avoid overlap, decline to emit code-shaped proposals when they could write a snippet or script instead, and propose snippet fixes (rather than retry-and-pray) when their failure traces to a snippet body. Details live in [`agents/driver.md`](./agents/driver.md), [`agents/snippet-author.md`](./agents/snippet-author.md), and [`agents/spec-verifier.md`](./agents/spec-verifier.md).
+
+## Snippet library
+
+Every snippet in `forge/snippets/` carries a structured `meta` block at the top of the file:
+
+| Field | Required | Purpose |
+|---|---|---|
+| `description` | yes | One-line summary — what the snippet does. |
+| `args` | yes | Args object; `{}` if the snippet takes none. |
+| `tags` | optional | Free-form tags for grouping (e.g. `['auth']`, `['checkout', 'angular']`). |
+| `flow` | optional | Name of a multi-step flow the snippet belongs to (e.g. `shop-checkout`). |
+| `phase` | optional | Phase within that flow (e.g. `billing→payment`). |
+| `requires` | optional | Page / state the snippet expects before invocation. |
+| `enters` | optional | Page / state the snippet leaves the browser in. |
+| `composes` | optional | Names of other snippets this one shells out to. |
+| `supersedes` | optional | Names of older snippets this one replaces. |
+
+`forge/snippets/INDEX.md` is the auto-generated contract — a grouped table read by the lead at session start so it knows the library shape without reading every snippet body. It regenerates whenever a snippet is added or modified, and whenever `/forge clean snippets` runs. Treat it as derived; edit the `meta` blocks, not the file.
+
+## Structured JSON output
+
+The `forge-pw` wrapper around `playwright-cli` accepts `--json` (or `FORGE_JSON=1`) and emits a single JSON envelope: `{ ok, result, error }`. This is mostly for advanced users and the driver agent's internal calls — everyday driving works the same as before. Reach for it when scripting forge into a larger pipeline or when you want machine-parseable failure modes.
 
 ## Architecture
 
