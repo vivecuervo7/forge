@@ -123,6 +123,16 @@ Path: `<PROJECT_FORGE_ROOT>/specs/<name>.spec.ts`. Create the directory with `mk
 
 **Test name** — short imperative phrase: `"add Sauce Labs Backpack to cart and verify badge count"`.
 
+### 4.5. Pre-flight self-review
+
+Before handing the spec to spec-verifier, walk three checks. Most verifier failures trace to one of these — applying them up front saves an iteration cycle.
+
+**Timeout sizing.** If any drive step took noticeably longer in the driver's narration than Playwright's default action wall, bump that step's timeout to give comparable headroom. The verifier runs cold (no warm caches) and may be slower than the driver's session in subtle ways.
+
+**Fixture idempotency.** If your spec mutates shared state, the drive's mutation has *already happened* by the time the verifier runs cold — the precondition the spec assumes no longer holds. Either add a reset-to-precondition step at the top of the spec, or generate unique-per-run fixture data so the spec creates what it mutates. The drive's "this works" is misleading here: the drive runs *once* before fixture pollution, the spec needs to run *repeatedly*.
+
+**Known-gotcha scan.** Re-read `<PROJECT_FORGE_ROOT>/hints/forge.md` and `<PROJECT_FORGE_ROOT>/hints/spec-writer.md`. The project documents patterns prior runs surfaced; apply the spec-composition-relevant ones in the spec text up front rather than discovering them at iteration 1.
+
 ### 5. Ask the driver when the message is ambiguous
 
 If final-state lacks something, SendMessage them:

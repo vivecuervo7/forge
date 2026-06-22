@@ -122,6 +122,8 @@ Decide who answers:
 - **Assertion mismatch** (`expected '1', received '2'`) → spec-writer. They wrote the assertion.
 - **Import error** / module resolution → spec-writer.
 - **Timing / flake** → driver first (was the page settled?), then spec-writer (`waitFor` needed?).
+- **Widget renders empty after a step that completed cleanly** (the step's own actions succeeded, but the element you expected to interact with next is blank or missing content) → **spec-writer first**, not driver. The driver's session may have given the app time to settle that the spec slams through. Don't open with "did you see this populated?" — they did, in a different timing regime. Ask spec-writer: "does this step need an explicit settle sentinel, or a re-establishment of context?"
+- **Auth or session loss mid-spec** (any step suddenly redirects to a login URL, or loses an authenticated session) → **stop and check environmental causes before iterating**. The application may enforce session constraints (another login displacing this one, IP-bound sessions, token expiry) that aren't a spec defect. See `<PROJECT_FORGE_ROOT>/hints/forge.md` for any project-documented session rules, then surface to lead rather than burning an iteration on a phantom selector bug.
 
 SendMessage the right teammate with a tight, answerable question:
 
@@ -148,19 +150,36 @@ When their response arrives:
 
 ### 5. Iteration budget
 
-After **3 failed iterations**, mark your task complete (outcome was escalation, but the task as defined is finished) and escalate to team-lead:
+After **3 iterations**, pause and evaluate progress before deciding whether to keep going or escalate. Hard cap is **5 iterations** regardless.
+
+**Iterations are landing fixes** (extend to 5) — signals:
+- Each round produces a *different* error than the previous (one layer fixed, the next surfaced).
+- The failing step advances later in the spec.
+- Driver, spec-writer, and snippet-author converge on a shared diagnosis at each round.
+
+A multi-layered spec (Kendo grid timing **and** fixture mutation **and** hydration sensitivity) can legitimately need 4–5 rounds — each unmasking the next. Cutting at 3 strands progress mid-stack.
+
+**Iterations are flailing** (escalate at 3) — signals:
+- Same error repeats with only cosmetic variation across iterations.
+- Agents return conflicting hypotheses ("driver says it works, spec-writer says it can't").
+- Suggested fix at iteration N looks structurally identical to iteration N-1.
+- The error category is environmental (login redirect → session collision; missing env key → contract gap) — these don't get better by patching the spec.
+
+When you hit 3 and judge "flailing", or when you hit 5 regardless, escalate:
 
 ```
 TaskUpdate(taskId=<id>, status="completed")
 
 SendMessage(
   to="team-lead",
-  summary="spec-verifier escalation: spec failing after 3 iterations",
-  message="The spec at <path> has failed verification 3 times with these errors:
+  summary="spec-verifier escalation: spec failing after <N> iterations",
+  message="The spec at <path> has failed verification <N> times with these errors:
 
 1. <error 1>
 2. <error 2>
-3. <error 3>
+...
+
+Progress assessment: <landing fixes but hit the 5-cap | flailing — same error repeated | environmental cause out of band>.
 
 I've asked driver and spec-writer for clarifications and applied the suggested fixes, but the spec continues to fail. Surfacing to you to bring this to the user."
 )
