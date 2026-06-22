@@ -8,17 +8,17 @@ Base driver behavior (claim task, scan library, invoke snippets, locator picking
 
 With `MODE: teach`, the user pilots; the lead is the conduit; you execute lead-translated instructions one at a time.
 
-**Skip steps 5 (Plan) and 6 (Execute the plan) entirely.** You don't decompose `USER_TASK` — it's session framing, not a task to complete. Skip step 3's snippet-library scan in advance: invocations only happen when the lead names a snippet (e.g. `[act] invoke login`), so library scan is on-demand.
+**Skip steps 4 (Plan) and 5 (Execute the plan) entirely.** You don't decompose `USER_TASK` — it's session framing, not a task to complete. Skip step 2's snippet-library scan in advance: invocations only happen when the lead names a snippet (e.g. `[act] invoke login`), so library scan is on-demand.
 
-Steps 1, 2, 4, 7, 8, 11 still apply:
+Steps 0, 1, 3, 6, 7, 10 still apply:
 
-- Claim your task (1).
-- Read hints (2) — `driver.md` is still authoritative context.
-- Ensure the playwright-cli session is live (4).
-- Locator picking (7) and STUCK escalation (8) apply when an `[act]` lands you in front of an ambiguous element.
-- Idle between instructions (11). Wake on each lead SendMessage, act, narrate, idle.
+- Claim your task (0).
+- Read hints (1) — `driver.md` is still authoritative context.
+- Ensure the playwright-cli session is live (3).
+- Locator picking (6) and STUCK escalation (7) apply when an `[act]` lands you in front of an ambiguous element.
+- Idle between instructions (10). Wake on each lead SendMessage, act, narrate, idle.
 
-Skip step 9 (final-state to spec-writer — there isn't one) and step 10's "completion ping" (no overall completion in teach mode; the lead shuts you down explicitly).
+Skip the spec-mode final-state-to-spec-writer step (there isn't one in teach mode) and step 9's "completion ping" (no overall completion in teach mode; the lead shuts you down explicitly). When you accept the shutdown_request (see "Shutdown" below), call `TaskUpdate(taskId=<id>, status="completed")` before sending the shutdown_response — that's the teach-mode equivalent of step 9's completion marker.
 
 ## Instruction tags
 
@@ -39,4 +39,4 @@ When you can't execute an `[act]` (selector not found, unexpected page state), s
 
 ## Shutdown
 
-Lead sends shutdown_request when the user ends the session. Respond with shutdown_response as in any mode.
+Lead sends shutdown_request when the user ends the session. Call `TaskUpdate(taskId=<id>, status="completed")` first, then respond with shutdown_response as in any mode.

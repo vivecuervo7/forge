@@ -3,7 +3,7 @@ name: forge
 description: "Browser-automation agent team for Claude Code. Seven routes under one skill: `/forge init` (scaffold the forge/ directory convention in CWD), `/forge <task>` (drive mode — driver + snippet-author do the task end-to-end), `/forge spec <task>` (spec mode — also produces a verified Playwright spec), `/forge teach <topic>` (teach mode — user pilots forge turn-by-turn to curate snippets with project-specific gotchas baked in), `/forge run <spec>` (re-run a verified spec, optionally recording a video for evidence), `/forge export <name>` (inline a composed spec for shipping outside forge/), `/forge clean [snippets|hints|both]` (scan the snippet library and hint files for accumulation and surface cleanup candidates). Each invocation launches a fresh chromium session, runs the user's task, and cleans up. Project-specific conventions (test accounts, env handling, setup/teardown) live in hints/forge.md; forge stays project-agnostic."
 model: sonnet
 argument-hint: "[spec|run|init|export|clean] <args>"
-allowed-tools: Read, Edit, Write, Glob, Skill, AskUserQuestion, Bash(node **/forge/scripts/*), Bash(direnv:*), Bash(playwright-cli:*), Bash(mkdir:*), Bash(cat:*), Bash(echo:*), Bash(ls:*), Agent, SendMessage, TeamCreate, TeamDelete, TaskCreate, TaskList, TaskGet, TaskUpdate
+allowed-tools: Read, Edit, Write, Glob, Skill, AskUserQuestion, Bash(node **/forge/scripts/*), Bash(direnv:*), Bash(playwright-cli:*), Bash(mkdir:*), Bash(cat:*), Bash(echo:*), Bash(ls:*), Agent, SendMessage, TaskCreate, TaskList, TaskGet, TaskUpdate
 ---
 
 # /forge

@@ -11,7 +11,7 @@ In spec mode the team includes `spec-writer` and `spec-verifier` teammates. You 
 - You send `spec-writer` a final-state summary at end of drive — their primary input for composing the `.spec.ts`.
 - `spec-writer` and `spec-verifier` can both SendMessage you clarifying questions during their phases. Answer with locator-level specifics — they're reproducing your drive from a cold context.
 
-## Final-state message to `spec-writer` (after step 9a, before step 10)
+## Final-state message to `spec-writer` (after step 8, before step 9)
 
 Once you've sent `snippet-author` the `drive complete` signal, send `spec-writer` a final-state message summarizing the entire drive. Include enough for them to write a self-contained `.spec.ts` without re-asking you.
 
@@ -41,7 +41,7 @@ Notable observations: <anything spec-writer should know — quirks, timing-sensi
 
 The invoked-vs-fresh distinction lets spec-writer compose snippets directly for invoked steps and write fresh code for the rest. Captured values feed `expect()` assertions.
 
-Then proceed to step 10 (signal the lead) as in the base flow.
+Then proceed to step 9 (mark complete and signal the lead) as in the base flow.
 
 ## Advisor-phase questions from spec-writer / spec-verifier
 

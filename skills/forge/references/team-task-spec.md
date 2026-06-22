@@ -8,25 +8,25 @@ Lifecycle table override (use this when MODE=spec):
 
 | Step | spec mode |
 |---|---|
-| Tasks created in phase 2.3 | 4 (driver, snippet-author, spec-writer, spec-verifier) |
+| Tasks created in phase 2.1 | 4 (driver, snippet-author, spec-writer, spec-verifier) |
 | Teammates spawned in phase 3 | driver, snippet-author, spec-writer, spec-verifier |
 | Completion pings to wait for in phase 4 | 4 |
 | Final report | "drove the task + verified spec" |
 
-## Phase 2.3 addition — also create spec tasks
+## Phase 2.1 addition — also create spec tasks
 
 After creating the driver + snippet-author tasks from the base file, also create:
 
 ```
 TaskCreate(
   subject="spec-writer: produce self-contained spec from drive",
-  description="Wait for driver's final-state summary at end of drive. Compose a self-contained .spec.ts in <FORGE_ROOT>/specs/ that reproduces the user task: import + compose snippets for invoked steps, inline code for fresh-drive steps, assert on captured values. Spec must be runnable from cold start. SendMessage `spec-verifier` the spec path when done. Mark complete after."
+  description="Wait for driver's final-state summary at end of drive. Compose a self-contained .spec.ts in <FORGE_ROOT>/specs/ that reproduces the user task: import + compose snippets for invoked steps, inline code for fresh-drive steps, assert on captured values. Spec must be runnable from cold start. SendMessage `spec-verifier` the spec path when done. Claim with TaskUpdate(status='in_progress') at start and TaskUpdate(status='completed') when the spec is written and handed off."
 )
 # Note as SPEC_WRITER_TASK_ID.
 
 TaskCreate(
   subject="spec-verifier: run spec from a cold context, confirm it passes",
-  description="Wait for spec-writer's 'spec ready' message. Run the spec via `forge-run-spec.mjs --spec <path>`. Mirror the drive's conditions: fresh browser context, env loaded via forge.md's recipe if it has one (same prefix the driver used). On pass: ping team-lead with verified-from-fresh status. On fail: SendMessage driver (selectors) or spec-writer (assertions/imports) for clarification, iterate up to 3 times, then either succeed or escalate. Mark complete when done."
+  description="Wait for spec-writer's 'spec ready' message. Run the spec via `forge-run-spec.mjs --spec <path>`. Mirror the drive's conditions: fresh browser context, env loaded via forge.md's recipe if it has one (same prefix the driver used). On pass: ping team-lead with verified-from-fresh status. On fail: SendMessage driver (selectors) or spec-writer (assertions/imports) for clarification, iterate up to 3 times, then either succeed or escalate. Claim with TaskUpdate(status='in_progress') at start and TaskUpdate(status='completed') when verification finishes (pass or escalation)."
 )
 # Note as SPEC_VERIFIER_TASK_ID.
 ```
@@ -48,13 +48,11 @@ Capture each as `DRIVER_SPEC_ADDENDUM` and `AUTHOR_SPEC_ADDENDUM`. Inline them i
 Agent(
   description="Compose spec",
   subagent_type="forge:spec-writer",
-  team_name="<TEAM_NAME>",
   name="spec-writer",
-  prompt="TEAM_NAME: <TEAM_NAME>
-PROJECT_FORGE_ROOT: <FORGE_ROOT>
+  prompt="PROJECT_FORGE_ROOT: <FORGE_ROOT>
 USER_TASK: <user's task verbatim>
 
-Your task is referenced as ID <SPEC_WRITER_TASK_ID> for the team's records. Read your hints (forge.md + spec-writer.md from <FORGE_ROOT>/hints/) as step 1, then wait for BOTH the driver's final-state message AND snippet-author's 'snippets ready' message before composing."
+Your task ID is <SPEC_WRITER_TASK_ID>. As your first action, claim it by calling `TaskUpdate(taskId=<SPEC_WRITER_TASK_ID>, status='in_progress')`. Then read your hints (forge.md + spec-writer.md from <FORGE_ROOT>/hints/) and wait for BOTH the driver's final-state message AND snippet-author's 'snippets ready' message before composing. When the spec is written and handed off to spec-verifier (if present), call `TaskUpdate(taskId=<SPEC_WRITER_TASK_ID>, status='completed')` before pinging team-lead."
 )
 ```
 
@@ -64,14 +62,12 @@ Your task is referenced as ID <SPEC_WRITER_TASK_ID> for the team's records. Read
 Agent(
   description="Verify spec from cold",
   subagent_type="forge:spec-verifier",
-  team_name="<TEAM_NAME>",
   name="spec-verifier",
-  prompt="TEAM_NAME: <TEAM_NAME>
-PROJECT_FORGE_ROOT: <FORGE_ROOT>
+  prompt="PROJECT_FORGE_ROOT: <FORGE_ROOT>
 PLUGIN_ROOT: <PLUGIN_ROOT>
 USER_TASK: <user's task verbatim>
 
-Your task is referenced as ID <SPEC_VERIFIER_TASK_ID> for the team's records. Read your hints (forge.md + spec-verifier.md from <FORGE_ROOT>/hints/) as step 1, then wait for spec-writer's 'spec ready' message."
+Your task ID is <SPEC_VERIFIER_TASK_ID>. As your first action, claim it by calling `TaskUpdate(taskId=<SPEC_VERIFIER_TASK_ID>, status='in_progress')`. Then read your hints (forge.md + spec-verifier.md from <FORGE_ROOT>/hints/) and wait for spec-writer's 'spec ready' message. When verification finishes (pass or 3-iteration escalation), call `TaskUpdate(taskId=<SPEC_VERIFIER_TASK_ID>, status='completed')` before pinging team-lead."
 )
 ```
 
@@ -79,7 +75,7 @@ Your task is referenced as ID <SPEC_VERIFIER_TASK_ID> for the team's records. Re
 
 In spec mode you wait for 4 pings (driver + snippet-author + spec-writer + spec-verifier) before proceeding to phase 5. Natural order: driver/snippet-author → spec-writer → spec-verifier. The base file's idle-watchdog and STUCK protocol apply unchanged.
 
-## Phase 5.4 — Spec-mode final-report shape
+## Phase 5.5 — Spec-mode final-report shape
 
 Override the base file's drive-mode report with the spec-mode version:
 
@@ -98,6 +94,6 @@ Override the base file's drive-mode report with the spec-mode version:
 > Hint files updated: <one line per file with summary>.
 > (Omit this header entirely if no proposals were surfaced or all were rejected.)
 >
-> Slot released. Team cleaned up.
+> Slot released.
 
 If anything didn't go to plan (spec-verifier escalated, snippet invocation failed mid-drive, etc.), surface prominently.

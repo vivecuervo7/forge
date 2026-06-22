@@ -18,11 +18,13 @@ Teach mode is the **snippet-internal deposit channel.** The user knows the quirk
 
 ## Prerequisite
 
-Agent teams are gated behind `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`. If `TeamCreate` isn't available in this session, surface to the user with the remedy:
+Agent teams are gated behind `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`. When the flag isn't set, the first `Agent(...)` call below will fail with an explicit message. If that happens, relay the remedy to the user:
 
 > /forge requires experimental agent teams. Enable by adding `"env": {"CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"}` to `~/.claude/settings.json` (or set the env var in your shell) and restart Claude Code.
 
 Then stop.
+
+As of Claude Code v2.1.178 the team auto-forms when the first teammate spawns — no `TeamCreate` call needed, no separate cleanup step. See `team-task.md` Prerequisite section for the same note in the drive/spec path.
 
 ## Phase 1 — Discovery and setup
 
@@ -32,33 +34,22 @@ Teach mode uses `forge.md`, `driver.md`, and `snippet-author.md` only — `spec-
 
 See `team-task.md` phases 1.1 through 1.5 for exact steps; byte-for-byte identical here.
 
-## Phase 2 — Create the team
+## Phase 2 — Create the tasks (two only)
 
-### 2.1 Generate a team name
+The team auto-forms when the first teammate spawns in Phase 3 — skip straight to task creation.
 
-```bash
-RUN_ID="${SESSION_NAME#ft-}-$(date +%s | tail -c 5)"
-TEAM_NAME="forge-${RUN_ID}"
-```
-
-### 2.2 TeamCreate
-
-```
-TeamCreate(team_name="<TEAM_NAME>", description="Forge teach session: <user's intent or 'interactive snippet authoring'>")
-```
-
-### 2.3 Create the tasks (two only)
+### 2.1 Create the tasks
 
 ```
 TaskCreate(
   subject="drive: teach mode — execute lead instructions step by step",
-  description="In teach mode you do NOT autonomously decompose the task. Wait for the lead's per-step SendMessage instructions; execute one at a time; narrate each to snippet-author. The lead drives a turn-based conversation with the user and translates user intent into your instructions. Stay alive until the lead sends shutdown_request."
+  description="In teach mode you do NOT autonomously decompose the task. Wait for the lead's per-step SendMessage instructions; execute one at a time; narrate each to snippet-author. The lead drives a turn-based conversation with the user and translates user intent into your instructions. Stay alive until the lead sends shutdown_request. Claim with TaskUpdate(status='in_progress') at start; call TaskUpdate(status='completed') when you accept the shutdown_request."
 )
 # → DRIVE_TASK_ID
 
 TaskCreate(
   subject="snippet-author: teach mode — author on explicit cap signals",
-  description="In teach mode, wait for the lead's 'cap as <name>' SendMessage rather than inferring boundaries. The lead will tell you the name, the steps to include, and any annotations (gotchas, retry logic) to weave into the snippet body. Accept lead-passed edit consent for existing-snippet overwrites."
+  description="In teach mode, wait for the lead's 'cap as <name>' SendMessage rather than inferring boundaries. The lead will tell you the name, the steps to include, and any annotations (gotchas, retry logic) to weave into the snippet body. Accept lead-passed edit consent for existing-snippet overwrites. Claim with TaskUpdate(status='in_progress') at start; call TaskUpdate(status='completed') when you accept the shutdown_request."
 )
 # → AUTHOR_TASK_ID
 ```
@@ -82,10 +73,8 @@ Capture each as `DRIVER_TEACH_ADDENDUM` and `AUTHOR_TEACH_ADDENDUM`. Inline them
 Agent(
   description="Drive teach session",
   subagent_type="forge:driver",
-  team_name="<TEAM_NAME>",
   name="driver",
-  prompt="TEAM_NAME: <TEAM_NAME>
-MODE: teach
+  prompt="MODE: teach
 SPEC_WRITER_PRESENT: no
 SESSION_NAME: <SESSION_NAME>
 PROJECT_FORGE_ROOT: <FORGE_ROOT>
@@ -100,7 +89,7 @@ USER_TASK: <user's framing intent verbatim, e.g. 'teach login flow'>
 TEACH MODE ADDENDUM:
 <DRIVER_TEACH_ADDENDUM verbatim>
 
-Your task is referenced as ID <DRIVE_TASK_ID> for the team's records. Follow the teach-mode addendum above for behavior; it modifies several steps of your base agent prompt. Don't message spec-writer (there isn't one). Stay alive until the lead sends shutdown_request."
+Your task ID is <DRIVE_TASK_ID>. As your first action, claim it by calling `TaskUpdate(taskId=<DRIVE_TASK_ID>, status='in_progress')`. Then follow the teach-mode addendum above for behavior; it modifies several steps of your base agent prompt. Don't message spec-writer (there isn't one). Stay alive until the lead sends shutdown_request. When you accept the shutdown_request, call `TaskUpdate(taskId=<DRIVE_TASK_ID>, status='completed')` before responding."
 )
 ```
 
@@ -110,10 +99,8 @@ Your task is referenced as ID <DRIVE_TASK_ID> for the team's records. Follow the
 Agent(
   description="Author snippets (teach)",
   subagent_type="forge:snippet-author",
-  team_name="<TEAM_NAME>",
   name="snippet-author",
-  prompt="TEAM_NAME: <TEAM_NAME>
-MODE: teach
+  prompt="MODE: teach
 PROJECT_FORGE_ROOT: <FORGE_ROOT>
 SPEC_WRITER_PRESENT: no
 USER_TASK: <user's framing intent verbatim>
@@ -123,7 +110,7 @@ PROJECT_HINT_SNIPPET_AUTHOR:
 TEACH MODE ADDENDUM:
 <AUTHOR_TEACH_ADDENDUM verbatim>
 
-Your task is referenced as ID <AUTHOR_TASK_ID> for the team's records. Follow the teach-mode addendum above for behavior; it replaces the base 'process driver narrations' loop with a 'plan-before-write per cap signal' loop."
+Your task ID is <AUTHOR_TASK_ID>. As your first action, claim it by calling `TaskUpdate(taskId=<AUTHOR_TASK_ID>, status='in_progress')`. Then follow the teach-mode addendum above for behavior; it replaces the base 'process driver narrations' loop with a 'plan-before-write per cap signal' loop. When you accept the shutdown_request, call `TaskUpdate(taskId=<AUTHOR_TASK_ID>, status='completed')` before responding."
 )
 ```
 
@@ -371,10 +358,11 @@ Same as team-task phase 5 (the original Phase 5 here, renumbered):
 1. `SendMessage(to="driver", ..., message={"type": "shutdown_request", "reason": "teach session complete"})`
 2. `SendMessage(to="snippet-author", ..., shutdown_request)`
 3. Wait for both `shutdown_response`s; capture `paneId`s.
-4. `TeamDelete()`
-5. `tmux kill-pane -t <paneId>` for each captured pane (best-effort).
-6. Apply `## Teardown after each run` instructions from `forge.md` if present.
-7. `playwright-cli -s=<SESSION_NAME> close` — close the chromium session.
+4. `tmux kill-pane -t <paneId>` for each captured pane (best-effort).
+5. Apply `## Teardown after each run` instructions from `forge.md` if present.
+6. `playwright-cli -s=<SESSION_NAME> close` — close the chromium session.
+
+The team's shared directories are removed automatically when the session exits — no explicit cleanup call.
 
 ### 6.1 Report to the user
 
@@ -389,7 +377,7 @@ Same as team-task phase 5 (the original Phase 5 here, renumbered):
 > Hint files updated: <one line per file with summary>.
 > (Omit this line entirely if no proposals were surfaced or all were rejected.)
 >
-> Browser session closed. Team cleaned up.
+> Browser session closed.
 ```
 
 ## Hard rules

@@ -94,10 +94,10 @@ Once you have either a trivial-cap fast-path or a resolved plan, write the file.
 
 **EDIT_EXISTING handling:**
 
-- `EDIT_EXISTING: yes` — user authorized in-place overwrite at the cap step. Skip step 7's overwrite check. Read the existing file to understand its shape, then write the new version. Preserve path and meta block structure; replace body; update description and args per the plan.
-- `EDIT_EXISTING: no` — apply step 7's usual overwrite check. The lead verified the name is free, but defense-in-depth is fine.
+- `EDIT_EXISTING: yes` — user authorized in-place overwrite at the cap step. Skip step 6's overwrite check. Read the existing file to understand its shape, then write the new version. Preserve path and meta block structure; replace body; update description and args per the plan.
+- `EDIT_EXISTING: no` — apply step 6's usual overwrite check. The lead verified the name is free, but defense-in-depth is fine.
 
-**Format** — same as standard step 7: `meta` block (description / args / tags), single exported `run(page, args)`. Body preserves what the driver did, with parameterizable values (including env-sourced) referenced as `args.foo`. Snippets never read `process.env` directly — the caller resolves env values and passes as args.
+**Format** — same as standard step 6: `meta` block (description / args / tags), single exported `run(page, args)`. Body preserves what the driver did, with parameterizable values (including env-sourced) referenced as `args.foo`. Snippets never read `process.env` directly — the caller resolves env values and passes as args.
 
 ## 6. Weave annotations into the body
 
@@ -138,4 +138,4 @@ SendMessage(
 
 For splits, one message per snippet, in order.
 
-Then idle. The next cap may arrive immediately, much later, or never (if the user wraps up). On shutdown_request, respond with shutdown_response.
+Then idle. The next cap may arrive immediately, much later, or never (if the user wraps up). On shutdown_request, call `TaskUpdate(taskId=<id>, status="completed")` first, then respond with shutdown_response — that's the teach-mode equivalent of the base "completion ping" (skipped in teach mode since there's no batch finale).

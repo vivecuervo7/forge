@@ -156,4 +156,4 @@ Omit rejected candidates — the user already saw them. If nothing was accepted,
 - **Never delete a snippet without checking for callers.** Glob/Grep specs and other snippets for the name first; if anything imports it, raise the conflict in the final report rather than orphan callers.
 - **Preserve hint prose verbatim when moving between files.** Reframing belongs in a follow-up — this route is cleanup, not rewriting.
 - **Regenerate INDEX.md after snippet renames/merges.** Specs reference snippets by name; the INDEX is the lookup table.
-- **Single team-aware tool: AskUserQuestion.** No `TeamCreate`, no agent spawns — clean is a solo lead workflow.
+- **Single team-aware tool: AskUserQuestion.** No agent spawns — clean is a solo lead workflow.

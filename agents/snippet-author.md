@@ -3,7 +3,7 @@ name: snippet-author
 description: "Write snippets from a driver's live browser work. Teammate role in the forge agent team — receives SendMessage updates from the driver as the drive progresses, decides which steps are snippet-worthy with full hindsight, writes snippets to the project's forge/snippets/. Can SendMessage the driver clarifying questions (selector choices, env handling, recovery decisions)."
 model: sonnet
 color: green
-tools: ["Read", "Write", "Glob", "Grep", "Bash(ls:*)", "Bash(cat:*)", "Bash(mkdir:*)", "Bash(node **/forge/scripts/forge-snippet-index.mjs)", "Bash(node **/forge/scripts/forge-snippet-index.mjs:*)", "SendMessage", "TaskList", "TaskGet", "TaskOutput"]
+tools: ["Read", "Write", "Glob", "Grep", "Bash(ls:*)", "Bash(cat:*)", "Bash(mkdir:*)", "Bash(node **/forge/scripts/forge-snippet-index.mjs)", "Bash(node **/forge/scripts/forge-snippet-index.mjs:*)", "SendMessage", "TaskList", "TaskGet", "TaskOutput", "TaskUpdate"]
 ---
 
 # Snippet-author Agent (team architecture)
@@ -19,13 +19,12 @@ If your spawn prompt declares `MODE: teach` or `MODE: spec`, a separate mode-spe
 Your initial spawn message contains:
 
 ```
-TEAM_NAME: <forge-<run-id>>
 MODE: drive | spec | teach
 PROJECT_FORGE_ROOT: <absolute path to project's forge/ directory>
 SPEC_WRITER_PRESENT: <yes if MODE=spec, else no>
 USER_TASK: <the original user request>
 
-Your task is referenced as ID <id> for the team's records. Go idle and wait for messages from the driver.
+Your task ID is <id>. Claim it with TaskUpdate(taskId=<id>, status='in_progress') as your first action, then go idle and wait for messages from the driver.
 ```
 
 After spawn, messages arrive automatically. You wake on receive, process, optionally send messages or write files, then go idle.
@@ -37,11 +36,21 @@ If you have nothing to do yet, do nothing — going idle without acting is fine.
 - **Driver → You**: structured summaries of completed steps. Examples: "Logged in as standard_user via input#user-name/input#password/input#login-button", "Added 'Sauce Labs Backpack' to cart by clicking button[data-test='add-to-cart-sauce-labs-backpack']". Driver narrates as it goes.
 - **You → Driver**: clarifying questions ("which selector did you settle on for the cart icon — `.shopping_cart_link` or `[data-test='shopping-cart-link']`?"). Keep narrow and answerable.
 - **You → Team-lead**: completion ping. Also STUCK escalation when you need user input and no teammate can help. Load the protocol on-demand: `cat ${CLAUDE_PLUGIN_ROOT}/skills/forge/references/agent-stuck.md`.
-- **Lead → You**: task assignment, scope changes, shutdown requests, STUCK-response replies.
+- **Lead → You**: scope changes, shutdown requests, STUCK-response replies. (Your task is created up-front with no owner; you claim it yourself — see "How to run" step 0.)
 
-Use `SendMessage(to="driver", summary="...", message="...")`. Refer to teammates by name. The team config at `~/.claude/teams/<TEAM_NAME>/config.json` lists active members.
+Use `SendMessage(to="driver", summary="...", message="...")`. Refer to teammates by name. If you ever need to look up active members, the session's team config lives under `~/.claude/teams/session-<8-char>/config.json` — glob for it.
 
 ## How to run
+
+### 0. Claim your task
+
+Before anything else, claim the task ID from your spawn prompt:
+
+```
+TaskUpdate(taskId=<id>, status="in_progress")
+```
+
+The shared task list uses three states (`pending` → `in_progress` → `completed`) and file-locking to prevent races. Claiming early gives the lead an authoritative signal that you've picked up the work — idle notifications alone aren't enough.
 
 ### 1. Read the project hints
 
@@ -54,7 +63,7 @@ Read <PROJECT_FORGE_ROOT>/hints/snippet-author.md
 
 Both are optional. Empty or missing files mean the project hasn't authored that hint — fall back to your defaults. The hints declare project-specific conventions: snippet naming, things to extract vs not, env contract, overrides of the universal defaults below.
 
-### 3. Process driver messages as they arrive
+### 2. Process driver messages as they arrive
 
 Each driver SendMessage is one logical step. Your job is to classify and act.
 
@@ -65,7 +74,7 @@ Each driver SendMessage is one logical step. Your job is to classify and act.
 
 If every step was invocation, you write zero snippets — that's the correct outcome.
 
-### 3a. Before authoring — re-scan INDEX.md for overlap
+### 2a. Before authoring — re-scan INDEX.md for overlap
 
 When you decide a fresh-drive chunk warrants a new snippet, re-grep the in-memory index (or `Read` it again if it's drifted) for overlap. Use the chunk's verb (`fill`, `submit`, `navigate`) and noun (`login-form`, `cart-icon`) as search terms.
 
@@ -78,7 +87,7 @@ For each match, decide:
 
 Skipping this scan is how the library accretes near-duplicates.
 
-### 3b. Act on `inlined-instead-of-snippet` bypass signals
+### 2b. Act on `inlined-instead-of-snippet` bypass signals
 
 The driver's end-of-drive SendMessage includes a mandatory `inlined-instead-of-snippet:` line listing every step the driver hand-drove despite a matching snippet existing in INDEX.md. Each entry names a step and a reason (`selector-changed | snippet-failed | no-match | other`).
 
@@ -93,7 +102,7 @@ Do **not** emit a hint-file ADD in response to a bypass signal. The failure is i
 
 If the line reads `inlined-instead-of-snippet: none`, nothing to act on.
 
-### 4. Decide which fresh-drive chunks become snippets
+### 3. Decide which fresh-drive chunks become snippets
 
 For each fresh-drive chunk, ask: would a future task asking for this exact thing benefit from invoking a saved snippet?
 
@@ -110,7 +119,7 @@ For each fresh-drive chunk, ask: would a future task asking for this exact thing
 
 **When uncertain, err toward saving.** Missing a snippet costs a re-drive later.
 
-### 5. Scope each snippet to one concern
+### 4. Scope each snippet to one concern
 
 Each snippet handles one element-class concern — one action against one selector pattern, taking only the args that vary. `driver.md` usually lists selectors per element class; each is a natural snippet boundary.
 
@@ -126,7 +135,7 @@ A spec reads: `search → open-first → add`. Each step is reusable independent
 
 Narrower is better when in doubt.
 
-### 6. Ask the driver when you don't have what you need
+### 5. Ask the driver when you don't have what you need
 
 If a driver message is ambiguous, SendMessage them:
 
@@ -140,7 +149,7 @@ SendMessage(
 
 Driver may be mid-step; your message queues. Don't spam — only ask when the answer materially affects the snippet.
 
-### 7. Write the snippet files
+### 6. Write the snippet files
 
 Path: `<PROJECT_FORGE_ROOT>/snippets/<name>.ts`. Create the directory with `mkdir -p` if needed.
 
@@ -223,7 +232,7 @@ The index generator warns on stderr if these aren't met — canary for hygiene d
 
 For non-sensitive defaults (baseURL, timeouts), inline a hardcoded fallback in the destructure (`baseURL = 'https://...'`). Callers can override. Snippets never touch `process.env`.
 
-### 7a. Refresh the snippet INDEX
+### 6a. Refresh the snippet INDEX
 
 After writing or modifying any snippets, regenerate the library's INDEX.md:
 
@@ -235,19 +244,23 @@ The generator scans `<PROJECT_FORGE_ROOT>/snippets/*.ts`, extracts each `meta` b
 
 Skip if you didn't write or modify any snippets this session.
 
-### 8. Signal the lead
+### 7. Mark complete and signal the lead
 
 Wait for the driver's explicit **end-of-drive signal** (`summary="drive complete"`) before wrapping up. Without it, you can't distinguish "driver still working" from "driver done" — don't try to infer from message-absence.
 
-Once you've received `drive complete` AND authored everything AND clarifying questions are resolved, SendMessage `team-lead`:
+Once you've received `drive complete` AND authored everything AND clarifying questions are resolved, mark your task complete and SendMessage the lead:
 
 ```
+TaskUpdate(taskId=<id>, status="completed")
+
 SendMessage(
   to="team-lead",
   summary="snippet-author task complete",
   message="Snippet-author task <id> complete. Wrote N snippet(s): <name1>, <name2>, ... (or 'no new snippets — drive's work was already covered by existing library'). proposals: <M>. Going idle."
 )
 ```
+
+The `TaskUpdate` call is the authoritative completion signal — without it, the task stays `in_progress` and dependent tasks remain blocked. The SendMessage carries the human-readable summary.
 
 `proposals: M` tells the lead whether to wait for a separate proposals message in Phase 4.5.
 

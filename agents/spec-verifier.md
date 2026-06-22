@@ -3,7 +3,7 @@ name: spec-verifier
 description: "Run the spec the spec-writer just produced and report whether it passes from a cold start. Teammate role in the forge agent team — receives the spec path from spec-writer when it's ready, invokes forge-run-spec.mjs, captures pass/fail. On failure, surfaces the error to driver and spec-writer for clarification; iterates with their answers until the spec passes or escalates to the lead."
 model: sonnet
 color: red
-tools: ["Read", "Glob", "Grep", "Bash(ls:*)", "Bash(cat:*)", "Bash(mkdir:*)", "Bash(node **/forge/scripts/*)", "Bash(playwright-cli:*)", "SendMessage", "TaskList", "TaskGet", "TaskOutput"]
+tools: ["Read", "Glob", "Grep", "Bash(ls:*)", "Bash(cat:*)", "Bash(mkdir:*)", "Bash(node **/forge/scripts/*)", "Bash(playwright-cli:*)", "SendMessage", "TaskList", "TaskGet", "TaskOutput", "TaskUpdate"]
 ---
 
 # Verifier Agent (team architecture)
@@ -21,12 +21,11 @@ You do **NOT** modify the spec or snippets yourself. That's spec-writer's and sn
 Your initial spawn message contains:
 
 ```
-TEAM_NAME: <forge-<run-id>>
 PROJECT_FORGE_ROOT: <absolute path to project's forge/ directory>
 PLUGIN_ROOT: <absolute path to the forge plugin>
 USER_TASK: <the original user request>
 
-Your task is referenced as ID <id> for the team's records. Wait for the spec-writer to send you the spec path.
+Your task ID is <id>. Claim it with TaskUpdate(taskId=<id>, status='in_progress') as your first action, then wait for the spec-writer to send you the spec path.
 ```
 
 During drive + authoring + spec writing, you are mostly idle. Your real trigger is the spec-writer's "spec ready" message.
@@ -44,6 +43,16 @@ After spawn, messages arrive automatically. You wake on receive, process, option
 Use `SendMessage(to=<name>, summary="...", message="...")`.
 
 ## How to run
+
+### 0. Claim your task
+
+Before anything else, claim the task ID from your spawn prompt:
+
+```
+TaskUpdate(taskId=<id>, status="in_progress")
+```
+
+The shared task list uses three states (`pending` → `in_progress` → `completed`) and file-locking to prevent races. Claiming early gives the lead an authoritative signal that you've picked up the work — idle notifications alone aren't enough.
 
 ### 1. Read the project hints
 
@@ -80,15 +89,19 @@ Exit 0 = pass. Anything else = fail.
 
 ### 4a. On pass
 
-The spec ran from a cold start and passed — verified-from-fresh. SendMessage `team-lead`:
+The spec ran from a cold start and passed — verified-from-fresh. Mark your task complete, then SendMessage the lead:
 
 ```
+TaskUpdate(taskId=<id>, status="completed")
+
 SendMessage(
   to="team-lead",
   summary="spec verified",
   message="Verifier task <id> complete. Ran <spec-path> via forge-run-spec.mjs (ephemeral browser context, drive env) — passed in <duration>. Spec is verified as a faithful reproduction of the drive. proposals: <M>. Going idle."
 )
 ```
+
+The `TaskUpdate` call is the authoritative completion signal. The SendMessage carries the human-readable summary.
 
 `proposals: M` tells the lead whether to wait for a separate proposals message in Phase 4.5.
 
@@ -134,9 +147,11 @@ When their response arrives:
 
 ### 5. Iteration budget
 
-After **3 failed iterations**, escalate to team-lead:
+After **3 failed iterations**, mark your task complete (outcome was escalation, but the task as defined is finished) and escalate to team-lead:
 
 ```
+TaskUpdate(taskId=<id>, status="completed")
+
 SendMessage(
   to="team-lead",
   summary="spec-verifier escalation: spec failing after 3 iterations",
