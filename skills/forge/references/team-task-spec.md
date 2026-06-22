@@ -26,7 +26,7 @@ TaskCreate(
 
 TaskCreate(
   subject="spec-verifier: run spec from a cold context, confirm it passes",
-  description="Wait for spec-writer's 'spec ready' message. Run the spec via `forge-run-spec.mjs --spec <path>`. Mirror the drive's conditions: fresh browser context, env loaded via forge.md's recipe if it has one (same prefix the driver used). On pass: ping team-lead with verified-from-fresh status. On fail: SendMessage driver (selectors) or spec-writer (assertions/imports) for clarification, iterate up to 3 times, then either succeed or escalate. Claim with TaskUpdate(status='in_progress') at start and TaskUpdate(status='completed') when verification finishes (pass or escalation)."
+  description="Wait for spec-writer's 'spec ready' message. Run the spec via `forge-run-spec.mjs --spec <path> --headed`. Mirror the drive's conditions: fresh browser context, env loaded via forge.md's recipe if it has one (same prefix the driver used). Headed so the user (and you, on a screenshot follow-up) can observe progress and help when a run gets stuck. On pass: ping team-lead with verified-from-fresh status. On fail: SendMessage driver (selectors) or spec-writer (assertions/imports) for clarification, iterate up to 3 times, then either succeed or escalate. Claim with TaskUpdate(status='in_progress') at start and TaskUpdate(status='completed') when verification finishes (pass or escalation)."
 )
 # Note as SPEC_VERIFIER_TASK_ID.
 ```

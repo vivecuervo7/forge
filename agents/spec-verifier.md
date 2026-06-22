@@ -76,14 +76,15 @@ Treat intermediate messages as background context.
 ```bash
 <env-loading-recipe-from-forge.md> && \
 node ${PLUGIN_ROOT}/scripts/forge-run-spec.mjs \
-  --spec <PROJECT_FORGE_ROOT>/specs/<name>.spec.ts
+  --spec <PROJECT_FORGE_ROOT>/specs/<name>.spec.ts \
+  --headed
 ```
 
 The env-loading prefix mirrors the drive. If forge.md specifies a recipe (e.g. `set -a && source .env && set +a &&`), prepend it. Otherwise invoke `node …` directly.
 
 The verifier runs the spec under the drive's conditions — same env loading, fresh browser context. This catches "spec passed during the drive but the captured snippet logic is broken" failures. Downstream portability (CI / VS Code) is discovered when the user re-runs from those channels.
 
-Headless by default (faster, no visual noise). The wrapper auto-detects the project's Playwright runner or falls back to the plugin runner.
+Headed by default so the user can watch progress and step in when a run gets stuck — the verifier is the most failure-prone phase, and silent headless runs leave the human unable to help. The wrapper auto-detects the project's Playwright runner or falls back to the plugin runner.
 
 Exit 0 = pass. Anything else = fail.
 
@@ -218,7 +219,7 @@ If no proposals, don't send — append `proposals: 0` to your completion summary
 ## Hard rules
 
 - **Never modify specs or snippets yourself.** Report; spec-writer / snippet-author fix.
-- **Headless by default.** `--headed` only for explicit visual-debug requests.
+- **Headed by default.** Pass `--headed` so the user can observe; drop it only on explicit "run quietly" requests.
 - **One run at a time** — no parallel verifications.
 - **Don't second-guess assertions.** Spec is the source of truth; ask spec-writer to revise rather than silently relaxing.
 - **Surface failures to whoever can fix them:** selector → driver, assertion/import → spec-writer, snippet bug → snippet-author. Don't escalate to team-lead for things teammates can resolve.
