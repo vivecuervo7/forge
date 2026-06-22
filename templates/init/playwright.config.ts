@@ -52,7 +52,16 @@ declare const process: { env: Record<string, string | undefined> }
 // is "video evidence of a passing flow," not "debugger artifact." Failures
 // still get a trace so you can diagnose them; passing runs get a clean
 // video-only artifact.
+//
+// FORGE_SLOW_MO=<ms> inserts a fixed pause after every Playwright action,
+// via launchOptions.slowMo. Set explicitly by `forge-run-spec.mjs --slow-mo
+// <ms>` as a retry lever for async-state-machine UI libraries (Kendo,
+// Angular Material with deferred change detection, etc.) where atomic
+// Playwright operations race the library's lifecycle. Set a baseline
+// directly in the fallback below if your project consistently benefits
+// from pacing (e.g. `?? 75`); leave unset for fast specs.
 const record = process.env.FORGE_RECORD === '1'
+const slowMo = process.env.FORGE_SLOW_MO ? parseInt(process.env.FORGE_SLOW_MO, 10) : 0
 
 export default defineConfig({
   testDir: './specs',
@@ -67,5 +76,6 @@ export default defineConfig({
   use: {
     video: record ? 'on' : 'off',
     trace: record ? 'retain-on-failure' : 'off',
+    launchOptions: slowMo ? { slowMo } : {},
   },
 })

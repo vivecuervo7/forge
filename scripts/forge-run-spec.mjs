@@ -29,12 +29,21 @@
 // by uncommenting.
 //
 // Usage:
-//   forge-run-spec.mjs --spec <path> [--headed] [--record] [--record-as <label>]
+//   forge-run-spec.mjs --spec <path> [--headed] [--record] [--record-as <label>] [--slow-mo <ms>]
 //
 // --record sets FORGE_RECORD=1 in the spawn env. The forge-scaffolded
 // playwright.config.ts honors this by enabling `use.video = 'on'` and
 // `use.trace = 'on'`; projects with their own config can opt in by
 // checking the same env var. With no opt-in, --record is a no-op.
+//
+// --slow-mo <ms> sets FORGE_SLOW_MO=<ms> in the spawn env. The forge-
+// scaffolded playwright.config.ts honors this by setting
+// `use.launchOptions.slowMo = <ms>`, inserting a fixed pause after every
+// Playwright action. Useful as a retry lever when a spec fails on
+// async-state-machine UI libraries (Kendo, etc.) where the driver's
+// headed pace masked a race the headless spec exposed. Projects with
+// their own playwright config opt in by reading FORGE_SLOW_MO the same
+// way. With no opt-in, --slow-mo is a no-op.
 //
 // After the run, if --record produced a video.webm under the project's
 // test-results/ dir, it's copied to <projectForge>/videos/ so it survives
@@ -89,7 +98,7 @@ ensureRunnerDeps(provisionalForgeRoot)
 
 const { default: mri } = await loadFromRunner(provisionalForgeRoot, 'mri')
 const args = mri(process.argv.slice(2), {
-  string: ['spec', 'record-as'],
+  string: ['spec', 'record-as', 'slow-mo'],
   boolean: ['headed', 'record'],
 })
 
@@ -99,6 +108,13 @@ if (!specPath) die('missing --spec <path-to-spec>')
 const headed = !!args.headed
 const recordAs = args['record-as'] ?? null
 const record = !!args.record || recordAs !== null  // --record-as implies --record
+const slowMoRaw = args['slow-mo']
+let slowMo = null
+if (slowMoRaw != null) {
+  const n = parseInt(slowMoRaw, 10)
+  if (!Number.isFinite(n) || n < 0) die(`--slow-mo expects a non-negative integer (ms), got ${slowMoRaw}`)
+  slowMo = n
+}
 
 specPath = resolve(specPath)
 if (!existsSync(specPath)) die(`spec not found: ${specPath}`, 4)
@@ -179,7 +195,13 @@ console.error(`forge-run-spec: using ${mode} runner`)
 // FORGE_RECORD is read by the forge-scaffolded playwright.config.ts to
 // enable video + trace. User env precedence wins — an explicit FORGE_RECORD=0
 // in the shell can suppress recording even with --record.
-const finalEnv = record ? { ...process.env, FORGE_RECORD: '1' } : { ...process.env }
+// FORGE_SLOW_MO is read by the forge-scaffolded config to set Playwright's
+// launchOptions.slowMo. Set explicitly via --slow-mo on this invocation; an
+// unset value defers to whatever the project's config decides (often a
+// baseline for async-state-machine UI libraries).
+const finalEnv = { ...process.env }
+if (record) finalEnv.FORGE_RECORD = '1'
+if (slowMo != null) finalEnv.FORGE_SLOW_MO = String(slowMo)
 
 // Note the start time so we can find videos produced by THIS run (and
 // ignore stale artifacts from earlier runs).

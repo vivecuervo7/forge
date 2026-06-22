@@ -86,6 +86,8 @@ The verifier runs the spec under the drive's conditions — same env loading, fr
 
 Headed by default so the user can watch progress and step in when a run gets stuck — the verifier is the most failure-prone phase, and silent headless runs leave the human unable to help. The wrapper auto-detects the project's Playwright runner or falls back to the plugin runner.
 
+The runner also accepts `--slow-mo <ms>` to insert a fixed pause after every Playwright action — useful as a retry lever when a failure smells like a pacing race against an async-state-machine UI library (Kendo, Angular Material with deferred change detection, etc.). The project's `spec-verifier.md` hint decides whether and when to use it; this file just makes you aware the flag exists.
+
 Exit 0 = pass. Anything else = fail.
 
 ### 4a. On pass
