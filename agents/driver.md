@@ -156,18 +156,40 @@ If invocation fails (snippet errored, selector no longer matches), fall back to 
 
 #### When driving fresh
 
-For each browser action:
+**Default to native playwright-cli commands.** Snapshot to orient, then act with `click <ref>`, `fill <ref> <text>`, `select <ref> <val>`, `hover <ref>`, `check <ref>`, `goto <url>`, `tab-new`, `dialog-accept`, etc. Playwright-cli echoes the equivalent Playwright code in a `### Ran Playwright code` block in each command's output — that echoed code is the snippet-author's source material when transcribing the drive into a snippet.
 
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-pw.mjs -s=<SESSION_NAME> <command> <args>
+node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-pw.mjs -s=<SESSION_NAME> snapshot --depth=3
+# returns ref-annotated accessibility tree
+
+node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-pw.mjs -s=<SESSION_NAME> click e3
+# Ran Playwright code:
+# await page.getByRole('button', { name: 'Sign In' }).click();
 ```
 
-Where `<command>` is `goto`, `snapshot`, `click`, `fill`, `eval`, `tab-new`, `run-code`, etc. For `run-code` bodies that need env values, use native shell expansion inside the code string — see "Environment variables". To read the current URL, use `eval "() => location.href"` (or `run-code`) — there is no dedicated `url` command.
+**Reach for `run-code` only when** a native command can't express what you need:
+
+- **Playwright API not exposed by native commands** — `dispatchEvent('click')`, custom timeouts, `waitForResponse`, two-`evaluate`-with-gap patterns, scroll-event dispatching, programmatic widget access.
+- **Value capture beyond `eval`** — when `eval "() => expr"` isn't enough (returning a structured object, multi-step capture, conditional read).
+- **Multi-step atomic logic** that must be one unit (read state → branch → act).
+
+For everything else — clicks, fills, selects, hovers, navigations, tab switches, dialogs — native commands are the answer. The codegen output is more idiomatic than what you'd hand-write, and it costs fewer tokens.
+
+**Snapshot discipline** — refs are valid only until the next snapshot. Re-snapshot at logical boundaries:
+
+- After any navigation (`goto`, `click` that triggers route change, `tab-new`).
+- After a modal/slide-over opens or closes.
+- After a form submission settles (use the project's documented post-submit sentinel from `forge.md` — `waitForResponse` on a MessageBus command, DOM sentinel on a new row appearing, URL transition — before re-snapshotting).
+- When a previous command's echoed code suggests the DOM changed substantially.
+
+Start narrow: `snapshot --depth=3` for orientation; `snapshot <ref>` to drill into a specific region; full snapshot only as fallback when the narrow ones don't surface what you need. The project's pages can be deep — full snapshots are expensive.
+
+**For env values inside `run-code` bodies**, use native shell expansion in the code string — see "Environment variables". To read the current URL, use `eval "() => location.href"` (or `run-code`).
 
 **After each meaningful step, SendMessage `snippet-author`** with a structured summary. The `summary` field's lead word is the load-bearing distinction:
 
 - **Invoked an existing snippet** — `summary="invoked <snippet-name>"`. Body: snippet + args, return value, landed-on URL or state change. Author skips these.
-- **Drove a step fresh** — `summary="drove fresh: <what>"`. Body: action, selectors used (with rationale if non-obvious), result, reusability note. Candidates for new snippets.
+- **Drove a step fresh** — `summary="drove fresh: <what>"`. Body: action, the Playwright code that ran (lifted from the echoes for native commands, verbatim from your `run-code` for the others), result, reusability note. Candidates for new snippets.
 
 Example (drove fresh):
 
@@ -176,28 +198,43 @@ SendMessage(
   to="snippet-author",
   summary="drove fresh: added backpack to cart",
   message="Step: add item to cart.
-Action: clicked button[data-test='add-to-cart-sauce-labs-backpack'] (via run-code dispatchEvent — standard click didn't register).
-Selectors used: button[data-test='add-to-cart-<slug>'].
-Result: button → 'Remove', cart badge incremented.
+Native: clicked button (echoed:
+  await page.getByRole('button', { name: 'Add to cart' }).first().click();
+)
+Result: button text → 'Remove', cart badge incremented to 1.
 Reusability note: this snippet should take item name as an arg."
 )
 ```
 
-**Meaningful** = discrete logical unit (login, add-to-cart, fill-form), OR multiple actions accomplishing one purpose, OR a `run-code` extraction worth preserving. **Not meaningful**: orientation snapshots, locator deliberation, mid-step actions, failed recovery attempts.
-
-### 6. Locator picking — every action targeting a specific element
-
-After a `snapshot` orients you, generate 2-4 candidate locator expressions at different specificity levels:
+When `run-code` was the right call, include the body verbatim so snippet-author can inline it:
 
 ```
-page.getByRole('textbox', { name: /username/i })
-page.locator('input[data-test="username"]')
-page.locator('#user-name')
+SendMessage(
+  to="snippet-author",
+  summary="drove fresh: selected Kendo option via dispatchEvent",
+  message="Step: select Group Size = 3.
+run-code (Kendo option items need dispatchEvent — see forge.md):
+  async page => {
+    await page.getByRole('combobox', { name: 'Group Size' }).click()
+    await page.getByRole('option', { name: '3', exact: true }).dispatchEvent('click')
+    await page.waitForTimeout(500)
+  }
+Result: Summary now shows 3 member rows."
+)
 ```
 
-Try them via `run-code` that returns match info, then pick the one that uniquely matches. Prefer semantic locators over CSS attribute matches when both uniquely match. Reject candidates matching the wrong tag/role.
+**Meaningful** = discrete logical unit (login, add-to-cart, fill-form), OR multiple actions accomplishing one purpose, OR a value extraction worth preserving. **Not meaningful**: orientation snapshots, recovery attempts that didn't land, mid-step probes.
 
-For projects with stable selectors, the hint usually has the right one — skip the enumeration. Reserve it for cases the hint doesn't cover.
+### 6. Snapshot refs and locator stability
+
+The snapshot+ref model from playwright-cli gives you semantic, ARIA-tree-derived locators for free — the codegen prefers `getByRole`, `getByLabel`, `getByText` over CSS attribute matches when both are available. That's almost always what you want. Don't hand-pick locators when the ref disambiguates.
+
+**Stay aware of two cases where you may want to override**:
+
+- **Project hints document a preferred selector.** `forge.md` may name stable selectors (data-test attributes, role+name patterns that hold across versions) that are more durable than what the snapshot's accessibility tree generates. If the project's hint names the selector, use it.
+- **The auto-generated locator is fragile.** Text-based locators (`getByText('Submit')`) can match multiple elements or break when copy changes. If the echoed code looks fragile, run `generate-locator <ref>` to see if playwright-cli has a better alternative, or pick a stable attribute manually via `eval "el => el.getAttribute('data-test')" <ref>`.
+
+In doubt, trust the snapshot ref and let the snippet-author refine during transcription (they read the same `forge.md`). Don't burn budget enumerating candidate locators by default.
 
 ### 7. Recovery, escalation, and giving up
 
@@ -267,13 +304,15 @@ Between your completion ping and going idle, send the lead a `proposals` message
 
 ### What to observe (driver-specific)
 
-Your proposals capture SUT facts the hint set didn't already encode. Worked examples:
+Your proposals capture SUT facts the hint set didn't already encode. Most discoveries about the application (selectors, routes, framework quirks, interaction patterns) land in **`forge.md`** because they're useful to every agent. Reserve `driver.md` for driving-discipline patterns that are project-specific but irrelevant to other roles.
 
-- **A framework quirk.** Plain `.click()` silently failed on the checkout finish button; switching to `dispatchEvent('click')` worked. Propose an ADD under `driver.md`'s `## Known gotchas` documenting symptom + workaround.
-- **A selector mismatch.** `driver.md` lists `[data-test="cart-icon"]` but the actual element is `[data-test="nav-cart"]`. Propose an AMEND with the corrected selector.
-- **A route you navigated** that isn't in the route map — single-line ADD.
+Worked examples:
+
+- **A framework quirk.** Plain `.click()` silently failed on the checkout finish button; switching to `dispatchEvent('click')` worked. Propose an ADD under `forge.md`'s selector-vocabulary or framework-patterns section documenting symptom + workaround.
+- **A selector mismatch.** `forge.md` lists `[data-test="cart-icon"]` but the actual element is `[data-test="nav-cart"]`. Propose an AMEND with the corrected selector.
+- **A route you navigated** that isn't in the route map — single-line ADD to `forge.md`'s "Common routes".
 - **An env key that expanded empty.** Hint advertises `$ADMIN_USERNAME` but it wasn't populated. Propose a `forge.md` clarification.
-- **First-encounter app-shape observations** — only when `driver.md` is empty or skeletal.
+- **A driving-discipline pattern** — e.g. "this project requires a delete-and-recreate dance on test fixtures before each fresh drive." That's `driver.md` territory.
 
 A clean run produces no proposals. That's the success case.
 
@@ -292,7 +331,7 @@ When something is clearly snippet- or spec-shaped, narrate it to snippet-author 
 Walk every ADD through three checks. They catch the most common drift modes:
 
 - **Is the content code-shaped?** If `SUGGESTED_EDIT` carries more than 3 lines of fenced code or a working snippet body, it belongs *inside* a snippet. Narrate it to `snippet-author` as an AMEND target via SendMessage, or skip the proposal. Hints describe intent and gotchas in prose; snippets carry the executable shape.
-- **Does another hint file already cover this?** Skim the `driver.md` and `forge.md` hints you already loaded, and (briefly, via `Read`) any other `<PROJECT_FORGE_ROOT>/hints/*.md` for a near-match before emitting.
+- **Does another hint file already cover this?** Skim the `driver.md` and `forge.md` hints you already loaded for a near-match before emitting. Your proposals target only those two — no need to check other agents' hint files.
 - **Is this fixing a symptom of a snippet bug?** If you fell back to inline driving because an existing snippet didn't work, the fix belongs in the snippet — not in a hint about how to work around it. Surface this via your `inlined-instead-of-snippet:` line (step 8) so snippet-author emits an AMEND against the snippet itself.
 
 ### Action types
@@ -402,7 +441,7 @@ Each Bash invocation runs in its own shell — env vars set in one tool call don
 
 - **Emit full URLs in code** (`page.goto('https://app.example.com/path')`, not `/path`). Snippets and specs deriving from your drive must be portable — no implicit baseURL.
 
-- **Values you mention to teammates must have come through `run-code`.** Reading a value from a `snapshot` and quoting it back is fabrication.
+- **Values you mention to teammates must have come through a command that actually retrieved them** — `eval`, `run-code`, `generate-locator`, `cookie-get`, etc. Quoting a value from a `snapshot`'s display text is fabrication: the snapshot shows what the accessibility tree exposes, which may differ from the actual input value, current state, or backend-stored data.
 
 - **Don't pad thin work.** A two-step task is two steps.
 

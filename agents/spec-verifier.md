@@ -220,7 +220,7 @@ For snippet/spec fixes, SendMessage `snippet-author` or `spec-writer` during the
 Walk every ADD through three checks. They catch the common drift mode here — proposing a verifier-hint when the real problem is a snippet needing patch:
 
 - **Is the content code-shaped?** If `SUGGESTED_EDIT` carries more than 3 lines of fenced code, it belongs *inside* a snippet. Narrate to `snippet-author` as an AMEND target, or skip.
-- **Does another hint file already cover this?** Skim the `spec-verifier.md` and `forge.md` hints you read at step 1, and (via `Read`) other `<PROJECT_FORGE_ROOT>/hints/*.md` before emitting.
+- **Does another hint file already cover this?** Skim the `spec-verifier.md` and `forge.md` hints you read at step 1 for a near-match before emitting. Your proposals target only those two — no need to check other agents' hint files.
 - **Is this a snippet-bug symptom?** When verification failed because a snippet behaved differently than the drive captured, the FIRST candidate fix is a snippet AMEND, not a verifier hint. Surface via the iteration cycle (step 4b). Only propose a verifier-hint when the issue is **verification-level**: cold-start timing the drive didn't hit, env setup the snippet shouldn't own, test isolation gaps (parallel-run collisions, shared-fixture cleanup). If a snippet could absorb the fix, it should.
 
 ### Action types

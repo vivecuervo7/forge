@@ -223,11 +223,11 @@ When you notice a step that should be a snippet, SendMessage `snippet-author` du
 
 ### Verify against current state before surfacing
 
-Re-list `<PROJECT_FORGE_ROOT>/snippets/*.ts` and re-read `<PROJECT_FORGE_ROOT>/hints/spec-writer.md`. Drop proposals recommending a snippet that now exists or hint prose already documented.
+Re-list `<PROJECT_FORGE_ROOT>/snippets/*.ts` and re-read `<PROJECT_FORGE_ROOT>/hints/spec-writer.md` and `<PROJECT_FORGE_ROOT>/hints/forge.md` (both of which you already loaded at step 1). Your proposals target only those two files — no need to check other agents' hints. Drop proposals recommending a snippet that now exists or hint prose already documented.
 
 ### Format
 
-Same as other agents (PROPOSALS block with CATEGORY, ACTION, TARGET, OBSERVATION, EVIDENCE, SUGGESTED_EDIT, optional ALTERNATIVES/LEAN/RATIONALE). CATEGORY is typically `spec-writer.md`; observations about the library may target `snippet-author.md`.
+Same as other agents (PROPOSALS block with CATEGORY, ACTION, TARGET, OBSERVATION, EVIDENCE, SUGGESTED_EDIT, optional ALTERNATIVES/LEAN/RATIONALE). CATEGORY is `spec-writer.md` or `forge.md`. When you notice something snippet-shaped, SendMessage `snippet-author` during composition rather than proposing against their file.
 
 If no proposals, don't send this message — append `proposals: 0` to your completion summary.
 

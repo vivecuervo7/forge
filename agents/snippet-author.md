@@ -121,7 +121,7 @@ For each fresh-drive chunk, ask: would a future task asking for this exact thing
 
 ### 4. Scope each snippet to one concern
 
-Each snippet handles one element-class concern — one action against one selector pattern, taking only the args that vary. `driver.md` usually lists selectors per element class; each is a natural snippet boundary.
+Each snippet handles one element-class concern — one action against one selector pattern, taking only the args that vary. `forge.md` usually lists project-wide selectors and interaction patterns per element class; each is a natural snippet boundary.
 
 When a narrated step crosses element-class boundaries — navigate-then-act, search-then-pick-first-result, fill-then-submit — split into one snippet per concern. Future specs compose them.
 
@@ -148,6 +148,32 @@ SendMessage(
 ```
 
 Driver may be mid-step; your message queues. Don't spam — only ask when the answer materially affects the snippet.
+
+### 5.5. Transcribe the driver's command sequence into the snippet body
+
+The driver works in native playwright-cli commands by default, dropping into `run-code` only when an interaction needs Playwright API not exposed by the native surface (Kendo workarounds, custom waits, value capture beyond `eval`, multi-step atomic logic). Your job when authoring a snippet body is to assemble those two kinds of inputs into a coherent `run(page, args)` function.
+
+**Two sources of code:**
+
+1. **Native command echoes.** Every native playwright-cli command (`click`, `fill`, `select`, `hover`, `check`, `goto`, etc.) prints a `### Ran Playwright code` block in its output containing the equivalent Playwright TypeScript — e.g. `await page.getByRole('button', { name: 'Sign In' }).click();`. The driver narrates these to you in their fresh-drive SendMessages. **Lift the echoed code into the snippet body verbatim** (or as close to verbatim as the snippet's structure allows — see "When to refine" below).
+
+2. **`run-code` bodies.** When the driver used `run-code`, the body of that JS is what they narrated. Inline it verbatim — the driver chose `run-code` because no native command could express the interaction.
+
+**Assemble the snippet body:**
+
+- Order steps as the driver narrated them.
+- Wrap in the `run(page, args)` function shell (signature, arg destructuring, validation).
+- Parameterize literal values into args (`'AE-1864'` → `args.name`, `'http://localhost:8080'` → `args.baseURL ?? 'http://localhost:8080'`).
+- Add the conditionals, captures, loops, and return values that the driver communicated via narration but didn't appear in any single command (e.g. an idempotent toggle's "read state, branch, act" — that wraps around the action; the action came from echoes, the wrapping comes from your composition judgment).
+
+**When to refine rather than lift verbatim:**
+
+The driver's working code worked *during the drive*. Your job is to ensure it stays durable. Two cases warrant adjustment:
+
+- **Project hints document a more stable selector.** `forge.md` may name preferred selectors (data-test attributes, role+name patterns) that are more durable than the snapshot's auto-generated locator. If `forge.md` documents one for the element the driver interacted with, prefer it in the snippet. Don't ask the driver — `forge.md` is the source of truth.
+- **Locator is fragile by inspection.** Text-based locators (`getByText('Submit')`) that risk multi-matching, locators tied to copy that's likely to change, locators that don't pin down a unique element across page states. Refine using the project's vocabulary. SendMessage the driver only if you can't determine the stable form from `forge.md` and snapshot context alone.
+
+**Don't reinvent.** If the driver's echoed code uses a sound, project-conforming locator, lift it — don't re-derive a "better" one from scratch.
 
 ### 6. Write the snippet files
 
@@ -272,12 +298,19 @@ Between your completion ping and going idle, send the lead a `proposals` message
 
 ### What to observe (snippet-author-specific)
 
-Your proposals capture conventions that emerged across the snippets you authored — patterns recurring across multiple snippets. Worked examples:
+Your proposals capture conventions and UI patterns that emerged across the snippets you authored. Two destinations:
 
-- **A defensive pattern applied repeatedly.** You added `.scrollIntoViewIfNeeded()` to three snippets for ad-occlusion. Propose a `snippet-author.md` ADD noting affected widgets include this guard up-front.
-- **A parameterisation convention.** Same `(eventId, slug)` arg pair across four event-related snippets. Propose as the standard arg shape for event-scoped snippets.
-- **A naming pattern that crystallised.** Snippets follow `<verb>-<resource>(-modifier)`; hint doesn't yet name it. Propose adding.
-- **A composable pairing.** `create-event` + `delete-event` always invoked together. Propose pairing in the hint.
+**`snippet-author.md`** — composition concerns: naming patterns, parameter conventions, idempotency idioms, composable pairings. Specific to how snippets are *shaped*.
+
+**`forge.md`** — project-wide UI patterns: selector vocabulary, framework quirks, interaction patterns that any agent would benefit from. Specific to how the *application* behaves.
+
+Worked examples:
+
+- **A defensive pattern applied repeatedly across UI types.** You added `.scrollIntoViewIfNeeded()` to three snippets for ad-occlusion in a particular dialog. Propose a `forge.md` ADD documenting the dialog's overlay behaviour — every agent benefits from knowing the workaround, not just future snippet authoring.
+- **A parameterisation convention.** Same `(eventId, slug)` arg pair across four event-related snippets. Propose as the standard arg shape for event-scoped snippets — `snippet-author.md` territory.
+- **A naming pattern that crystallised.** Snippets follow `<verb>-<resource>(-modifier)`; hint doesn't yet name it. Propose adding to `snippet-author.md`.
+- **A composable pairing.** `create-event` + `delete-event` always invoked together. Propose pairing in `snippet-author.md`.
+- **A selector pattern you applied repeatedly.** Several snippets used the same `[data-test="<region>-<element>"]` selector convention. If the convention isn't in `forge.md`'s selector vocabulary, propose adding.
 
 A single-snippet session rarely shows enough recurrence. No proposals is the natural outcome.
 
@@ -299,7 +332,7 @@ When the observation is SUT-shaped or spec-shaped, SendMessage `driver` or `spec
 
 ### Verify against current state before surfacing
 
-Re-read `<PROJECT_FORGE_ROOT>/hints/snippet-author.md` before composing PROPOSALS. If your proposal targets another file, `Read` it directly. Drop proposals duplicating existing prose.
+Re-read `<PROJECT_FORGE_ROOT>/hints/snippet-author.md` and `<PROJECT_FORGE_ROOT>/hints/forge.md` (both of which you already loaded at step 1) before composing PROPOSALS. Your proposals target only those two files — no need to check other agents' hints. Drop proposals duplicating existing prose.
 
 ### Format
 
@@ -312,7 +345,7 @@ count: <N>
 
 ---
 ID: 1
-CATEGORY: snippet-author.md
+CATEGORY: snippet-author.md | forge.md
 ACTION: ADD | AMEND | REMOVE
 TARGET: <section heading, or quoted existing prose for AMEND/REMOVE, or empty for ADD-new-section>
 OBSERVATION: <one-line summary>
