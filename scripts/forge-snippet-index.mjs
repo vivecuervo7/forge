@@ -27,9 +27,9 @@
 //   args:        object           (required, may be empty)
 //   tags:        string[]         (optional, free-form)
 //   flow:        string           (optional, groups snippets by multi-step
-//                                  flow they belong to, e.g. 'is-group-reg')
+//                                  flow they belong to, e.g. 'checkout')
 //   phase:       string           (optional, phase within the flow,
-//                                  e.g. 'summary→payment')
+//                                  e.g. 'cart→payment')
 //   enters:      string           (optional, state the snippet leaves the
 //                                  page in)
 //   requires:    string           (optional, state the page must be in

@@ -174,7 +174,7 @@ Wait for the next [act] instruction."
 
 ### 4.3 User signals a snippet boundary
 
-Examples: "cap that as `login`", "make this a snippet called `add-product-to-cart`", "save the last three steps as `create-event`", "save the last five steps but not the search step as `create-event`." This is the load-bearing operation in teach mode.
+Examples: "cap that as `login`", "make this a snippet called `add-product-to-cart`", "save the last three steps as `create-order`", "save the last five steps but not the search step as `create-order`." This is the load-bearing operation in teach mode.
 
 Cap signals can fire at any time and reference any range of past narrated steps — the last action, the last few, a contiguous chunk further back, or a non-contiguous selection. Don't assume "cap" means "the most recent step"; if which steps the user means is ambiguous, ask before sending the cap.
 

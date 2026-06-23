@@ -200,12 +200,12 @@ export const meta = {
   },
   tags: ['login', 'auth'],
   // Optional fields — include them when meaningful:
-  flow:       'is-group-registration',     // groups related snippets in INDEX.md
-  phase:      'summary→payment',           // phase within the flow
-  requires:   'on /Site/Register, summary step active',
-  enters:     'on /Site/Register, payment step active',
-  composes:   ['navigate-is-step-forward'],   // names of snippets this one shells out to
-  supersedes: ['old-submit-group'],            // names of older snippets this replaces
+  flow:       'checkout',                 // groups related snippets in INDEX.md
+  phase:      'cart→payment',             // phase within the flow
+  requires:   'on /cart, items present',
+  enters:     'on /checkout, payment step active',
+  composes:   ['advance-checkout-step'],  // names of snippets this one shells out to
+  supersedes: ['old-submit-cart'],         // names of older snippets this replaces
 }
 
 export async function run(page, args) {
@@ -223,10 +223,10 @@ export async function run(page, args) {
 
 - `description` (required) — one sentence, intent-focused. "Submits a search and leaves the result list visible" beats "Calls page.locator('.search-input').fill(...) then clicks button.submit".
 - `args` (required, may be empty `{}`) — each key is an arg name; value is `{ type, optional?, description }`. Type is a free-form string used for display, not validation. Optional args set `optional: true`.
-- `tags` (optional) — free-form strings for discovery. Avoid generic noise like `'auto-authored'`; pick tags that aid discovery (`'auth'`, `'dnd'`, `'kendo-combobox'`).
-- `flow` (optional but encouraged) — identifies the multi-step flow (e.g. `'is-group-registration'`). Snippets with the same `flow` are grouped in INDEX.md.
-- `phase` (optional) — phase within the flow, e.g. `'step1→summary'`.
-- `requires` (optional) — one-line description of page state on entry (e.g. `'on /Site/Register, summary step active'`). Replaces the older free-form `preconditions` block.
+- `tags` (optional) — free-form strings for discovery. Avoid generic noise like `'auto-authored'`; pick tags that aid discovery (`'auth'`, `'dnd'`, `'datepicker'`).
+- `flow` (optional but encouraged) — identifies the multi-step flow (e.g. `'checkout'`, `'onboarding'`). Snippets with the same `flow` are grouped in INDEX.md.
+- `phase` (optional) — phase within the flow, e.g. `'cart→payment'`.
+- `requires` (optional) — one-line description of page state on entry (e.g. `'on /cart, items present'`). Replaces the older free-form `preconditions` block.
 - `enters` (optional) — one-line description of state the snippet leaves the page in. Helps decide whether two snippets compose cleanly.
 - `composes` (optional) — array of snippet names this one shells out to. Documents dependencies.
 - `supersedes` (optional) — array of older snippet names this replaces. Keeps a paper trail.
@@ -244,7 +244,7 @@ register | advance | back | open | scroll | switch | extract
 
 If your verb isn't listed, pick the closest match ("tap" → `click`, "select" → `click`, "go to" → `navigate` or `goto`). Compact list keeps the library consistent.
 
-**Never name a snippet after a Jira ticket.** A snippet named `ae-1234.ts` is invisible to future drivers scanning INDEX.md. Tickets belong in `description`, not filenames.
+**Never name a snippet after a Jira ticket.** A snippet named `proj-1234.ts` is invisible to future drivers scanning INDEX.md. Tickets belong in `description`, not filenames.
 
 **Required meta at author time.** Before writing, confirm:
 
@@ -309,7 +309,7 @@ Worked examples:
 - **A defensive pattern applied repeatedly across UI types.** You added `.scrollIntoViewIfNeeded()` to three snippets for ad-occlusion in a particular dialog. Propose a `forge.md` ADD documenting the dialog's overlay behaviour — every agent benefits from knowing the workaround, not just future snippet authoring.
 - **A parameterisation convention.** Same `(eventId, slug)` arg pair across four event-related snippets. Propose as the standard arg shape for event-scoped snippets — `snippet-author.md` territory.
 - **A naming pattern that crystallised.** Snippets follow `<verb>-<resource>(-modifier)`; hint doesn't yet name it. Propose adding to `snippet-author.md`.
-- **A composable pairing.** `create-event` + `delete-event` always invoked together. Propose pairing in `snippet-author.md`.
+- **A composable pairing.** `create-order` + `cancel-order` always invoked together. Propose pairing in `snippet-author.md`.
 - **A selector pattern you applied repeatedly.** Several snippets used the same `[data-test="<region>-<element>"]` selector convention. If the convention isn't in `forge.md`'s selector vocabulary, propose adding.
 
 A single-snippet session rarely shows enough recurrence. No proposals is the natural outcome.

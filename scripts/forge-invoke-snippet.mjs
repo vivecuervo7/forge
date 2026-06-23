@@ -113,7 +113,7 @@ try {
 
 // Read raw source. NEVER dynamically import — Node 24's strict ESM rejects
 // extensionless imports against .ts files, which is how snippets compose
-// each other (e.g. `import { searchEvent } from './search-event'`).
+// each other (e.g. `import { addItem } from './add-item-to-cart'`).
 let rawSrc
 try {
   rawSrc = readFileSync(snippetPath, 'utf8')
@@ -161,7 +161,8 @@ const jsBody = transpile.stdout
 // the snippet's declared precondition, falling back to the most recent
 // non-blank tab. Without this, snippets often run against a stray about:blank
 // the driver left behind during exploration — the 0.16/0.17 rewrite dropped
-// the 0.9.7 prelude and triggered the AE-1793 "all snippets failed" report.
+// the 0.9.7 prelude and triggered an "all snippets failed" regression that
+// the prelude's reintroduction resolved.
 // Safe by design: if nothing matches, we leave `page` alone (cold-start case
 // where about:blank is the only tab).
 const pageSelectPrelude = `try {

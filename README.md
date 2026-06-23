@@ -52,7 +52,7 @@ Supported on macOS, Linux, and Windows.
 |---|---|
 | `/forge init` | Scaffolds the `forge/` directory convention into the current project. Idempotent — the starting point for any new project. |
 | `/forge <task>` | **Drive mode.** Driver + snippet-author. Does the task end-to-end, accretes reusable snippets from novel work. The everyday command. |
-| `/forge spec <task>` | **Spec mode.** Adds spec-writer + spec-verifier. Composes a self-contained `.spec.ts` and confirms it passes from a cold start. Also fires on natural-language signals — "create a spec for AE-1775", "write a spec that…", "capture as a spec". |
+| `/forge spec <task>` | **Spec mode.** Adds spec-writer + spec-verifier. Composes a self-contained `.spec.ts` and confirms it passes from a cold start. Also fires on natural-language signals — "create a spec for PROJ-123", "write a spec that…", "capture as a spec". |
 
 ### Teach mode
 

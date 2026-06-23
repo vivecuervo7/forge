@@ -83,7 +83,7 @@ Group the AskUserQuestion call by category so each question's options are compar
 
 1. **Snippet merges / supersedes** (from `byFlowPhase`, `byDescription`, `byBody` with `sharedLines`). Propose: "Merge `A.ts` and `B.ts` — N shared body lines, descriptions overlap. Collapse to one with `<arg>?: <type>` to parameterise the difference."
 2. **Snippet forks on selectors** (`byBody` with `sharedSelectorFamily`). Propose: "Reconcile `A.ts`, `B.ts`, `C.ts` — all target `#firstName<i>` family with different index bases. Decide which base is correct and supersede the others."
-3. **Snippet rename / meta fix** (`flagged: jira-key-named`, `description-missing`, `meta-missing-or-broken`, `low-value-tags`). Propose: "Rename `ae-1785-group-registration.ts` → `<intent-named>.ts`" or "Add real `meta.tags` to `<file>` (currently just `['auto-authored']`)".
+3. **Snippet rename / meta fix** (`flagged: jira-key-named`, `description-missing`, `meta-missing-or-broken`, `low-value-tags`). Propose: "Rename `proj-1785-checkout-flow.ts` → `<intent-named>.ts`" or "Add real `meta.tags` to `<file>` (currently just `['auto-authored']`)".
 4. **Hint sections — code-shaped** (`fenced`, `indented`). Propose: "Move the fenced block in `<file>` § `<heading>` into snippet `<name>.ts` (or new snippet); replace the hint section with prose describing the intent."
 5. **Hint sections — procedure** (`procedure-shaped`). Propose: "Extract the procedure in `<file>` § `<heading>` to `forge/hints/scripts/<name>.sh`; replace with prose pointer."
 6. **Hint sections — fixture data** (`fixture-data`). Propose: "Lift the data block in `<file>` § `<heading>` into a fixture file (e.g. `forge/hints/scripts/<name>.fixture.json` or inline into the spec) — hints are for stable gotchas, not regression fixtures."
@@ -135,7 +135,7 @@ Compose a tight summary. Drop sections that don't apply:
 >
 > Snippets:
 >   - Merged: `<A>`, `<B>` → `<merged>` (parameterised on `<arg>`)
->   - Renamed: `ae-1785-group-registration.ts` → `<new>.ts`
+>   - Renamed: `proj-1785-checkout-flow.ts` → `<new>.ts`
 >   - Updated meta on N snippets
 >   - INDEX.md regenerated
 >

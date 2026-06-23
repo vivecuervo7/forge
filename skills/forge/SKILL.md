@@ -84,7 +84,7 @@ Counter-examples that should NOT match:
 - `/forge clean` → route=clean, args="" (scope defaults to both)
 - `/forge clean snippets` → route=clean, args="snippets"
 - `/forge tidy up the snippet library` → route=clean (via NL signal), args="tidy up the snippet library", scope=snippets
-- `/forge spec AE-1775 add a backpack` → route=spec, args="AE-1775 add a backpack", MODE=spec
+- `/forge spec PROJ-123 add a backpack` → route=spec, args="PROJ-123 add a backpack", MODE=spec
 - `/forge add the backpack to cart` → route=task, args="add the backpack to cart", MODE=drive
 - `/forge create a spec for adding the backpack` → route=task, args="create a spec for adding the backpack", MODE=spec (via Phase 0a natural-language signal)
 

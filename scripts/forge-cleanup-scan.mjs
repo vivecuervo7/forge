@@ -402,7 +402,7 @@ function detectFixtureData(body) {
   // NO commands or procedure shape.
   const uuidLike = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(body)
   const labelledBullets = (body.match(/^\s*-\s+[A-Z][A-Za-z ]+:\s+/gm) || []).length
-  const namedIds = (body.match(/\b(ID|id|UUID|attendee ID|planner ID|bracket)\b/g) || []).length
+  const namedIds = (body.match(/\b(ID|id|UUID)\b/g) || []).length
   if (labelledBullets >= 3 && (uuidLike || namedIds >= 2)) {
     return { kind: 'fixture-data', labelledBullets, hasUuid: uuidLike }
   }
