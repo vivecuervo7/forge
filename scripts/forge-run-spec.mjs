@@ -40,8 +40,9 @@
 // scaffolded playwright.config.ts honors this by setting
 // `use.launchOptions.slowMo = <ms>`, inserting a fixed pause after every
 // Playwright action. Useful as a retry lever when a spec fails on
-// async-state-machine UI libraries (Kendo, etc.) where the driver's
-// headed pace masked a race the headless spec exposed. Projects with
+// async-state-machine UI libraries (Kendo, Angular Material with
+// deferred change detection, etc.) where the driver's headed pace
+// masked a race the headless spec exposed. Projects with
 // their own playwright config opt in by reading FORGE_SLOW_MO the same
 // way. With no opt-in, --slow-mo is a no-op.
 //

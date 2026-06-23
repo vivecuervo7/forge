@@ -159,7 +159,7 @@ After **3 iterations**, pause and evaluate progress before deciding whether to k
 - The failing step advances later in the spec.
 - Driver, spec-writer, and snippet-author converge on a shared diagnosis at each round.
 
-A multi-layered spec (Kendo grid timing **and** fixture mutation **and** hydration sensitivity) can legitimately need 4–5 rounds — each unmasking the next. Cutting at 3 strands progress mid-stack.
+A multi-layered spec (async-widget timing **and** fixture mutation **and** hydration sensitivity, for example) can legitimately need 4–5 rounds — each unmasking the next. Cutting at 3 strands progress mid-stack.
 
 **Iterations are flailing** (escalate at 3) — signals:
 - Same error repeats with only cosmetic variation across iterations.

@@ -129,7 +129,7 @@ Recording is **evidence** — typically before/after videos around the same spec
 The workflow this enables:
 
 ```
-/forge spec AE-1775 add backpack to cart
+/forge spec add backpack to cart
   ↓ authors + verifies the spec
 /forge run last spec, record as before
   ↓ runs against current (buggy) code, records evidence

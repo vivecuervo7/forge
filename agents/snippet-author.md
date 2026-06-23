@@ -151,7 +151,7 @@ Driver may be mid-step; your message queues. Don't spam — only ask when the an
 
 ### 5.5. Transcribe the driver's command sequence into the snippet body
 
-The driver works in native playwright-cli commands by default, dropping into `run-code` only when an interaction needs Playwright API not exposed by the native surface (Kendo workarounds, custom waits, value capture beyond `eval`, multi-step atomic logic). Your job when authoring a snippet body is to assemble those two kinds of inputs into a coherent `run(page, args)` function.
+The driver works in native playwright-cli commands by default, dropping into `run-code` only when an interaction needs Playwright API not exposed by the native surface (framework-specific workarounds like `dispatchEvent`, custom waits, value capture beyond `eval`, multi-step atomic logic). Your job when authoring a snippet body is to assemble those two kinds of inputs into a coherent `run(page, args)` function.
 
 **Two sources of code:**
 
@@ -163,7 +163,7 @@ The driver works in native playwright-cli commands by default, dropping into `ru
 
 - Order steps as the driver narrated them.
 - Wrap in the `run(page, args)` function shell (signature, arg destructuring, validation).
-- Parameterize literal values into args (`'AE-1864'` → `args.name`, `'http://localhost:8080'` → `args.baseURL ?? 'http://localhost:8080'`).
+- Parameterize literal values into args (`'sauce-labs-backpack'` → `args.item`, `'http://localhost:8080'` → `args.baseURL ?? 'http://localhost:8080'`).
 - Add the conditionals, captures, loops, and return values that the driver communicated via narration but didn't appear in any single command (e.g. an idempotent toggle's "read state, branch, act" — that wraps around the action; the action came from echoes, the wrapping comes from your composition judgment).
 
 **When to refine rather than lift verbatim:**

@@ -179,7 +179,7 @@ For everything else — clicks, fills, selects, hovers, navigations, tab switche
 
 - After any navigation (`goto`, `click` that triggers route change, `tab-new`).
 - After a modal/slide-over opens or closes.
-- After a form submission settles (use the project's documented post-submit sentinel from `forge.md` — `waitForResponse` on a MessageBus command, DOM sentinel on a new row appearing, URL transition — before re-snapshotting).
+- After a form submission settles (use the project's documented post-submit sentinel from `forge.md` — `waitForResponse` on a known endpoint, DOM sentinel on a new row appearing, URL transition — before re-snapshotting).
 - When a previous command's echoed code suggests the DOM changed substantially.
 
 Start narrow: `snapshot --depth=3` for orientation; `snapshot <ref>` to drill into a specific region; full snapshot only as fallback when the narrow ones don't surface what you need. The project's pages can be deep — full snapshots are expensive.
@@ -211,15 +211,15 @@ When `run-code` was the right call, include the body verbatim so snippet-author 
 ```
 SendMessage(
   to="snippet-author",
-  summary="drove fresh: selected Kendo option via dispatchEvent",
-  message="Step: select Group Size = 3.
-run-code (Kendo option items need dispatchEvent — see forge.md):
+  summary="drove fresh: selected dropdown option via dispatchEvent",
+  message="Step: select size = 3.
+run-code (native click left the popup open — framework's value-change handler doesn't fire on real click in headless; see forge.md for the pattern):
   async page => {
-    await page.getByRole('combobox', { name: 'Group Size' }).click()
+    await page.getByRole('combobox', { name: 'Size' }).click()
     await page.getByRole('option', { name: '3', exact: true }).dispatchEvent('click')
     await page.waitForTimeout(500)
   }
-Result: Summary now shows 3 member rows."
+Result: size committed, downstream UI re-rendered."
 )
 ```
 
@@ -423,8 +423,8 @@ If a command isn't working with `$VAR`, debug the command shape — don't inline
 SendMessages are written to disk as part of the team's task output. **Reference env-sourced values by env-key name only when narrating, never by resolved value.**
 
 ```
-✓ "invoked login with username=$ADMIN_USERNAME, password=$ADMIN_PASSWORD — landed on /event/selection"
-✗ "invoked login with username=admin@example.com, password=hunter2 — landed on /event/selection"
+✓ "invoked login with username=$ADMIN_USERNAME, password=$ADMIN_PASSWORD — landed on /inventory.html"
+✗ "invoked login with username=admin@example.com, password=hunter2 — landed on /inventory.html"
 ```
 
 If a teammate needs to know what value was used, they don't — they need to know which env key was referenced.
