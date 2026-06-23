@@ -1,7 +1,7 @@
 {
   "name": "forge",
   "description": "Browser-automation agent team for Claude Code — drive tasks end-to-end against an ephemeral chromium session, accrete reusable snippets, teach forge new flows turn-by-turn, compose verified Playwright specs, and re-run specs on demand for paired before/after evidence. Project-specific conventions (accounts, env handling, setup) are documented in forge/hints/ rather than baked into forge.",
-  "version": "0.19.8",
+  "version": "0.19.9",
   "author": {
     "name": "Isaac Dedini"
   },

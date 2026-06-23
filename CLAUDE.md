@@ -1,3 +1,16 @@
+# Keeping the plugin project-agnostic
+
+forge is a generic tool. Its source — code, doc comments, agent prompts, skill references, README, templates, example snippets — describes how forge works, independent of any particular project forge gets used against. Project-specific knowledge (an app's routes, selectors, framework gotchas, ticket-key prefixes, domain terminology) belongs in that project's own `forge/hints/forge.md`, not in plugin source.
+
+When you need a concrete example in plugin docs or code, draw it from a generic source:
+
+- **The plugin's own sample sites.** `forge/samples/` exercises against the Sauce Labs Swag Demo (`saucedemo.com`), `the-internet.herokuapp.com`, and the widgets demo. These are public Playwright tutorial sites — examples drawn from them (login forms, `sauce-labs-backpack`, `/inventory.html`, cart badges) read naturally to any reader.
+- **Generic stand-ins** for things the samples don't cover. `PROJ-123` for ticket keys, `example.com` for hosts, `checkout` / `cart` / `onboarding` for multi-step flows, `create-order` / `cancel-order` for paired operations, `add-item-to-cart` for inter-snippet composition examples.
+
+When illustrating a *category* of behavior whose instances vary per project (async-state-machine UI libraries, deferred-change-detection frameworks, etc.), name two or three concrete examples so the category reads as the subject rather than any single name becoming "the" example.
+
+If you find yourself reaching for a real-world example from a project forge happens to be running against in the current session, redirect it: the right home is that project's hint file. Plugin examples come from the sample sites or generic stand-ins.
+
 # Debugging forge sub-agent runs
 
 When forge spawns its sub-agents (`forge:driver`, `forge:snippet-author`, `forge:spec-writer`, `forge:spec-verifier`), each gets its own full transcript saved to disk. The parent session sees only the agent's final summary — but the entire internal execution (every tool call, every reasoning step, every file read) is recorded separately.
