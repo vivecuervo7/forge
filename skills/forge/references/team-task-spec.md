@@ -1,99 +1,56 @@
 # /forge — team-task spec-mode addendum
 
-This file is loaded by the team-lead **only** when `MODE=spec`. Sections below are additions to or modifications of the base `team-task.md` — integrate them inline at the indicated phases.
+This file is loaded by the team-lead **only** when `MODE=spec`. It adds two things to the base `team-task.md`: establishing the spec's **intent** before spawning, and the spec-mode **final-report** shape. Integrate them at the indicated phases.
 
-The base file covers drive mode (lead + driver + snippet-author). Spec mode adds two more teammates (`spec-writer`, `spec-verifier`), four total completion pings instead of two, and a verified-spec line in the final report.
+In the single-worker design the spec is composed, run cold, and fixed **inside the worker** — it holds the drive's verbatim trace, so the freeze-and-verify loop has no context boundary to cross. There is no separate spec-writer or spec-verifier, and **no lead-orchestrated verify loop**. Your spec-mode additions are therefore small: decide the intent, thread it into the one worker spawn, and report what came back.
 
-Lifecycle table override (use this when MODE=spec):
+Lifecycle is unchanged from drive mode — still **1 task, 1 worker, 1 completion ping**. The only deltas are the intent decision (Phase 2.0) and the report (Phase 5.5).
 
-| Step | spec mode |
-|---|---|
-| Tasks created in phase 2.1 | 4 (driver, snippet-author, spec-writer, spec-verifier) |
-| Teammates spawned in phase 3 | driver, snippet-author, spec-writer, spec-verifier |
-| Completion pings to wait for in phase 4 | 4 |
-| Final report | "drove the task + verified spec" |
+## Phase 2.0 — Establish the spec intent (before Phase 2.1 / 3)
 
-## Phase 2.1 addition — also create spec tasks
+A forge spec is a re-runnable flow whose assertions each carry an *expected outcome*. It determines what a passing or failing run *means*, so decide it explicitly — never let the worker infer it silently. Every spec is exactly one of:
 
-After creating the driver + snippet-author tasks from the base file, also create:
+- **regression** — assert correct behavior with hard `expect(...)`; expected to **pass** (green). Default for "create a spec for X", "write a spec that …".
+- **repro** — a red-green bug reproduction: assert the *correct* behavior with `expect.soft(...)` so the spec is honestly **red** against the current build until the bug is fixed. The failure *is* the reproduction — the desired outcome. Signals: a bug ticket, "reproduce …", "write a failing spec for …", "capture the bug where …".
+- **scenario** — a runnable flow with **no assertions**, invoked later via `/forge run`. Signals: "a reusable flow to …", "get me to the state where …", "set up …" with no pass/fail claim.
 
-```
-TaskCreate(
-  subject="spec-writer: produce self-contained spec from drive",
-  description="Wait for driver's final-state summary at end of drive. Compose a self-contained .spec.ts in <FORGE_ROOT>/specs/ that reproduces the user task: import + compose snippets for invoked steps, inline code for fresh-drive steps, assert on captured values. Spec must be runnable from cold start. SendMessage `spec-verifier` the spec path when done. Claim with TaskUpdate(status='in_progress') at start and TaskUpdate(status='completed') when the spec is written and handed off."
-)
-# Note as SPEC_WRITER_TASK_ID.
-
-TaskCreate(
-  subject="spec-verifier: run spec from a cold context, confirm it passes",
-  description="Wait for spec-writer's 'spec ready' message. Run the spec via `forge-run-spec.mjs --spec <path> --headed`. Mirror the drive's conditions: fresh browser context, env loaded via forge.md's recipe if it has one (same prefix the driver used). Headed so the user (and you, on a screenshot follow-up) can observe progress and help when a run gets stuck. On pass: ping team-lead with verified-from-fresh status. On fail: route per failure category (see spec-verifier.md's 'Decide who answers'), iterate with a progress-aware budget (escalate at 3 if flailing, extend to a hard cap of 5 if iterations are landing concrete fixes). Claim with TaskUpdate(status='in_progress') at start and TaskUpdate(status='completed') when verification finishes (pass or escalation)."
-)
-# Note as SPEC_VERIFIER_TASK_ID.
-```
-
-## Phase 3.0 — Load spec-mode agent addenda
-
-Drive spawns send agents lean prompts; spec mode adds protocol that lives in separate addendum files (one per agent) so it only loads when needed. Before spawning, read both addenda:
-
-```bash
-cat <PLUGIN_ROOT>/skills/forge/references/spec-addenda/driver.md
-cat <PLUGIN_ROOT>/skills/forge/references/spec-addenda/snippet-author.md
-```
-
-Capture each as `DRIVER_SPEC_ADDENDUM` and `AUTHOR_SPEC_ADDENDUM`. Inline them into the driver and snippet-author spawn prompts (the base file's 3.1 and 3.2 each show the conditional `SPEC MODE ADDENDUM:` block).
-
-## Phase 3.3 — Spawn the spec-writer
+Derive it from `USER_TASK`. **When it's ambiguous, ask the user before spawning** — this is the one place a wrong guess re-creates the green/red thrash:
 
 ```
-Agent(
-  description="Compose spec",
-  subagent_type="forge:spec-writer",
-  name="spec-writer",
-  prompt="PROJECT_FORGE_ROOT: <FORGE_ROOT>
-USER_TASK: <user's task verbatim>
-
-Your task ID is <SPEC_WRITER_TASK_ID>. As your first action, claim it by calling `TaskUpdate(taskId=<SPEC_WRITER_TASK_ID>, status='in_progress')`. Then read your hints (forge.md + spec-writer.md from <FORGE_ROOT>/hints/) and wait for BOTH the driver's final-state message AND snippet-author's 'snippets ready' message before composing. When the spec is written and handed off to spec-verifier (if present), call `TaskUpdate(taskId=<SPEC_WRITER_TASK_ID>, status='completed')` before pinging team-lead."
-)
+AskUserQuestion({
+  question: "Is this spec a regression test (assert correct behavior, expect green), a bug reproduction (assert correct behavior, expect RED until the bug is fixed), or an assertion-less scenario to re-run?",
+  header: "Spec intent",
+  options: [
+    { label: "Bug repro (red)", description: "Asserts the fix's correct behavior; fails now, passes once fixed." },
+    { label: "Regression (green)", description: "Asserts correct behavior that already holds; expected to pass." },
+    { label: "Scenario (no asserts)", description: "A runnable flow with no pass/fail claim." },
+  ]
+})
 ```
 
-## Phase 3.4 — Spawn the spec-verifier
-
-```
-Agent(
-  description="Verify spec from cold",
-  subagent_type="forge:spec-verifier",
-  name="spec-verifier",
-  prompt="PROJECT_FORGE_ROOT: <FORGE_ROOT>
-PLUGIN_ROOT: <PLUGIN_ROOT>
-USER_TASK: <user's task verbatim>
-
-Your task ID is <SPEC_VERIFIER_TASK_ID>. As your first action, claim it by calling `TaskUpdate(taskId=<SPEC_VERIFIER_TASK_ID>, status='in_progress')`. Then read your hints (forge.md + spec-verifier.md from <FORGE_ROOT>/hints/) and wait for spec-writer's 'spec ready' message. When verification finishes (pass or 3-iteration escalation), call `TaskUpdate(taskId=<SPEC_VERIFIER_TASK_ID>, status='completed')` before pinging team-lead."
-)
-```
-
-## Phase 4 addition — expect 4 completion pings
-
-In spec mode you wait for 4 pings (driver + snippet-author + spec-writer + spec-verifier) before proceeding to phase 5. Natural order: driver/snippet-author → spec-writer → spec-verifier. The base file's idle-watchdog and STUCK protocol apply unchanged.
+Hold the answer as `SPEC_INTENT`. For a **repro**, also confirm the bug claim — *what correct behavior should hold once the bug is fixed* — so the worker asserts the right thing. Thread `SPEC_INTENT` (and, for repro, the bug claim) into the worker spawn prompt in `team-task.md` Phase 3.
 
 ## Phase 5.5 — Spec-mode final-report shape
 
 Override the base file's drive-mode report with the spec-mode version:
 
-> <driver's final-result one-liner>
+> <worker's final-result one-liner>
 >
-> Snippet-author wrote N snippet(s):
->   - <name1> — <description>
-> (or: "Snippet-author wrote 0 snippets — drive's work was covered by existing library.")
+> Snippets: wrote N (<names>) — or "none — covered by existing library".
 >
-> Spec-writer wrote `<name>.spec.ts` composing <list of snippets> and asserting <one-liner>.
-> (or: "Spec-writer updated `<name>.spec.ts` in place" / "No new spec — existing one covers this.")
+> Spec: `<name>.spec.ts` (intent: <regression | repro | scenario>) composing <snippets> and asserting <one-liner>.
 >
-> Spec-verifier ran `<name>.spec.ts` — **passed** in <duration>.
-> (or: "Spec-verifier ran spec, FAILED after 3 iterations — escalated. See <details>.")
+> Verified: **<verdict>**, matching its <intent> intent:
+>   - regression → "**verified green** in <duration>".
+>   - repro → "**repro confirmed** — red at the bug claim (`specs/<name>:<line>`) as expected, preconditions green; passes once fixed".
+>   - repro that came back green → "**bug appears fixed** — the repro no longer reproduces; promote the soft claim to a hard regression assertion?".
+>   - scenario → "**ran clean** (no assertions)".
+> (or: "Verified after <N> round(s): <one line on what each round fixed — e.g. 'round 1 found the Size combobox disabled until the options fetch resolved → added a waitFor to the snippet'>".)
+> (or: "Did not match intent after <N> round(s) — **verified: no**. <landing-fixes-but-hit-cap | flailing | missing app-knowledge: escalated to user>. See <details>.")
 >
 > Hint files updated: <one line per file with summary>.
 > (Omit this header entirely if no proposals were surfaced or all were rejected.)
 >
-> Slot released.
+> Browser session closed.
 
-If anything didn't go to plan (spec-verifier escalated, snippet invocation failed mid-drive, etc.), surface prominently.
+If anything didn't go to plan (the spec parked without matching intent, snippet invocation failed mid-drive, etc.), surface prominently — an honest "Verified: no" beats a sanitized success report.

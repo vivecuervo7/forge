@@ -13,7 +13,7 @@ If you find yourself reaching for a real-world example from a project forge happ
 
 # Debugging forge sub-agent runs
 
-When forge spawns its sub-agents (`forge:driver`, `forge:snippet-author`, `forge:spec-writer`, `forge:spec-verifier`), each gets its own full transcript saved to disk. The parent session sees only the agent's final summary — but the entire internal execution (every tool call, every reasoning step, every file read) is recorded separately.
+When forge spawns its worker (`forge:worker` for drive and spec runs; `forge:driver` + `forge:snippet-author` for teach mode), each gets its own full transcript saved to disk. The parent session sees only the agent's final summary — but the entire internal execution (every tool call, every reasoning step, every file read) is recorded separately.
 
 ## Where to look
 
@@ -30,7 +30,7 @@ The `.meta.json` file declares `agentType` and a short `description`. The `.json
 
 ## Team-peer transcripts (not under `subagents/`)
 
-Only orchestrator sub-agents spawned via the `Task` tool land under `subagents/`. The team-mesh peers — `forge:driver`, `forge:snippet-author`, `forge:spec-writer`, `forge:spec-verifier` — are full Claude Code sessions in their own right, and their transcripts live as **top-level** session files alongside the parent:
+Only orchestrator sub-agents spawned via the `Task` tool land under `subagents/`. The team peers — `forge:worker` (drive/spec), and `forge:driver` / `forge:snippet-author` (teach mode) — are full Claude Code sessions in their own right, and their transcripts live as **top-level** session files alongside the parent:
 
 ```
 ~/.claude/projects/<encoded-cwd>/<sessionId>.jsonl
@@ -79,5 +79,5 @@ jq -c 'select(.type == "assistant") | .message.content' <path>
 
 ## What's *not* captured
 
-- `forge:driver` invocations of `playwright-cli`: the playwright-cli session itself doesn't write to the sub-agent transcript — only the driver's *calls* to it.
+- The worker's (or teach-mode driver's) invocations of `playwright-cli`: the playwright-cli session itself doesn't write to the sub-agent transcript — only the *calls* to it (routed through `forge-pw`).
 - Anything the agent decided to `Read` but didn't show in its summary — still recorded in `tool_use_result` blocks within the sub-agent transcript.

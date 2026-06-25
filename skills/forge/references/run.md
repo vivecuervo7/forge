@@ -83,7 +83,9 @@ node <PLUGIN_ROOT>/scripts/forge-run-spec.mjs \
 
 The script handles project-runner detection vs plugin-fallback (lazy-installs on first use). With `--record-as`, it persists `video.webm` to `<FORGE_ROOT>/videos/<spec-basename>-<RECORD_AS>.webm`.
 
-Capture exit code and stderr. Exit 0 = pass; else fail.
+Capture exit code and stderr. Exit 0 = all assertions passed (green); non-zero = some failed.
+
+**Mind the spec's intent.** A green/red exit is only "good/bad" for a regression spec. A **repro** spec (one with `expect.soft` bug claims asserting correct behavior) is *expected* to be red while the bug is open — running it red confirms the bug still reproduces; running it **green means the bug is now fixed** (the red→green moment). `/forge run` is the natural way to re-check a repro after a fix, often paired with `record as before` (buggy, red) and `record as after` (fixed, green) for evidence. Report the result in those terms rather than a blanket "pass/fail" when the spec is a repro.
 
 ## Phase 4 — Report
 

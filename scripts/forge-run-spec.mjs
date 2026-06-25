@@ -64,7 +64,7 @@
 //   6   plugin fallback selected but forge/playwright.config.ts missing
 //       (project hasn't been /forge init'd, or the config was deleted)
 
-import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, dirname, join, relative, resolve } from 'node:path'
 import {
@@ -150,7 +150,10 @@ if (projectRunner) {
     'playwright', 'test',
     specPath,  // absolute — playwright accepts this
     `--config=${projectRunner.configPath}`,
-    '--reporter=list',
+    // list for the human-watchable stream (inherited stdio); json (written to
+    // PLAYWRIGHT_JSON_OUTPUT_NAME, set below) for forge to parse a structured
+    // per-error outcome rather than scraping the list reporter's text.
+    '--reporter=list,json',
     '--workers=1',
   ]
   if (headed) pwArgs.push('--headed')
@@ -185,7 +188,9 @@ if (projectRunner) {
   }
   cwd = projectForge
   const specRel = relative(projectForge, specPath)
-  const pwArgs = ['playwright', 'test', specRel, '--workers=1']
+  // list for the watchable stream, json (→ PLAYWRIGHT_JSON_OUTPUT_NAME) for
+  // forge to parse a structured outcome. Overrides the config's reporter.
+  const pwArgs = ['playwright', 'test', specRel, '--reporter=list,json', '--workers=1']
   if (headed) pwArgs.push('--headed')
   cmd = 'npx'
   cmdArgs = pwArgs
@@ -203,6 +208,21 @@ console.error(`forge-run-spec: using ${mode} runner`)
 const finalEnv = { ...process.env }
 if (record) finalEnv.FORGE_RECORD = '1'
 if (slowMo != null) finalEnv.FORGE_SLOW_MO = String(slowMo)
+
+// Structured outcome: Playwright's json reporter writes to the file named by
+// PLAYWRIGHT_JSON_OUTPUT_NAME (kept out of the inherited stdout, which carries
+// the list reporter). It lives in a forge-owned dir OUTSIDE test-results/ so
+// the exit-0 cleanup below doesn't wipe it. Reset it each run so a stale file
+// from a previous run can't be mistaken for this run's outcome.
+const lastRunDir = join(projectForge, '.last-run')
+const jsonOutPath = join(lastRunDir, 'results.json')
+try {
+  rmSync(lastRunDir, { recursive: true, force: true })
+  mkdirSync(lastRunDir, { recursive: true })
+} catch {
+  // best-effort — a missing outcome file is handled gracefully below
+}
+finalEnv.PLAYWRIGHT_JSON_OUTPUT_NAME = jsonOutPath
 
 // Note the start time so we can find videos produced by THIS run (and
 // ignore stale artifacts from earlier runs).
@@ -225,6 +245,12 @@ try {
   }
   die(`spawn error: ${err.message}`, 5)
 }
+
+// Print a compact, structured outcome from the json reporter so the verifier
+// reads per-error file:line on solid data rather than scraping the list
+// reporter's text. The exit code remains authoritative for pass/fail; this is
+// additive context.
+printOutcomeSummary(jsonOutPath, exitCode)
 
 // Recording persistence: copy any video.webm produced under
 // <projectForge>/test-results to <projectForge>/videos/ before exit.
@@ -294,6 +320,59 @@ function persistRecording() {
     }
     resolve()
   })
+}
+
+// Parse Playwright's json report into a compact, per-error summary printed to
+// stderr. Best-effort: a missing/unparseable file never changes the exit code
+// — it just means the verifier falls back to the list reporter text.
+function printOutcomeSummary(jsonPath, exitCode) {
+  if (!existsSync(jsonPath)) {
+    console.error('forge-run-spec: no structured outcome (json reporter produced no file)')
+    return
+  }
+  let report
+  try {
+    report = JSON.parse(readFileSync(jsonPath, 'utf8'))
+  } catch (err) {
+    console.error(`forge-run-spec: outcome json unreadable (${err.message}) — rely on the list reporter above`)
+    return
+  }
+
+  const stripAnsi = (s) => String(s ?? '').replace(/\x1b\[[0-9;]*m/g, '')
+  const firstLine = (s) => stripAnsi(s).split('\n').find((l) => l.trim().length) ?? ''
+
+  // Flatten the nested suites → specs tree into one list of spec outcomes.
+  const specs = []
+  const walk = (suite) => {
+    for (const spec of suite.specs ?? []) {
+      const errors = []
+      for (const t of spec.tests ?? []) {
+        for (const r of t.results ?? []) {
+          for (const e of r.errors ?? []) {
+            const loc = e.location ? `${relative(projectForge, e.location.file)}:${e.location.line}` : '(no location)'
+            errors.push({ loc, message: firstLine(e.message) })
+          }
+        }
+      }
+      specs.push({ title: spec.title, ok: spec.ok !== false && errors.length === 0, errors })
+    }
+    for (const child of suite.suites ?? []) walk(child)
+  }
+  for (const suite of report.suites ?? []) walk(suite)
+
+  console.error('forge-run-spec: outcome summary (json reporter) ----------------------')
+  console.error(`  overall: ${exitCode === 0 ? 'passed' : 'failed'} (exit ${exitCode})`)
+  if (specs.length === 0) {
+    console.error('  (no specs reported)')
+  }
+  for (const s of specs) {
+    console.error(`  ${s.ok ? 'PASS' : 'FAIL'}  ${s.title}`)
+    for (const e of s.errors) {
+      console.error(`      ↳ ${e.loc} — ${e.message}`)
+    }
+  }
+  console.error('  (soft-assertion failures appear as errors here even though the run completed)')
+  console.error('--------------------------------------------------------------------------')
 }
 
 function findFilesNewerThan(dir, pattern, sinceMs) {

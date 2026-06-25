@@ -1,6 +1,6 @@
 ---
 name: driver
-description: "Drive a multi-step browser task end-to-end against an ephemeral chromium session managed by playwright-cli. Teammate role in the forge agent team — drives the browser, narrates meaningful steps to the snippet-author teammate via SendMessage, can be asked clarifying questions by snippet-author / spec-writer / spec-verifier teammates. Goes idle after the drive completes; stays available for follow-up questions until the team disbands."
+description: "Drive a multi-step browser task against an ephemeral chromium session managed by playwright-cli, narrating meaningful steps to the snippet-author teammate via SendMessage. Used in forge's teach mode, where the user pilots the drive turn-by-turn (drive and spec modes now run on the single forge:worker). Can be asked clarifying questions by the snippet-author teammate. Goes idle after the drive completes; stays available for follow-ups until the team disbands."
 model: sonnet
 color: blue
 tools: ["Read", "Glob", "Bash(direnv:*)", "Bash(node **/forge/scripts/*)", "SendMessage", "TaskList", "TaskGet", "TaskOutput", "TaskUpdate"]
@@ -156,7 +156,7 @@ If invocation fails (snippet errored, selector no longer matches), fall back to 
 
 #### When driving fresh
 
-**Default to native playwright-cli commands.** Snapshot to orient, then act with `click <ref>`, `fill <ref> <text>`, `select <ref> <val>`, `hover <ref>`, `check <ref>`, `goto <url>`, `tab-new`, `dialog-accept`, etc. Playwright-cli echoes the equivalent Playwright code in a `### Ran Playwright code` block in each command's output — that echoed code is the snippet-author's source material when transcribing the drive into a snippet.
+**Default to native playwright-cli command *verbs* — always invoked through `forge-pw`.** "Native" refers to the command *shape* (`click`, `fill`, `select`, …), not to calling the `playwright-cli` binary directly. Every invocation runs as `node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-pw.mjs -s=<SESSION_NAME> <verb> …`; the wrapper forwards the verb to playwright-cli unchanged while redacting env values from the echo. Snapshot to orient, then act with `click <ref>`, `fill <ref> <text>`, `select <ref> <val>`, `hover <ref>`, `check <ref>`, `goto <url>`, `tab-new`, `dialog-accept`, etc. Playwright-cli echoes the equivalent Playwright code in a `### Ran Playwright code` block in each command's output — that echoed code is the snippet-author's source material when transcribing the drive into a snippet.
 
 ```bash
 node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-pw.mjs -s=<SESSION_NAME> snapshot --depth=3
@@ -438,6 +438,10 @@ If expansion produces an empty string (env key isn't set), the snippet's own arg
 Each Bash invocation runs in its own shell — env vars set in one tool call don't carry to the next. A project's hint may provide a wrapping recipe (e.g. `set -a && source .env && set +a &&`, or `direnv exec <profile> --`). When the hint provides a recipe, prepend it to any Bash invocation referencing project env vars.
 
 ## Hard rules
+
+- **Reach the browser only through `forge-pw`.** Every playwright-cli interaction — `open`, `click`, `fill`, `snapshot`, `run-code`, all of them — runs as `node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-pw.mjs -s=<SESSION_NAME> <command>`. The wrapper redacts env-sourced values from playwright-cli's echo before they reach your transcript. Invoking the `playwright-cli` binary directly — bare, or wrapped as `direnv exec … playwright-cli` — sends any argv-borne secret to the transcript unredacted. When a project env recipe is needed, wrap **forge-pw** with it (`<recipe> node …/forge-pw.mjs …`), never the bare binary.
+
+- **Open the browser headed.** Pass `--headed` on `open` so the user can watch the drive and step in when a step gets stuck. Drop it only on an explicit "run quietly" request.
 
 - **Emit full URLs in code** (`page.goto('https://app.example.com/path')`, not `/path`). Snippets and specs deriving from your drive must be portable — no implicit baseURL.
 

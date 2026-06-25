@@ -1,6 +1,6 @@
 ---
 name: forge
-description: "Browser-automation agent team for Claude Code. Seven routes under one skill: `/forge init` (scaffold the forge/ directory convention in CWD), `/forge <task>` (drive mode — driver + snippet-author do the task end-to-end), `/forge spec <task>` (spec mode — also produces a verified Playwright spec), `/forge teach <topic>` (teach mode — user pilots forge turn-by-turn to curate snippets with project-specific gotchas baked in), `/forge run <spec>` (re-run a verified spec, optionally recording a video for evidence), `/forge export <name>` (inline a composed spec for shipping outside forge/), `/forge clean [snippets|hints|both]` (scan the snippet library and hint files for accumulation and surface cleanup candidates). Each invocation launches a fresh chromium session, runs the user's task, and cleans up. Project-specific conventions (test accounts, env handling, setup/teardown) live in hints/forge.md; forge stays project-agnostic."
+description: "Browser-automation agent team for Claude Code. Seven routes under one skill: `/forge init` (scaffold the forge/ directory convention in CWD), `/forge <task>` (drive mode — a single worker drives the task and accretes snippets), `/forge spec <task>` (spec mode — the worker also composes and verifies a Playwright spec from the drive's own trace), `/forge teach <topic>` (teach mode — user pilots forge turn-by-turn to curate snippets with project-specific gotchas baked in), `/forge run <spec>` (re-run a verified spec, optionally recording a video for evidence), `/forge export <name>` (inline a composed spec for shipping outside forge/), `/forge clean [snippets|hints|both]` (scan the snippet library and hint files for accumulation and surface cleanup candidates). Each invocation launches a fresh chromium session, runs the user's task, and cleans up. Project-specific conventions (test accounts, env handling, setup/teardown) live in hints/forge.md; forge stays project-agnostic."
 model: sonnet
 argument-hint: "[spec|run|init|export|clean] <args>"
 allowed-tools: Read, Edit, Write, Glob, Skill, AskUserQuestion, Bash(node **/forge/scripts/*), Bash(direnv:*), Bash(playwright-cli:*), Bash(mkdir:*), Bash(cat:*), Bash(echo:*), Bash(ls:*), Agent, SendMessage, TaskCreate, TaskList, TaskGet, TaskUpdate
@@ -21,7 +21,7 @@ First word of `$ARGUMENTS` (case-insensitive). Dispatch table:
 | `run` | re-run a verified spec, optionally recording | `references/run.md` | spec name / `last` / `latest`, plus optional `record as <label>` |
 | `teach` | teach mode — user pilots forge to curate snippets | `references/teach.md` | optional session-framing topic |
 | `clean` | tidy snippet library + hint files | `references/clean.md` | optional scope: `snippets` \| `hints` \| `both` |
-| `spec` | spec mode — drive + write spec + verify | `references/team-task.md` + `references/team-task-spec.md` (with `MODE=spec`) | the actual task description |
+| `spec` | spec mode — drive + write spec + verify (intent: regression / red-green bug repro / assertion-less scenario) | `references/team-task.md` + `references/team-task-spec.md` (with `MODE=spec`) | the actual task description |
 | *(anything else)* | (see natural-language signals below; default fallback is the task route) | `references/team-task.md` (with `MODE=drive`) | the full args = task description |
 
 ### Natural-language route signals (when first word doesn't match)
@@ -99,6 +99,8 @@ For task and spec routes, set `MODE` before loading the reference. Skip for init
 
 Otherwise → **drive mode**. If intent is ambiguous, default to drive — spec creation is an explicit opt-in.
 
+Within spec mode, the spec carries a mandatory **intent** — regression (assert correct behavior, expect green), repro (red-green bug reproduction: assert correct behavior, expect red until the bug is fixed), or scenario (no assertions, re-run via `/forge run`). A bug ticket / "reproduce …" / "failing spec for …" signals repro; the lead establishes and (when ambiguous) confirms the intent before authoring — see `team-task-spec.md` Phase 2.0.
+
 ## Phase 0b — Recording label detection (run route only)
 
 For the run route, look for a recording label in the args:
@@ -140,7 +142,7 @@ cat <PLUGIN_ROOT>/skills/forge/references/<reference>.md
 (Substitute the literal value captured in 1.0 for `<PLUGIN_ROOT>`.)
 
 Where `<reference>` is one of:
-- `team-task.md` (for task/spec routes — carries `MODE` into its instructions). In spec mode, also load `team-task-spec.md` after it — the addendum carries Phase 2.3 spec tasks, Phase 3.3/3.4 spec spawns, and the spec-mode final-report shape.
+- `team-task.md` (for task/spec routes — carries `MODE` into its instructions). In spec mode, also load `team-task-spec.md` after it — the addendum carries the Phase 2.0 spec-intent decision and the spec-mode final-report shape.
 - `teach.md` (for teach route — carries the optional session-framing topic)
 - `init.md` (for init route)
 - `export.md` (for export route)

@@ -36,7 +36,7 @@ If you have nothing to do yet, do nothing — going idle without acting is fine.
 - **Driver → You**: structured summaries of completed steps. Examples: "Logged in as standard_user via input#user-name/input#password/input#login-button", "Added 'Sauce Labs Backpack' to cart by clicking button[data-test='add-to-cart-sauce-labs-backpack']". Driver narrates as it goes.
 - **You → Driver**: clarifying questions ("which selector did you settle on for the cart icon — `.shopping_cart_link` or `[data-test='shopping-cart-link']`?"). Keep narrow and answerable.
 - **You → Team-lead**: completion ping. Also STUCK escalation when you need user input and no teammate can help. Load the protocol on-demand: `cat ${CLAUDE_PLUGIN_ROOT}/skills/forge/references/agent-stuck.md`.
-- **Lead → You**: scope changes, shutdown requests, STUCK-response replies. (Your task is created up-front with no owner; you claim it yourself — see "How to run" step 0.)
+- **Lead → You**: scope changes, shutdown requests, STUCK-response replies. In spec mode the lead may also route you a snippet **fix directive** during the verify loop — see the spec-mode addendum. (Your task is created up-front with no owner; you claim it yourself — see "How to run" step 0.)
 
 Use `SendMessage(to="driver", summary="...", message="...")`. Refer to teammates by name. If you ever need to look up active members, the session's team config lives under `~/.claude/teams/session-<8-char>/config.json` — glob for it.
 
