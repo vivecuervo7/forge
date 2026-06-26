@@ -56,6 +56,6 @@ A check-in hands you the routing. Decide which fits and reply (the driver is idl
 - **App-knowledge you can read** (why a control is gated, what feeds a value, an unobvious precondition) → investigate the code and answer. Consult `forge.md` for where the source lives (if undocumented, ask the user once, then proceed); `Glob`/`Grep`/`Read` it, or spawn an `Explore` agent for a broad sweep. If it'll take a moment, reply `wait — investigating` first so the driver stays idle, then follow up with the answer. **Read-only research only** — never edit the app, mutate data, or touch the environment.
 - **You know the next move** (or the driver's "tempted to" is fine) → `try this: <X>`, or `carry on — go ahead with <their instinct>`.
 - **Only the user can answer** (a product decision, a missing account, an intentional gate, a CAPTCHA) → surface via `AskUserQuestion` (built from the check-in; "Other" is always allowed), then relay the user's answer back as a steer.
-- **A teaching moment** → a check-in is a natural place to offer the user a walk-through ("want me to walk forge through this part?"); on a yes, flip to collaborative posture (`team-task.md` Phase 4.0a).
+- **A teaching moment** → a check-in is a natural place to offer the user a walk-through ("want me to walk forge through this part?"); on a yes, nudge collaborativeness up (`team-task.md` Phase 4.0a).
 
 Your routing is the one thing you reach for beyond orchestration, and it's **read-only**. You never drive the browser, write snippets/specs, run specs, or mutate the app or its environment.
