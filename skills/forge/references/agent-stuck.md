@@ -1,19 +1,50 @@
-# Agent — STUCK protocol
+# Agent — escalation protocol
 
-This reference is loaded on-demand by any agent (driver, snippet-author, others) that has exhausted self-recovery and needs to escalate. It's not pre-loaded — agents only `cat` it when a STUCK condition has been recognized.
+This reference is loaded on-demand by any agent (driver, snippet-author, others) that has exhausted self-recovery and needs to escalate. It's not pre-loaded — agents only `cat` it when a blocker has been recognized.
 
-The agent's base prompt is responsible for **recognition** (deciding "I'm stuck"). This reference covers **handling** (how to escalate, what to send, how to apply the user's answer).
+The agent's base prompt is responsible for **recognition** (deciding it's blocked); this reference covers **handling** — which way up to take, what to send, and how to apply the reply. There are **two upward channels**:
+
+- **investigate** — the blocker is *app-knowledge you can't see from the browser* (what gates a control, what feeds a value, an unobvious precondition). The **lead** can read it out of the source/config and answer you.
+- **STUCK** — the blocker needs a *user* decision (ambiguous intent, a missing account, a product call, CAPTCHA).
+
+Prefer **investigate** when the answer lives in the code — it keeps the user out of the loop until a real decision needs them, and it's the move to make instead of reaching outside the browser yourself.
 
 ## When to load this
 
-Load when you've recognized a STUCK condition:
+Load when you've recognized a blocker that your own ~5 cheap recovery moves (different selectors, waits, re-orientation, modal dismissal) didn't clear. Then pick the channel:
 
-- ~5 in-task recovery attempts past the first failure have all failed (different selectors, waits, re-orientation, modal dismissal — exhausted)
+**Investigate** (the lead can answer from the code):
+
+- A control stays gated, a value won't populate, a flow silently needs a precondition — and you can't tell *why* from the UI
+- Anything you'd otherwise reach behind the browser to learn (an endpoint, a backend rule, a data dependency)
+
+**STUCK** (only the user can answer):
+
 - An ambiguous next step where only the user can decide ("which of these 3 Export buttons do you mean?")
 - An unexpected UI state requiring manual intervention (CAPTCHA, MFA, unknown error dialog)
 - Credentials or business decisions you can't infer from hints
 - A naming-convention conflict (snippet-author) the project hint doesn't resolve
-- Cap of 5 STUCK escalations per task. Past that, escalate to cannot-drive (below).
+
+Cap of 5 escalations per task across both channels. Past that, escalate to cannot-drive (below).
+
+## How to investigate — hand the question up to the lead
+
+When the blocker is something you'd otherwise have to look *behind the browser* to answer — the source, the API, the data layer — hand it to the lead instead of reaching there yourself. The lead reads the code and answers.
+
+```
+SendMessage(
+  to="team-lead",
+  summary="investigate: <tight one-line of what you need to understand>",
+  message="INVESTIGATE
+
+QUESTION: <what you need to know about how the app works — e.g. 'what gates the Size dropdown? it stays disabled after I pick a colour'>
+
+OBSERVED: <the UI state, the selectors you saw, what you tried, what didn't change>
+"
+)
+```
+
+The lead replies `investigate_response — <answer>` once it's read the relevant code; apply it and resume. If its investigation turns up that the call is actually the user's to make, it comes back as a `stuck_response` instead — same as STUCK. Either way, **go idle** while you wait; the reply wakes you.
 
 ## How to STUCK
 
@@ -42,7 +73,7 @@ While waiting, **go idle**. Don't busy-loop, don't probe more selectors, don't k
 
 ## Applying the answer
 
-The lead's reply arrives as a plain-text message with summary `stuck_response` and a body like `stuck_response — answer: <chosen-value-or-free-text>`. Parse the answer out of the body, apply it, continue the work. Use the user's answer literally if it's a selector/value; interpret naturally if it's free-form. Re-check whether the issue is actually resolved before claiming progress.
+An `investigate_response — <answer>` carries what the lead learned from the code; apply it and resume. A `stuck_response` (whether you sent STUCK, or the lead converted your investigate into a user question) arrives as a plain-text message with a body like `stuck_response — answer: <chosen-value-or-free-text>`. Parse the answer out of the body, apply it, continue the work. Use the user's answer literally if it's a selector/value; interpret naturally if it's free-form. Re-check whether the issue is actually resolved before claiming progress.
 
 ## Cannot-drive — terminal failure
 

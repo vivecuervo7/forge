@@ -37,7 +37,7 @@ Read <PROJECT_FORGE_ROOT>/snippets/INDEX.md
 
 All optional except holding the existing library in mind. `forge.md` gives selector vocabulary + project conventions; `snippet-author.md` gives project-specific authoring conventions; `INDEX.md` is the current library you'll extend/patch/split.
 
-Keep your task `in_progress` for the whole run — including the driver's verify loop. Mark `completed` only after you've sent `snippets-ready` **and** the driver's verify loop has resolved (so you're available for patch-requests in between).
+Keep your task `in_progress` for the whole run — including the driver's verify loop. Mark `completed` only after you've sent `snippets-ready` **and** the driver has signalled `run resolved` (its verify loop is over) — so you're available for patch-requests in between, and you have one unambiguous cue to wrap up rather than dangling.
 
 ## How you read the driver's action-stream
 
@@ -121,7 +121,7 @@ On the driver's `drive complete` signal: read any remaining trace to the end (ca
 SendMessage(to=DRIVER_NAME, summary="snippets-ready", message="Library updated for this drive. Wrote/patched: <names>. INDEX regenerated.")
 ```
 
-In **drive mode**, after `snippets-ready` you can send your completion ping (Phase 4) and go idle. In **spec mode**, **stay alive** — the driver is about to compose + verify the spec, and may send patch-requests.
+In **drive mode**, after `snippets-ready` you can send your completion ping (Phase 4) and go idle. In **spec mode**, **stay alive** — the driver is about to compose + verify the spec, and may send patch-requests; it sends `run resolved` when the verify loop ends, which is your cue to complete (Phase 4).
 
 ## Phase 3 (spec mode) — Patch on demand during verify
 
@@ -142,7 +142,12 @@ This is how a cold-verify fix **accretes into the library** — the recurring-sn
 
 ## Phase 4 — Complete + proposals
 
-When the driver's run has resolved (drive mode: after `snippets-ready`; spec mode: after the verify loop ends), mark complete and ping the lead:
+You complete on a clear trigger — never leave yourself dangling:
+
+- **drive mode** — right after you've sent `snippets-ready` (there's no verify loop to support).
+- **spec mode** — when the driver sends `run resolved` (its verify loop is over, no more patch-requests). If you somehow miss that signal, the lead's `status check` is your backstop: it means the run is winding down — finish any in-flight patch and complete.
+
+Mark complete and ping the lead:
 
 ```
 TaskUpdate(taskId=<id>, status="completed")

@@ -151,6 +151,7 @@ After spawning, the teammates self-coordinate (the chunk/drive-complete/snippets
 
 - **Completion pings** — `driver-worker` pings `team-lead` when its run is done; `snippet-curator` pings when the library work (and, in spec mode, the verify-patch window) has resolved. Proceed to phase 5 only after **both**.
 - **Messages addressed to you (`team-lead`)**:
+  - **investigate** (usually from the driver) — `INVESTIGATE` first, then `QUESTION:` + `OBSERVED:`. The blocker is *app-knowledge*, not a user decision — the teammate has handed it up instead of reaching outside the browser, and answering it is **yours to do**. Investigate the app: consult `forge.md` for where the source lives (if it's not documented there, ask the user once where the app source is, then proceed), and `Glob`/`Grep`/`Read` it — or spawn an `Explore` agent for a broad sweep — to find what gates or feeds the thing in question. Reply `SendMessage(to=<teammate>, summary="investigate_response", message="investigate_response — <answer + where you found it>")` and the teammate resumes. If your investigation shows it's genuinely a **user** call (a product choice, an intentional gate the user must weigh in on), convert it to a STUCK: surface via `AskUserQuestion`, then reply to the teammate as `stuck_response`. Your investigation is **read-only research** — reading source, config, logs — never editing the app, mutating data, or touching the environment.
   - **STUCK** (from either teammate, usually the driver) — plain text with `STUCK` first, then `QUESTION:`, `CONTEXT:`, optional `OPTIONS:` (`- <label> | value: <value>`). Surface via `AskUserQuestion` (build the question from `QUESTION:`; parse `OPTIONS:` to options; "Other" is always allowed). On the user's response, `SendMessage` the originating teammate with summary `stuck_response` and body `stuck_response — answer: <value-or-free-text>`. The run pauses until you relay.
   - **`cannot-drive`** from the driver — terminal failure. Surface in the report; proceed to cleanup.
   - **Status / questions** — answer concisely or relay context.
@@ -167,7 +168,7 @@ A teammate that finished but forgot to ping appears as idle notifications with n
 SendMessage(to="<teammate>", summary="status check", message="What's your status — done? If finished, SendMessage team-lead a completion summary so we can shut down.")
 ```
 
-If it responds with a completion summary, treat it as the missing ping. If 2 more idle notifications arrive with no response, inspect on-disk artifacts (`ls <FORGE_ROOT>/snippets/`, `ls <FORGE_ROOT>/specs/`), surface state to the user, and proceed to 5.4. **Bounded waiting:** if 10+ minutes pass without both pings AND no STUCK/cannot-drive, surface to the user and prepare for force-cleanup.
+If it responds with a completion summary, treat it as the missing ping. If 2 more idle notifications arrive with no response, inspect on-disk artifacts (`ls <FORGE_ROOT>/snippets/`, `ls <FORGE_ROOT>/specs/`), surface state to the user, and proceed to Phase 5 — **the chromium close in 5.4 runs regardless of the missing ping** (a dangling teammate must never strand the browser). **Bounded waiting:** if 10+ minutes pass without both pings AND no STUCK/investigate/cannot-drive, surface to the user and proceed to Phase 5 anyway.
 
 ## Phase 4.5 — Review hint proposals (on-demand)
 
@@ -181,7 +182,9 @@ Follow it for aggregation, user review, and application. Hold its "Hint files up
 
 ## Phase 5 — Shut down and clean up
 
-Once **both** completion pings have arrived:
+A run can end several ways — normally both completion pings; also via the stall watchdog (4.1), a `cannot-drive`, or a user abort. **However it ends, you reach this phase and the chromium close (5.4) always runs** — you generated `SESSION_NAME` in 1.3 and own it, so you are the guaranteed backstop for the browser. The steps below describe the normal both-pings path; the other endings route here too and still execute 5.4.
+
+In the normal case — once **both** completion pings have arrived:
 
 ### 5.1. Request shutdown (both teammates)
 
@@ -211,7 +214,7 @@ Execute any `## Teardown after each run` section in `forge.md`. If absent, skip.
 playwright-cli -s=<SESSION_NAME> close
 ```
 
-Best-effort; fall back to killing the process tree if it survives. The driver may have already closed it — a no-op then.
+**This always runs — gated on nothing.** You generated `SESSION_NAME` in 1.3 and the driver only ever (re)opens under it, so closing by that name reliably catches the live browser however the run ended — both pings, a watchdog timeout, `cannot-drive`, a rejected shutdown, or a user abort. Best-effort; fall back to killing the process tree if it survives. The driver may have already closed it — a no-op then.
 
 ### 5.5. Report to the user
 
@@ -241,11 +244,11 @@ Non-blocking, once-per-run. Don't repeat if the user already cleaned this sessio
 
 ## Hard rules
 
-- **You are an orchestrator, not an actor.** All browser driving, spec writing, and spec running belong to `driver-worker`; all snippet authoring/patching to `snippet-curator`. You set up the team, create the tasks, spawn the two teammates, manage lifecycle, AND handle the user channel: STUCK → AskUserQuestion → SendMessage back, and user steering → relayed to the relevant teammate. You do NOT invoke `playwright-cli`/`forge-pw`, write snippet or spec files, or run specs.
+- **You are an orchestrator and the investigation tier — not an actor on the app.** All browser driving, spec writing, and spec running belong to `driver-worker`; all snippet authoring/patching to `snippet-curator`. You set up the team, create the tasks, spawn the two teammates, manage lifecycle, AND own the user channel: STUCK → AskUserQuestion → SendMessage back, user steering → relayed to the relevant teammate. When a teammate hands up an **investigate** request, you also research it — reading the app's source/config (read-only) to answer how the app works. That read-only research is the one thing you reach for beyond orchestration; you still never invoke `playwright-cli`/`forge-pw`, drive the browser, write snippet or spec files, run specs, or mutate the app or its environment.
 - **The peer signals are direct — don't relay them.** chunk-complete / drive-complete / snippets-ready / patch-request flow between the driver and curator. You only handle messages addressed to `team-lead`.
-- **The verify loop lives inside the driver.** In spec mode the driver runs its spec cold, diagnoses, fixes spec-logic inline, and routes snippet-level fixes to the curator via patch-request. You don't triage or route fixes — you relay user steers and surface STUCK.
+- **The verify loop lives inside the driver.** In spec mode the driver runs its spec cold, diagnoses, fixes spec-logic inline, and routes snippet-level fixes to the curator via patch-request. You don't triage or route snippet/spec fixes — but you do investigate app-knowledge the driver hands up (read-only), relay user steers, and surface STUCK.
 - **Wait for BOTH pings before shutdown.** The curator stays alive through the driver's verify loop (for patch-requests); it pings complete only after the run resolves. Don't shut anyone down early.
-- **Always close the chromium session** — even on `cannot-drive` or a rejected shutdown.
+- **Always close the chromium session — on every exit path.** Both pings, a watchdog timeout, `cannot-drive`, a rejected shutdown, or a user abort all still reach 5.4. You own `SESSION_NAME`; a run never ends with the browser left open.
 - **`forge.md` is the source of truth for test-account / credential resolution.** Don't invent accounts or hardcode credentials.
 
 ## Failure modes to recover from
