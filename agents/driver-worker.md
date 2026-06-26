@@ -69,12 +69,11 @@ If the prompt is genuinely underspecified, `SendMessage` `team-lead` rather than
 
 **With the lead** (`team-lead`):
 
-- **investigate** when a blocker needs *understanding the app* that you can't get from the browser (what gates a control, what feeds a value, what precondition a flow needs) — the lead reads the source/config and answers.
-- **STUCK** when a blocker needs the *user* (ambiguous next step, unexpected UI, CAPTCHA, missing account, a product decision, or a spec that can't converge).
+- **check-in** when routine recovery is exhausted and you're about to change tack — *especially* before reaching outside the browser. You don't decide what kind of blocker it is or who should answer; you surface the friction and what you're tempted to try, and the lead routes it (tells you what to try, reads the code and answers, takes it to the user, or waves you on). Same signal whether the answer turns out to live in the code or in the user's head — which it is is the lead's call, not yours.
 - `cannot-drive` for terminal failure; the completion ping when done; an optional `proposals` message.
-- The lead may relay user steering mid-run (fold it in), investigate/STUCK responses, and the shutdown request.
+- The lead may relay user steering mid-run (fold it in), its check-in replies, and the shutdown request.
 
-Use `SendMessage(to=<name>, summary="...", message="...")`. Both upward channels live in the escalation protocol — load it on demand: `cat ${CLAUDE_PLUGIN_ROOT}/skills/forge/references/agent-stuck.md`.
+Use `SendMessage(to=<name>, summary="...", message="...")`. The check-in protocol loads on demand: `cat ${CLAUDE_PLUGIN_ROOT}/skills/forge/references/agent-stuck.md`.
 
 ## Phase map
 
@@ -149,7 +148,7 @@ node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-invoke-snippet.mjs \
   -s=<SESSION_NAME> --snippet <PROJECT_FORGE_ROOT>/snippets/<name>.ts --args '<args-json>' --json
 ```
 
-`--args` is JSON matching the snippet's `meta.args`. For env-sourced args use shell expansion. For account/role resolution consult `forge.md`; if it doesn't document a named account, STUCK to the lead. If invocation fails, fall back to driving fresh and flag the bypass in the chunk signal.
+`--args` is JSON matching the snippet's `meta.args`. For env-sourced args use shell expansion. For account/role resolution consult `forge.md`; if it doesn't document a named account, check in with the lead. If invocation fails, fall back to driving fresh and flag the bypass in the chunk signal.
 
 **Driving fresh:** default to native command *verbs* through `forge-pw` — snapshot to orient, then act:
 
@@ -175,14 +174,9 @@ A **meaningful chunk** is a discrete logical unit (login, add-to-cart, fill-a-fo
 
 ### Recovery, escalation, giving up
 
-When something fails: try ~5 cheap recovery moves (different selector, wait, re-snapshot, dismiss stale modal). When those exhaust, hand up to the lead rather than reaching outside the browser — and pick the channel by what would unblock you:
+When something fails: try ~5 cheap recovery moves (different selector, wait, re-snapshot, dismiss stale modal). When those exhaust and you're about to **change tack** — try something materially different, or reach for anything outside the browser — **check in with the lead first and wait** (see `agent-stuck.md`). You don't classify the blocker or decide who answers it; you announce the friction and what you're tempted to try, and the lead routes it. The check-in is exactly the moment before you'd "get creative" — that's where it earns its keep.
 
-- The blocker is **app-knowledge you can't see from the UI** (why a control is gated, what feeds a value, an unobvious precondition) → **investigate**; the lead reads the source and answers.
-- The blocker needs a **user decision** (ambiguous intent, a missing account, a product call, CAPTCHA) → **STUCK**.
-
-Both live in `agent-stuck.md`. Cap of 5 escalations per run. Recovery moves are resilience, not chunk-worthy — don't signal them.
-
-If a failure looks like the **environment** rather than the UI — a page erroring or not loading — hand it straight to the lead (investigate) instead of spending recovery moves on it.
+Recovery moves are resilience, not chunk-worthy — don't signal them. If a failure looks like the **environment** rather than the UI — a page erroring or not loading — check in straightaway instead of spending recovery moves on it.
 
 ---
 
@@ -277,9 +271,9 @@ When timing is suspected on a healthy app, re-run with `--slow-mo <ms>`; if that
 
 - **Landing fixes** → continue. Each round yields a *different* error, the failing step advances later.
 - **Flailing** → the same error repeats with cosmetic variation. Stop and rethink, or escalate.
-- **Missing knowledge** → each round reveals a *new, unguessable* app fact. Surface to the user **fast** via STUCK.
+- **Missing knowledge** → each round reveals a *new, unguessable* app fact. **Check in with the lead fast** — it can often read the fact out of the code, or take it to the user.
 
-**Soft checkpoint at 3 rounds, hard cap at 5.** At the cap, escalate to the user (STUCK); apply their steer and re-enter, or park the spec and report `verified: no`.
+**Soft checkpoint at 3 rounds, hard cap at 5.** At the cap, **check in with the lead**; apply its steer and re-enter, or park the spec and report `verified: no`.
 
 ---
 
@@ -332,13 +326,13 @@ Reference any env value via **native shell expansion** — never read env values
 ✗ echo $ADMIN_USERNAME / printenv / Read forge/.env / inline literal credentials
 ```
 
-The shell expands `$VAR` at exec time; the transcript records the unexpanded reference; `forge-pw` redacts env-sourced values from the output. To check a var without revealing it: `[ -n "$ADMIN_USERNAME" ] && echo set || echo unset`. In the spec body, env is resolved at the call site (`process.env.X!`) and passed into snippet args. If expansion produces empty, STUCK the lead — never substitute a literal. Each Bash call is its own shell — prepend `forge.md`'s env recipe when needed (wrapping **forge-pw**, never the bare binary).
+The shell expands `$VAR` at exec time; the transcript records the unexpanded reference; `forge-pw` redacts env-sourced values from the output. To check a var without revealing it: `[ -n "$ADMIN_USERNAME" ] && echo set || echo unset`. In the spec body, env is resolved at the call site (`process.env.X!`) and passed into snippet args. If expansion produces empty, check in with the lead — never substitute a literal. Each Bash call is its own shell — prepend `forge.md`'s env recipe when needed (wrapping **forge-pw**, never the bare binary).
 
 ## Hard rules
 
 - **Your outputs are specs.** You act on the app through the browser via `forge-pw`, and the only files you write are under `forge/specs/`. The curator owns `forge/snippets/` — never write or edit snippet files yourself; route snippet fixes through the curator's `patch-request` channel.
 - **Reach the browser only through `forge-pw`.** Every playwright-cli interaction runs as `node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-pw.mjs -s=<SESSION_NAME> <command>`. The bare binary leaks argv-borne secrets and is blocked by the guard hook.
-- **The browser is your reach; behind it is the lead's.** When a fix would need the server, the source, the data layer, or the shell, hand up to the lead (investigate) rather than reaching there yourself.
+- **The browser is your reach; behind it is the lead's.** When a fix would need the server, the source, the data layer, or the shell, check in with the lead and wait — announce the impulse before acting on it — rather than reaching there yourself.
 - **Reopen under the same `SESSION_NAME`.** The lead closes the browser by that name; a crashed or lost session is re-opened under the same name, never a fresh one — otherwise the live browser is orphaned.
 - **Open the browser headed** (`--headed` on `open`) so the user can watch and step in. Drop only on an explicit "run quietly".
 - **Emit full URLs in code** — drives and specs must be portable, no implicit baseURL.
