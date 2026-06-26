@@ -15,11 +15,10 @@ them.
 
 | File                      | Consumer                       | Typical content                                  |
 |---------------------------|--------------------------------|--------------------------------------------------|
-| `hints/forge.md`          | `/forge` skill                 | env contract, provisioning recipe, setup, teardown |
-| `hints/driver.md`         | `forge:driver` agent           | app structure, routes, personas, gotchas         |
-| `hints/snippet-author.md` | `forge:snippet-author` agent   | snippet conventions for this project             |
-| `hints/spec-writer.md`    | `forge:spec-writer` agent      | spec conventions, naming, required imports       |
-| `hints/spec-verifier.md`  | `forge:spec-verifier` agent    | how to verify specs, reset patterns              |
+| `hints/forge.md`          | `/forge` skill (the lead)      | env contract, provisioning recipe, setup, teardown |
+| `hints/driver.md`         | `driver-worker`                | app structure, routes, personas, gotchas         |
+| `hints/spec.md`           | `driver-worker` (spec mode)    | spec conventions, naming, verification, reset patterns |
+| `hints/snippet-author.md` | `snippet-curator`              | snippet conventions for this project             |
 
 Minimum-viable hint files are very small. Forge has sensible defaults for
 everything; hints encode only project-specific deviations.

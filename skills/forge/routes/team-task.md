@@ -57,7 +57,7 @@ If it fails (exit non-zero), relay verbatim and stop. The user needs `/forge ini
 cat <FORGE_ROOT>/hints/forge.md 2>/dev/null || echo ""
 ```
 
-You need `forge.md` for persona/account resolution and the optional setup/teardown sections (Phases 1.4 and 5.3). The role hints (`driver.md`, `snippet-author.md`, `spec-writer.md`, `spec-verifier.md`) are read by the teammates themselves. Empty string is fine.
+You need `forge.md` for persona/account resolution and the optional setup/teardown sections (Phases 1.4 and 5.3). The role hints (`driver.md`, `spec.md`, `snippet-author.md`) are read by the teammates themselves. Empty string is fine.
 
 All hints are optional. A bare `/forge init` scaffold drives correctly; hints encode project-specific knowledge the teammates can't derive from the app.
 

@@ -91,7 +91,7 @@ Group the AskUserQuestion call by category so each question's options are compar
 8. **Hint sections — TODO masquerade** (`todo-masquerade`). Propose: "`<file>` § `<heading>` reads as a TODO ('the snippet needs this fix applied'). Either apply the fix to the named snippet and delete the hint, or rewrite as a stable gotcha."
 9. **Hint sections — orphan references** (`orphan-reference`). Propose: "`<file>` § `<heading>` references snippets that don't exist: `<list>`. Fix the names or remove the references."
 
-When a candidate has multiple flags, surface it once with the strongest action and mention the secondary flag ("also duplicates prose in `spec-verifier.md`").
+When a candidate has multiple flags, surface it once with the strongest action and mention the secondary flag ("also duplicates prose in `spec.md`").
 
 **Single-candidate case** — if only one candidate in the whole scan, use single-select (`multiSelect: false`) with Accept / Reject.
 

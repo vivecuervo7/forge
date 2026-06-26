@@ -53,8 +53,7 @@ Be **conservative** — a clean run produces none. Proposals carry genuine, reus
 
 - `forge.md` — SUT facts useful to everyone: a framework quirk + workaround, a selector mismatch, a route, an env-key gap, a cold-start timing pattern, a single-session-collision warning.
 - `driver.md` — project-specific driving discipline.
-- `spec-writer.md` — spec-composition shapes and data-passing idioms.
-- `spec-verifier.md` — verification-level patterns: cold-start timing, env setup, test-isolation gaps.
+- `spec.md` — spec-composition shapes and data-passing idioms, plus verification-level patterns: cold-start timing, env setup, test-isolation gaps.
 
 *Snippet-curator:*
 

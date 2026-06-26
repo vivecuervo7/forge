@@ -3,7 +3,7 @@
 // inlined form suitable for shipping into another test suite (or sharing as
 // a single-file artifact).
 //
-// The composed form (what spec-writer produces) imports from forge/snippets/
+// The composed form (what the driver-worker produces) imports from forge/snippets/
 // and calls `<snippet>.run(page, args)` for each step. That form is great for
 // working artifacts because it auto-evolves with the library, but it can't
 // be lifted into a project's e2e-tests/ directory without bringing forge's
@@ -22,7 +22,7 @@
 // underlying snippets change. Re-run forge-export-spec.mjs to refresh.
 //
 // Approach: hand-rolled paren/brace matching, no AST parser dependency.
-// Forge specs follow a strict, predictable shape (the spec-writer agent
+// Forge specs follow a strict, predictable shape (the driver-worker
 // emits them); we lean on that shape rather than handling arbitrary TS.
 //
 // Usage:

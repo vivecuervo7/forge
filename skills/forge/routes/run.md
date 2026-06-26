@@ -109,7 +109,7 @@ Surface the script's error output verbatim — the user needs to see exactly wha
 
 ## Hard rules
 
-- **No team involved.** Thin script invocation. Don't spawn driver, snippet-author, spec-writer, or spec-verifier. Re-authoring is `/forge spec`'s job.
+- **No team involved.** Thin script invocation. Don't spawn the driver-worker or snippet-curator teammates. Re-authoring is `/forge spec`'s job.
 - **Thin script invocation.** Playwright launches its own browser; env comes from `process.env` (user's shell + `forge/playwright.config.ts`). The spec runs as a standalone Playwright test.
 - **Default to verification-only.** When `RECORD_AS = none`, do NOT pass `--record`. Recordings are explicit; silent recording bloats `forge/videos/`.
 - **Surface script errors verbatim.** Playwright's report (which selector failed, which assertion mismatched) — don't paraphrase.

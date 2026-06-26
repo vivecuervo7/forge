@@ -1,6 +1,6 @@
-# Project hint: forge:driver
+# Project hint: driver-worker
 
-Consumed by `forge:driver` when driving against demoqa.com.
+Consumed by the `driver-worker` when driving against demoqa.com.
 
 ## What this project is
 

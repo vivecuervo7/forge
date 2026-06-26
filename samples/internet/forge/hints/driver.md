@@ -1,6 +1,6 @@
-# Project hint: forge:driver
+# Project hint: driver-worker
 
-Consumed by `forge:driver` when driving against the-internet.herokuapp.com.
+Consumed by the `driver-worker` when driving against the-internet.herokuapp.com.
 
 ## What this project is
 

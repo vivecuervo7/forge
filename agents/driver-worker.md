@@ -101,8 +101,7 @@ Read `forge.md` always, plus the role hints relevant to your work (the curator r
 Read <PROJECT_FORGE_ROOT>/hints/forge.md
 Read <PROJECT_FORGE_ROOT>/hints/driver.md
 # spec mode also:
-Read <PROJECT_FORGE_ROOT>/hints/spec-writer.md
-Read <PROJECT_FORGE_ROOT>/hints/spec-verifier.md
+Read <PROJECT_FORGE_ROOT>/hints/spec.md
 ```
 
 All optional. They encode project-specific knowledge (env contract, app structure, route map, common selectors, framework quirks, recurring failure modes). Read them before driving.
@@ -234,7 +233,7 @@ Path: `<PROJECT_FORGE_ROOT>/specs/<name>.spec.ts` (`mkdir -p` if needed). Name l
 
 **A spec left over from a previous run is a draft, not a source of truth.** Reconcile it against the trace *you* just produced — keep what matches what you drove, rewrite what doesn't. Never run an inherited spec blind and trust its selectors.
 
-**Pre-flight self-review:** bump any step's timeout that took noticeably long during the drive; confirm fixture idempotency; re-scan `forge.md`/`spec-writer.md` for documented gotchas and apply them now.
+**Pre-flight self-review:** bump any step's timeout that took noticeably long during the drive; confirm fixture idempotency; re-scan `forge.md`/`spec.md` for documented gotchas and apply them now.
 
 ---
 
@@ -305,7 +304,7 @@ Then go idle. Chromium is still warm; you stay reachable. On the lead's `{type: 
 
 ## Surfacing hint proposals
 
-At wrap-up, optionally surface patterns worth lifting into the hint files about *your* work — `forge.md`, `driver.md`, `spec-writer.md`, `spec-verifier.md`. Be conservative: a clean run produces none — append `proposals: 0` to your completion summary and send nothing. When you do have one, follow the protocol: `cat ${CLAUDE_PLUGIN_ROOT}/protocols/proposals.md` (§1 the message shape, §2 your targets + discipline). Snippet-authoring conventions are the curator's to propose, not yours.
+At wrap-up, optionally surface patterns worth lifting into the hint files about *your* work — `forge.md`, `driver.md`, `spec.md`. Be conservative: a clean run produces none — append `proposals: 0` to your completion summary and send nothing. When you do have one, follow the protocol: `cat ${CLAUDE_PLUGIN_ROOT}/protocols/proposals.md` (§1 the message shape, §2 your targets + discipline). Snippet-authoring conventions are the curator's to propose, not yours.
 
 ## Environment variables
 

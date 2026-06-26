@@ -10,19 +10,18 @@ A reasonable approach: drive a task with no hints, observe what the agents misse
 
 ## File-per-consumer convention
 
-Each hint file is named after the agent or skill that reads it. Forge looks for files matching these specific names:
+Each hint file is named after the role that reads it. Forge looks for files matching these specific names:
 
-- `driver.md` — read by `forge:driver`
-- `forge.md` — read by the `/forge` skill
-- `snippet-author.md` — read by `forge:snippet-author`
-- `spec-writer.md` — read by `forge:spec-writer`
-- `spec-verifier.md` — read by `forge:spec-verifier`
+- `forge.md` — read by the `/forge` skill (the lead)
+- `driver.md` — read by the `driver-worker` (driving)
+- `spec.md` — read by the `driver-worker` in spec mode (composition + verification)
+- `snippet-author.md` — read by the `snippet-curator` (snippet conventions)
 
 ## Where the leverage is
 
 The most consequential hint is **`driver.md`'s selector inventory**. Here's the mechanism:
 
-When the snippet-author sees a selector listed in `driver.md` (e.g. "product card: `a[data-test^="product-"]`"), it tends to author a snippet whose scope maps 1:1 to that selector ("click first product card"). Narrow snippets compose well; the spec-writer ends up parameterising over snippet args rather than embedding the specific value the driver happened to encounter during the drive.
+When the snippet-curator sees a selector listed in `driver.md` (e.g. "product card: `a[data-test^="product-"]`"), it tends to author a snippet whose scope maps 1:1 to that selector ("click first product card"). Narrow snippets compose well; the driver-worker, composing the spec, ends up parameterising over snippet args rather than embedding the specific value it happened to encounter during the drive.
 
 Concretely: in field tests, the same drive task produced two very different specs depending on hints:
 
@@ -56,7 +55,7 @@ Worth writing if your site has auth or other run-level concerns the driver can't
 - **Setup before each run** *(optional)* — write this only when the SUT has real server-side state worth resetting before each run. "Run `bun run db:seed`," "wipe the events table," "don't reset anything — runs share state intentionally." For read-mostly or public sites, skip.
 - **Teardown after each run** *(optional)* — same shape, fires at end-of-work. There's no default teardown; opt-in only.
 
-### `snippet-author.md`, `spec-writer.md`, `spec-verifier.md`
+### `snippet-author.md`, `spec.md`
 
 Usually quite small or absent. Project-specific exceptions to the universal defaults the agents ship with:
 
@@ -94,5 +93,5 @@ Paste this into Claude (or your AI of choice) at the start of a project session.
 > - **Setup before each run** *(optional)* — if the project needs SQL seeding, a database reset, or other state preparation, describe it in plain language.
 > - **Teardown after each run** *(optional)* — same shape, for end-of-run cleanup the agent defaults won't cover.
 >
-> Use plain language, not configuration syntax. If something isn't documented and isn't obvious from the code, note the gap rather than guessing. Skip `snippet-author.md`, `spec-writer.md`, and `spec-verifier.md` unless you spot a clear project-specific deviation worth recording — the agent defaults usually cover those.
+> Use plain language, not configuration syntax. If something isn't documented and isn't obvious from the code, note the gap rather than guessing. Skip `snippet-author.md` and `spec.md` unless you spot a clear project-specific deviation worth recording — the agent defaults usually cover those.
 
