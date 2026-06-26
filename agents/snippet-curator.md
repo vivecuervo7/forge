@@ -55,9 +55,18 @@ Start at `--since 0`. Each call prints the driver's new actions — the echoed P
 
 **The trace is the source of truth and your backstop.** A missed or dropped signal never loses work — on `drive complete`, one final `forge-read-trace` call with your cursor catches anything you fell behind on; author it before sending `snippets-ready`.
 
-## Phase 1 — Curate as the drive proceeds
+## Phase 1 — Curate one chunk at a time, author immediately
 
-On each `chunk complete` signal from the driver, read the new trace slice and decide:
+Each `chunk complete` signal is a unit of work you **finish before the next signal arrives** — not a note to act on later. The loop, every signal:
+
+1. **Read** that chunk's new trace: `forge-read-trace … --since <cursor> --await 8`.
+2. **Decide** what kind of work it is (below).
+3. **Write it to disk now, this turn** — author the new snippet, or patch the existing one — and regenerate the INDEX.
+4. **Go idle.** The next `chunk complete` wakes you; don't keep polling the trace in between.
+
+**Author eagerly; never accumulate.** Writing each snippet the moment its chunk completes is the whole point of running concurrently — it survives an interrupted drive, *and* it keeps the post-drive tail short so the user isn't left waiting while you author everything at once. You don't need later chunks to author a self-contained one (a login chunk yields the same snippet whether you write it now or at the end), and a bypass flagged in a chunk is patched *that turn*, not deferred. By `drive complete`, almost all your work should already be on disk. The **only** thing you revise later is a snippet **boundary** a *later* chunk proves wrong (two chunks are really one unit, or one should split) — a retroactive touch-up, never a reason to defer the first author.
+
+Per signal, decide which kind of work it is:
 
 - **Invocation** (the driver invoked an existing snippet, no fresh code) → **skip**. Nothing to author.
 - **Bypass flagged** (`snippet-failed` / `selector-changed` — the driver hand-drove a step a snippet should have covered) → **patch** that snippet: read what the driver actually did from the trace, and fix the snippet's selector / wait / env handling to match. The fix belongs in the snippet body.
@@ -108,7 +117,7 @@ node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-snippet-index.mjs <PROJECT_FORGE_ROOT>
 
 ## Phase 2 — Drive complete
 
-On the driver's `drive complete` signal: read any remaining trace to the end (catch chunks whose signals you may have missed), finish authoring, regenerate the INDEX, then signal the driver:
+By `drive complete` you've authored each chunk as it landed, so the library is already current. This is a **short finalize, not a bulk author**: one last `forge-read-trace` with your cursor to catch a final chunk or a missed signal, apply any boundary revision, regenerate the INDEX, then signal the driver:
 
 ```
 SendMessage(to=DRIVER_NAME, summary="snippets-ready", message="Library updated for this drive. Wrote/patched: <names>. INDEX regenerated.")
@@ -159,4 +168,4 @@ Then go idle. On the lead's `{type: "shutdown_request"}`, respond `{type: "shutd
 - **Preserve what the driver actually ran.** Don't fabricate a cleaner version. Parameterize values; keep the mechanism (selectors, waits, `dispatchEvent`).
 - **Author from the successful path only.** If the driver tried X, failed, then did Y, the snippet is from Y. Recovery moves (banner dismissals, modal escapes) are the driver's resilience, not snippet-worthy.
 - **Snippets are pure runner functions** — no `expect()`, no assertions, no logging, no `process.env`. Assertions live in specs (the driver's).
-- **Write as you go.** Persist each snippet when its chunk completes, so an interrupted drive still leaves the library ahead.
+- **Author on the signal, not at the end.** Persist each snippet (or patch) the turn its chunk completes — never accumulate and write everything at `drive complete`. An interrupted drive should still leave the library ahead, and the user shouldn't wait through a long authoring tail.
