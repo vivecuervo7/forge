@@ -3,11 +3,11 @@
 This reference is loaded by `/forge`'s router for the **task**, **spec**, and **teach** routes. The router has already:
 
 - Decided `MODE` (one of `drive` | `spec`) — the teach route uses `drive`
-- Decided `COLLABORATIVENESS` (`0.0`–`1.0`, default `0.0`) — `1.0` for the teach route (the user is teaching forge a quirky flow), high for a task the user asked to be walked through, `0.0` otherwise. See `collaborativeness.md`.
+- Decided `COLLABORATIVENESS` (one of `autonomous` | `light-touch` | `guided` | `step-by-step`, default `autonomous`) — `step-by-step` for the teach route (the user is teaching forge a quirky flow), `guided` for a task the user asked to be walked through, `autonomous` otherwise. See `collaborativeness.md`.
 - Stripped any leading `spec` / `teach` keyword from the task description
 - Resolved `PLUGIN_ROOT` to the plugin's install path (see SKILL.md phase 1.0)
 
-**Teach is a posture, not a separate mode.** The teach route is just `MODE=drive` at high `COLLABORATIVENESS` (`1.0`) — the same two teammates and lifecycle, with the driver going step-by-step *with* the user so quirks they know get baked into snippets. There is no separate teach agent pair; everything below applies, and the collaborativeness handling in Phase 4.0a is the only addition.
+**Teach is a posture, not a separate mode.** The teach route is just `MODE=drive` at `COLLABORATIVENESS=step-by-step` — the same two teammates and lifecycle, with the driver going step-by-step *with* the user so quirks they know get baked into snippets. There is no separate teach agent pair; everything below applies, and the collaborativeness handling in Phase 4.0a is the only addition.
 
 **Placeholder note.** `<PLUGIN_ROOT>` in the bash commands below is a placeholder — substitute the literal path captured by the router. Do **not** use `${CLAUDE_PLUGIN_ROOT}` here: the env var isn't reliably populated in the bash context that runs from this reference.
 
@@ -68,7 +68,7 @@ cat <PLUGIN_ROOT>/protocols/escalation.md
 cat <PLUGIN_ROOT>/protocols/collaborativeness.md
 ```
 
-`escalation.md` — you route the driver's check-ins per its **Lead side** (§3); loading it keeps the protocol and message shapes a single source of truth shared with the driver (it `cat`s the same file on friction). `collaborativeness.md` — you read the **deference** column to know how readily to involve the user at this run's `COLLABORATIVENESS`, and you hold/nudge that dial through the run.
+`escalation.md` — you route the driver's check-ins per its **Lead side** (§3); loading it keeps the protocol and message shapes a single source of truth shared with the driver (it `cat`s the same file on friction). `collaborativeness.md` — you read the **deference** column to know how readily to involve the user at this run's `COLLABORATIVENESS` level, and you hold/step that level through the run.
 
 ### 1.3. Generate a session name
 
@@ -174,7 +174,7 @@ After spawning, the teammates self-coordinate (the chunk/drive-complete/snippets
 
 ### 4.0a. Collaborativeness (deference + teaching)
 
-`COLLABORATIVENESS` (`0.0`–`1.0`, default `0.0`; see `collaborativeness.md`, loaded in 1.2a) sets how readily you bring the user in — you read its **deference** column. At `0.0` you resolve check-ins yourself wherever you can (asking the user only when *you're* stuck — the floor); as it rises you route more to the user; near `1.0` the driver surfaces every step and you carry a step-by-step teaching conversation. You **hold the dial and nudge it mid-run** on the user's framing — "walk me through this next bit" → up; "you can take it from here" → back toward `0.0`. A driver check-in (Phase 4) is also a natural cue to *offer* a walk-through and nudge up on a yes.
+`COLLABORATIVENESS` (one of `autonomous` | `light-touch` | `guided` | `step-by-step`, default `autonomous`; see `collaborativeness.md`, loaded in 1.2a) sets how readily you bring the user in — you read its **deference** column. At `autonomous` you resolve check-ins yourself wherever you can (asking the user only when *you're* stuck — the floor); each rung up routes more to the user; at `step-by-step` the driver surfaces every step and you carry a step-by-step teaching conversation. You **hold the level and step it mid-run** on the user's framing — "walk me through this next bit" → up a rung; "you can take it from here" → back to `autonomous`. A driver check-in (Phase 4) is also a natural cue to *offer* a walk-through and step up on a yes.
 
 When collaborativeness is high you're an **active interlocutor**, not a passive ping-waiter:
 
@@ -273,7 +273,7 @@ Non-blocking, once-per-run. Don't repeat if the user already cleaned this sessio
 
 - **You are an orchestrator and the routing tier — not an actor on the app.** All browser driving, spec writing, and spec running belong to `driver-worker`; all snippet authoring/patching to `snippet-curator`. You set up the team, create the tasks, spawn the two teammates, manage lifecycle, AND own the user channel and the driver's **check-ins**: you decide whether a check-in is answered from the code (read-only research — `Glob`/`Grep`/`Read`/`Explore`), with a concrete steer, or by the user (`AskUserQuestion` → SendMessage back); you relay user steering to the relevant teammate. That read-only research is the one thing you reach for beyond orchestration; you still never invoke `playwright-cli`/`forge-pw`, drive the browser, write snippet or spec files, run specs, or mutate the app or its environment.
 - **The peer signals are direct — don't relay them.** chunk-complete / drive-complete / snippets-ready / patch-request flow between the driver and curator. You only handle messages addressed to `team-lead`.
-- **High collaborativeness makes you an active interlocutor.** `COLLABORATIVENESS` sets how readily you involve the user; at high values you carry the teaching conversation — relay the driver's per-step check-ins as plain conversation, pass guidance back, nudge the dial and relay library steers on request (Phase 4.0a). The lifecycle is unchanged: still two teammates, two pings, the same Phase 5.
+- **High collaborativeness makes you an active interlocutor.** `COLLABORATIVENESS` sets how readily you involve the user; at `guided`/`step-by-step` you carry the teaching conversation — relay the driver's per-step check-ins as plain conversation, pass guidance back, step the level and relay library steers on request (Phase 4.0a). The lifecycle is unchanged: still two teammates, two pings, the same Phase 5.
 - **The verify loop lives inside the driver.** In spec mode the driver runs its spec cold, diagnoses, fixes spec-logic inline, and routes snippet-level fixes to the curator via patch-request. You don't triage or route snippet/spec fixes — but you field the driver's check-ins (route them: a steer, read-only investigation of the code, or take it to the user), and relay user steers.
 - **Wait for BOTH pings before shutdown.** The curator stays alive through the driver's verify loop (for patch-requests); it pings complete only after the run resolves. Don't shut anyone down early.
 - **Always close the chromium session — on every exit path.** Both pings, a watchdog timeout, `cannot-drive`, a rejected shutdown, or a user abort all still reach 5.4. You own `SESSION_NAME`; a run never ends with the browser left open.

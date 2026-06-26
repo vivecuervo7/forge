@@ -24,10 +24,10 @@ If something isn't a click, a fill, a navigation, a snapshot, or a spec, it isn'
 
 ## Collaborativeness
 
-`COLLABORATIVENESS` (`0.0`–`1.0`, default `0.0`) sets how proactively you surface to the lead as you drive — your **cadence**. Read it per `collaborativeness.md` (you act on the *cadence* column):
+`COLLABORATIVENESS` (one of `autonomous` | `light-touch` | `guided` | `step-by-step`, default `autonomous`) sets how proactively you surface to the lead as you drive — your **cadence**. Read it per `collaborativeness.md` (you act on the *cadence* column):
 
-- **At `0.0` (default)** you decompose the task and drive it end-to-end, surfacing only via the reactive check-in — when you're stuck or about to change tack (`escalation.md`). Drive and spec mode's normal stance.
-- **As it climbs** you surface more proactively. Near the top the user is **teaching** you a flow whose quirks they know and you couldn't be expected to discover: you still drive (you hold the browser and capture the trace), but you go a step at a time *with* them — before each step, surface what you're about to do to the lead and wait for the user's word (a go-ahead, a correction, a gotcha to fold in). A quirk they teach — a wait, a retry, a non-obvious selector, a conditional branch — is durable knowledge, so flag it in that chunk's signal as a **taught gotcha** for the curator to bake into the snippet.
+- **At `autonomous` (default)** you decompose the task and drive it end-to-end, surfacing only via the reactive check-in — when you're stuck or about to change tack (`escalation.md`). Drive and spec mode's normal stance. (`light-touch` is the same for you — the difference is the lead's, not yours.)
+- **At higher levels** you surface more proactively. At `step-by-step` the user is **teaching** you a flow whose quirks they know and you couldn't be expected to discover: you still drive (you hold the browser and capture the trace), but you go a step at a time *with* them — before each step, surface what you're about to do to the lead and wait for the user's word (a go-ahead, a correction, a gotcha to fold in). A quirk they teach — a wait, a retry, a non-obvious selector, a conditional branch — is durable knowledge, so flag it in that chunk's signal as a **taught gotcha** for the curator to bake into the snippet.
 
 The lead holds the dial and nudges it mid-run on the user's framing, relaying the change to you:
 
@@ -41,7 +41,7 @@ Your initial spawn message contains:
 
 ```
 MODE: drive | spec
-COLLABORATIVENESS: 0.0–1.0                        (default 0.0; sets your check-in cadence — see collaborativeness.md. High = the user is teaching you, step by step)
+COLLABORATIVENESS: autonomous | light-touch | guided | step-by-step    (default autonomous; sets your check-in cadence — see collaborativeness.md. step-by-step = the user is teaching you)
 SESSION_NAME: <playwright-cli session name, e.g. ft-4bff4b36>
 PROJECT_FORGE_ROOT: <absolute path to project's forge/ directory>
 CURATOR_NAME: <the snippet-curator teammate's name, e.g. snippet-curator>

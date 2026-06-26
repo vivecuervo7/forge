@@ -19,7 +19,7 @@ First word of `$ARGUMENTS` (case-insensitive). Dispatch table:
 | `init` | scaffold a forge/ directory | `routes/init.md` | optional target dir |
 | `export` | inline a composed spec for shipping | `routes/export.md` | spec name + optional `--output <path>` |
 | `run` | re-run a verified spec, optionally recording | `routes/run.md` | spec name / `last` / `latest`, plus optional `record as <label>` |
-| `teach` | teach mode — collaborative drive: the user walks forge through a quirky flow, snippets accrete | `routes/team-task.md` (with `MODE=drive`, `COLLABORATIVENESS=1.0`) | optional session-framing topic |
+| `teach` | teach mode — collaborative drive: the user walks forge through a quirky flow, snippets accrete | `routes/team-task.md` (with `MODE=drive`, `COLLABORATIVENESS=step-by-step`) | optional session-framing topic |
 | `clean` | tidy snippet library + hint files | `routes/clean.md` | optional scope: `snippets` \| `hints` \| `both` |
 | `spec` | spec mode — drive + write spec + verify (intent: regression / red-green bug repro / assertion-less scenario) | `routes/team-task.md` + `routes/team-task-spec.md` (with `MODE=spec`) | the actual task description |
 | *(anything else)* | (see natural-language signals below; default fallback is the task route) | `routes/team-task.md` (with `MODE=drive`) | the full args = task description |
@@ -99,11 +99,11 @@ For task and spec routes, set `MODE` before loading the reference. Skip for init
 
 Otherwise → **drive mode**. If intent is ambiguous, default to drive — spec creation is an explicit opt-in.
 
-**COLLABORATIVENESS** — a `0.0`–`1.0` dial set alongside `MODE`, then passed into `team-task.md` (see `protocols/collaborativeness.md`):
+**COLLABORATIVENESS** — one of the named levels `autonomous` | `light-touch` | `guided` | `step-by-step`, set alongside `MODE` from the user's language, then passed into `team-task.md` (see `protocols/collaborativeness.md`):
 
-- The **teach route** (Phase 0) → `1.0` (the user is teaching forge a flow, step by step).
-- A task/spec whose framing asks to be walked through — "walk me through…", "I'll show you…", "let me teach you as we go" — → high (≈`0.7`).
-- Otherwise → `0.0` (the default). The lead can nudge it up mid-run on the user's cue; it handles that live.
+- The **teach route** (Phase 0) → `step-by-step` (the user is teaching forge a flow, step by step).
+- A task/spec whose framing asks to be walked through — "walk me through…", "I'll show you…", "let me teach you as we go" — → `guided`.
+- Otherwise → `autonomous` (the default). The lead can step it up mid-run on the user's cue; it handles that live.
 
 Within spec mode, the spec carries a mandatory **intent** — regression (assert correct behavior, expect green), repro (red-green bug reproduction: assert correct behavior, expect red until the bug is fixed), or scenario (no assertions, re-run via `/forge run`). A bug ticket / "reproduce …" / "failing spec for …" signals repro; the lead establishes and (when ambiguous) confirms the intent before authoring — see `team-task-spec.md` Phase 2.0.
 
@@ -148,7 +148,7 @@ cat <PLUGIN_ROOT>/skills/forge/routes/<reference>.md
 (Substitute the literal value captured in 1.0 for `<PLUGIN_ROOT>`.)
 
 Where `<reference>` is one of:
-- `team-task.md` (for task / spec / **teach** routes — carries `MODE` and `COLLABORATIVENESS` into its instructions; the teach route uses `MODE=drive, COLLABORATIVENESS=1.0` with the framing topic as initial context). In spec mode, also load `team-task-spec.md` after it — the addendum carries the Phase 2.0 spec-intent decision and the spec-mode final-report shape.
+- `team-task.md` (for task / spec / **teach** routes — carries `MODE` and `COLLABORATIVENESS` into its instructions; the teach route uses `MODE=drive, COLLABORATIVENESS=step-by-step` with the framing topic as initial context). In spec mode, also load `team-task-spec.md` after it — the addendum carries the Phase 2.0 spec-intent decision and the spec-mode final-report shape.
 - `init.md` (for init route)
 - `export.md` (for export route)
 - `run.md` (for run route — carries `RECORD_AS` into its instructions)
@@ -159,7 +159,7 @@ Then **follow the instructions in the loaded reference** — it's authoritative 
 When passing context into the reference's work, include the captured route-specific values AND the resolved `PLUGIN_ROOT`. References use `<PLUGIN_ROOT>` as a placeholder; substitute the captured value when running their bash commands.
 
 - For all routes: `PLUGIN_ROOT` (the literal path captured in 1.0).
-- For team-task (task / spec / teach): `MODE`, `COLLABORATIVENESS`, and the task description (args with route keyword stripped). For the teach route, the framing topic is the task description and `COLLABORATIVENESS=1.0`.
+- For team-task (task / spec / teach): `MODE`, `COLLABORATIVENESS`, and the task description (args with route keyword stripped). For the teach route, the framing topic is the task description and `COLLABORATIVENESS=step-by-step`.
 - For init: optional target directory.
 - For export: spec name + optional `--output <path>` override.
 - For run: spec reference (explicit name / `last` / `latest` / unspecified) + `RECORD_AS`.
