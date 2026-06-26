@@ -236,10 +236,10 @@ Execute any `## Teardown after each run` section in `forge.md`. If absent, skip.
 ### 5.4. Close the chromium session
 
 ```bash
-playwright-cli -s=<SESSION_NAME> close
+node <PLUGIN_ROOT>/scripts/forge-pw.mjs -s=<SESSION_NAME> close
 ```
 
-**This always runs — gated on nothing.** You generated `SESSION_NAME` in 1.3 and the driver only ever (re)opens under it, so closing by that name reliably catches the live browser however the run ended — both pings, a watchdog timeout, `cannot-drive`, a rejected shutdown, or a user abort. Best-effort; fall back to killing the process tree if it survives. The driver may have already closed it — a no-op then.
+(Route the close through `forge-pw`, not the bare `playwright-cli` binary — the guard hook blocks the bare binary.) **This always runs — gated on nothing.** You generated `SESSION_NAME` in 1.3 and the driver only ever (re)opens under it, so closing by that name reliably catches the live browser however the run ended — both pings, a watchdog timeout, `cannot-drive`, a rejected shutdown, or a user abort. Best-effort; fall back to killing the process tree if it survives. The driver may have already closed it — a no-op then.
 
 ### 5.5. Report to the user
 
@@ -271,7 +271,7 @@ Non-blocking, once-per-run. Don't repeat if the user already cleaned this sessio
 
 ## Hard rules
 
-- **You are an orchestrator and the routing tier — not an actor on the app.** All browser driving, spec writing, and spec running belong to `driver-worker`; all snippet authoring/patching to `snippet-curator`. You set up the team, create the tasks, spawn the two teammates, manage lifecycle, AND own the user channel and the driver's **check-ins**: you decide whether a check-in is answered from the code (read-only research — `Glob`/`Grep`/`Read`/`Explore`), with a concrete steer, or by the user (`AskUserQuestion` → SendMessage back); you relay user steering to the relevant teammate. That read-only research is the one thing you reach for beyond orchestration; you still never invoke `playwright-cli`/`forge-pw`, drive the browser, write snippet or spec files, run specs, or mutate the app or its environment.
+- **You are an orchestrator and the routing tier — not an actor on the app.** All browser driving, spec writing, and spec running belong to `driver-worker`; all snippet authoring/patching to `snippet-curator`. You set up the team, create the tasks, spawn the two teammates, manage lifecycle, AND own the user channel and the driver's **check-ins**: you decide whether a check-in is answered from the code (read-only research — `Glob`/`Grep`/`Read`/`Explore`), with a concrete steer, or by the user (`AskUserQuestion` → SendMessage back); you relay user steering to the relevant teammate. That read-only research is the one thing you reach for beyond orchestration; you still never drive the browser, write snippet or spec files, run specs, or mutate the app or its environment. The sole `forge-pw` call you make is the **teardown close** (5.4) — and only ever through `forge-pw`, never the bare `playwright-cli` binary.
 - **The peer signals are direct — don't relay them.** chunk-complete / drive-complete / snippets-ready / patch-request flow between the driver and curator. You only handle messages addressed to `team-lead`.
 - **High collaborativeness makes you an active interlocutor.** `COLLABORATIVENESS` sets how readily you involve the user; at `guided`/`step-by-step` you carry the teaching conversation — relay the driver's per-step check-ins as plain conversation, pass guidance back, step the level and relay library steers on request (Phase 4.0a). The lifecycle is unchanged: still two teammates, two pings, the same Phase 5.
 - **The verify loop lives inside the driver.** In spec mode the driver runs its spec cold, diagnoses, fixes spec-logic inline, and routes snippet-level fixes to the curator via patch-request. You don't triage or route snippet/spec fixes — but you field the driver's check-ins (route them: a steer, read-only investigation of the code, or take it to the user), and relay user steers.

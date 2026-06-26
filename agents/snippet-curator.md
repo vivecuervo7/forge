@@ -43,29 +43,17 @@ Keep your task `in_progress` for the whole run — including the driver's verify
 
 ## How you read the driver's action-stream
 
-The driver is a team peer; its transcript is a top-level session file. Find it once, then read forward from a cursor.
-
-**Locate the driver's transcript** (do this on the first signal, cache the path):
+The driver's verbatim browser actions live in its on-disk transcript. Read them with one command — `forge-read-trace` locates the driver's transcript (by your `TEAM_NAME`, matching on its records' own identity so it can't be fooled by the lead's or your own transcript) and prints its forge-pw actions since a cursor:
 
 ```bash
-PROJ=~/.claude/projects/$(pwd | sed 's#/#-#g')
-DRIVER_TX=$(grep -lE '"agentName":"driver-worker".*"teamName":"<TEAM_NAME>"|"teamName":"<TEAM_NAME>".*"agentName":"driver-worker"' "$PROJ"/*.jsonl 2>/dev/null | head -1)
+node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-read-trace.mjs --team <TEAM_NAME> --since <cursor> --await 8
 ```
 
-(If `pwd` encoding doesn't resolve, glob `~/.claude/projects/*/` for the `*.jsonl` whose header carries `agentName=driver-worker` and your `TEAM_NAME`.)
+Start at `--since 0`. Each call prints the driver's new actions — the echoed Playwright (lift it **verbatim** into snippets), `run-code` bodies, and any returned values (for the spec's assertions) — then a trailing `cursor: <N>`. **Carry that `N` as your next `--since`.** On each `chunk complete` signal, call it again to pick up what's new and author from it.
 
-**Read forward from a cursor.** Track the last record count you processed. On each signal, read the *new* records since your cursor and extract the driver's verbatim browser actions — the `forge-pw` Bash commands and their results, including the `### Ran Playwright code` echoes and any `run-code` bodies:
+`--await 8` absorbs transcript flush-lag: a signal can briefly outrun the on-disk flush, so if nothing new has landed yet it waits up to 8s, and any result-less trailing action is held back for your next read rather than handed over half-written. You never poll by hand.
 
-```bash
-# new assistant Bash commands (the verbatim actions) since line <cursor>:
-tail -n +<cursor> "$DRIVER_TX" | jq -rc 'select(.type=="assistant") | .message.content[]? | select(.type=="tool_use" and .name=="Bash") | .input.command'
-# and their results (the echoed Playwright code / returned JSON):
-tail -n +<cursor> "$DRIVER_TX" | jq -rc 'select(.type=="user") | .message.content[]? | select(.type=="tool_result") | (.content | if type=="array" then (map(.text//"")|join(" ")) else . end)'
-```
-
-**Flush timing:** a signal can arrive *before* the driver's transcript has flushed that chunk's actions. If the records you expect aren't there yet, wait briefly and re-read (bounded — a few retries). The trace is the source of truth; the signal just tells you to look.
-
-**The trace is also your backstop.** If a signal is missing or you fell behind, you can still recover by reading the trace forward to the end — you never lose work because a signal was dropped.
+**The trace is the source of truth and your backstop.** A missed or dropped signal never loses work — on `drive complete`, one final `forge-read-trace` call with your cursor catches anything you fell behind on; author it before sending `snippets-ready`.
 
 ## Phase 1 — Curate as the drive proceeds
 
