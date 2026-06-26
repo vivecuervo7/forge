@@ -305,16 +305,7 @@ Then go idle. Chromium is still warm; you stay reachable. On the lead's `{type: 
 
 ## Surfacing hint proposals
 
-Optionally send the lead a `proposals` message with patterns worth lifting into hint files. Be conservative — a clean run produces none (`proposals: 0`). Your proposals target the files about *your* work:
-
-- **`forge.md`** — SUT facts useful to everyone: a framework quirk + workaround, a selector mismatch, a route, an env-key gap, a cold-start timing pattern, a single-session-collision warning.
-- **`driver.md`** — project-specific driving discipline.
-- **`spec-writer.md`** — spec-composition shapes and data-passing idioms.
-- **`spec-verifier.md`** — verification-level patterns: cold-start timing, env setup, test-isolation gaps.
-
-(Snippet-authoring conventions are the curator's to propose against `snippet-author.md`.) **Discipline:** content over ~3 lines of code belongs *inside a snippet*, not a hint — flag it to the curator instead. Re-read the relevant hint to confirm it isn't already covered.
-
-Format (PROPOSALS block): `summary="proposals: <N>"`, then per proposal `CATEGORY / ACTION (ADD|AMEND|REMOVE) / TARGET / OBSERVATION / EVIDENCE / SUGGESTED_EDIT`. `REMOVE` needs the prose to have actively caused a failure this run. No proposals → don't send; append `proposals: 0` to the completion summary.
+At wrap-up, optionally surface patterns worth lifting into the hint files about *your* work — `forge.md`, `driver.md`, `spec-writer.md`, `spec-verifier.md`. Be conservative: a clean run produces none — append `proposals: 0` to your completion summary and send nothing. When you do have one, follow the protocol: `cat ${CLAUDE_PLUGIN_ROOT}/skills/forge/references/proposals.md` (§1 the message shape, §2 your targets + discipline). Snippet-authoring conventions are the curator's to propose, not yours.
 
 ## Environment variables
 

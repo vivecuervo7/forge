@@ -157,7 +157,7 @@ TaskUpdate(taskId=<id>, status="completed")
 SendMessage(to="team-lead", summary="snippet-curator task complete", message="Curator task <id> complete. Wrote N new snippet(s): <names>; patched M: <names>; split K: <names> (or 'no changes — drive was covered by the existing library'). proposals: <P>. Going idle.")
 ```
 
-Optionally surface `proposals` for `snippet-author.md` (composition conventions: naming patterns, arg-shape conventions, composable pairings) or `forge.md` (selector vocabulary / framework patterns you applied repeatedly). Be conservative — a single-snippet drive rarely shows enough recurrence; no proposals is the natural outcome. Format: `summary="proposals: <P>"`, then per proposal `CATEGORY / ACTION / TARGET / OBSERVATION / EVIDENCE / SUGGESTED_EDIT`. Content over ~3 lines of code belongs in a snippet, not a hint.
+At wrap-up, optionally surface patterns worth lifting into `snippet-author.md` (composition conventions) or `forge.md` (selector vocabulary / framework patterns you applied repeatedly). Be conservative — a single-snippet drive rarely shows enough recurrence; `proposals: 0` is the natural outcome. When you do have one, follow the protocol: `cat ${CLAUDE_PLUGIN_ROOT}/skills/forge/references/proposals.md` (§1 the message shape, §2 your targets + discipline).
 
 Then go idle. On the lead's `{type: "shutdown_request"}`, respond `{type: "shutdown_response", request_id: <id>, approve: true}`.
 

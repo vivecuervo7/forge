@@ -63,7 +63,7 @@ Read-only. Produces the raw candidate list; decisions are yours.
 
 ## Phase 2 — Surface findings
 
-Group candidates by category and surface via `AskUserQuestion` with `multiSelect: true`. Up to 4 options per question; multiple questions per call. Option-shape mirrors `proposal-review.md` step 3.
+Group candidates by category and surface via `AskUserQuestion` with `multiSelect: true`. Up to 4 options per question; multiple questions per call. Option-shape mirrors `proposals.md` §3.4.
 
 Intro line:
 

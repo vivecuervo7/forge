@@ -197,10 +197,10 @@ If it responds with a completion summary, treat it as the missing ping. If 2 mor
 Each completion ping ends with `proposals: <N>`. If **both** are `proposals: 0`, skip this phase entirely. If either is `> 0`, wait for its `PROPOSALS` SendMessage(s), capture verbatim, then:
 
 ```bash
-cat <PLUGIN_ROOT>/skills/forge/references/proposal-review.md
+cat <PLUGIN_ROOT>/skills/forge/references/proposals.md
 ```
 
-Follow it for aggregation, user review, and application. Hold its "Hint files updated" summary for Phase 5.5.
+Follow its **§3 (Lead side)** for aggregation, user review, and application. Hold the "Hint files updated" summary for Phase 5.5.
 
 ## Phase 5 — Shut down and clean up
 
