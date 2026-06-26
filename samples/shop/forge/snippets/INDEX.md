@@ -4,7 +4,7 @@
 # 3 snippet(s) — grouped by flow:; ungrouped land in misc
 
 flow: browse
-  - search-for-product(query)  → Fill the search box and submit to filter the product listing [phase: search] [enters: product listing filtered by query]
+  - search-for-product(query)  → Navigate to the product catalog and search by keyword to filter the listing [phase: search] [enters: product listing filtered by query] [requires: authenticated or guest session]
 
 misc
   - add-product-to-cart()       → Click the Add to Cart button on a product detail page [enters: product added to shopping cart (toast confirms)] [requires: product detail page]
