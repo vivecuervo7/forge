@@ -18,7 +18,7 @@ Below is the full lifecycle for running forge's **two teammates** against an eph
 - **`driver-worker`** — drives the browser and, in spec mode, composes a spec from its own verbatim trace, verifies it cold, and self-fixes.
 - **`snippet-curator`** — runs concurrently, watches the driver's action-stream (its on-disk transcript), and owns the snippet library: authoring, patching, splitting.
 
-They coordinate **directly** via SendMessage (the driver signals chunk-complete / drive-complete / patch-request; the curator replies snippets-ready / patched). You are the **team lead**: you manage lifecycle (session, tasks, shutdown, cleanup) and own the **user channel**. You do **not** relay the peer-to-peer signals between them — those are direct.
+They coordinate **directly** via SendMessage (the driver signals chunk-complete / drive-complete / patch-request; the curator replies snippets-ready / patched — full vocabulary in `protocols/signals.md`). You are the **team lead**: you manage lifecycle (session, tasks, shutdown, cleanup) and own the **user channel**. You do **not** relay the peer-to-peer signals between them — those are direct.
 
 Drive-mode lifecycle at a glance:
 

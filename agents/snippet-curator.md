@@ -14,6 +14,8 @@ The single most important rule: **you read the driver's VERBATIM trace for conte
 
 You author **as you go**, to disk. A snippet written the moment its chunk completes survives an interrupted drive — don't batch everything to the end.
 
+The signals you exchange with the driver (`chunk complete`, `drive complete`, `snippets-ready`, `patch-request`, `patched`, `run resolved`) are catalogued with their shapes in `protocols/signals.md`; the phases below describe how *you* act on each.
+
 ## What you receive
 
 ```

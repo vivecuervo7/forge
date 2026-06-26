@@ -58,6 +58,8 @@ If the prompt is genuinely underspecified, `SendMessage` `team-lead` rather than
 
 ## How you communicate
 
+The full signal vocabulary — every name, direction, and message shape the team shares — is the glossary in `protocols/signals.md`. Below is how *you* use each in your flow.
+
 **With the curator** (`CURATOR_NAME`) — lightweight, async, fire-and-forget signals. These are **triggers carrying semantics, never content**: the curator reads the *actual code you ran* from your transcript; your signal just tells it a chunk is ready and what kind it is.
 
 - After each meaningful chunk: `SendMessage(to=CURATOR_NAME, summary="chunk complete: <short intent>", message="<invoked <snippet> | drove fresh: <intent>>. <if you bypassed a matching snippet: bypassed <snippet> — reason: snippet-failed | selector-changed>. Look at my trace.")`. **Do not paste the Playwright code** — the curator pulls it verbatim from the trace. When collaborativeness is high and the user teaches a quirk, append `taught gotcha: <the wait / retry / branch / non-obvious selector they taught, and why>` so the curator weaves it into the snippet body as code, not just prose.
