@@ -46,27 +46,31 @@ Keep your task `in_progress` for the whole run — including the driver's verify
 The driver's verbatim browser actions live in its on-disk transcript. Read them with one command — `forge-read-trace` locates the driver's transcript (by your `TEAM_NAME`, matching on its records' own identity so it can't be fooled by the lead's or your own transcript) and prints its forge-pw actions since a cursor:
 
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-read-trace.mjs --team <TEAM_NAME> --since <cursor> --await 8
+node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-read-trace.mjs --team <TEAM_NAME> --since <cursor> [--await <sec>]
 ```
 
-Start at `--since 0`. Each call prints the driver's new actions — the echoed Playwright (lift it **verbatim** into snippets), `run-code` bodies, and any returned values (for the spec's assertions) — then a trailing `cursor: <N>`. **Carry that `N` as your next `--since`.** On each `chunk complete` signal, call it again to pick up what's new and author from it.
+It prints the driver's new actions — the echoed Playwright (lift it **verbatim** into snippets), `run-code` bodies, and any returned values (for the spec's assertions) — then a trailing `cursor: <N>`. **Carry that `N` as your next `--since`** (start at `0`). Un-flushed trailing actions are held back automatically (the cursor stops before them), so the next read picks them up — you never receive a half-written action.
 
-`--await 8` absorbs transcript flush-lag: a signal can briefly outrun the on-disk flush, so if nothing new has landed yet it waits up to 8s, and any result-less trailing action is held back for your next read rather than handed over half-written. You never poll by hand.
+**When and how you call it differs by phase, and that difference *is* the concurrency mechanism:**
 
-**The trace is the source of truth and your backstop.** A missed or dropped signal never loses work — on `drive complete`, one final `forge-read-trace` call with your cursor catches anything you fell behind on; author it before sending `snippets-ready`.
+- **During the drive (Phase 1):** opportunistic reads on each `chunk complete` signal — **no `--await`**, take what's flushed right now, then idle.
+- **At the end (Phase 2):** one draining read on `drive complete` — **with `--await`**, the only place you wait, because no more signals are coming.
 
-## Phase 1 — Curate one chunk at a time, author immediately
+The trace is the source of truth and your backstop — the drain guarantees nothing is missed even if you fell behind during the drive.
 
-Each `chunk complete` signal is a unit of work you **finish before the next signal arrives** — not a note to act on later. The loop, every signal:
+## Phase 1 — Author opportunistically, one signal at a time
 
-1. **Read** that chunk's new trace: `forge-read-trace … --since <cursor> --await 8`.
-2. **Decide** what kind of work it is (below).
-3. **Write it to disk now, this turn** — author the new snippet, or patch the existing one — and regenerate the INDEX.
-4. **Go idle.** The next `chunk complete` wakes you; don't keep polling the trace in between.
+You are **signal-driven, not a poller.** After Phase 0, **go idle** — do *not* read the trace until the driver's first `chunk complete` signal wakes you. (Reading ahead of signals is the trap: if you never yield, the signals pile up undelivered and you end up draining everything into one batch at the end. Idle, and let each signal wake you.)
 
-**Author eagerly; never accumulate.** Writing each snippet the moment its chunk completes is the whole point of running concurrently — it survives an interrupted drive, *and* it keeps the post-drive tail short so the user isn't left waiting while you author everything at once. You don't need later chunks to author a self-contained one (a login chunk yields the same snippet whether you write it now or at the end), and a bypass flagged in a chunk is patched *that turn*, not deferred. By `drive complete`, almost all your work should already be on disk. The **only** thing you revise later is a snippet **boundary** a *later* chunk proves wrong (two chunks are really one unit, or one should split) — a retroactive touch-up, never a reason to defer the first author.
+On each `chunk complete` signal:
 
-Per signal, decide which kind of work it is:
+1. **Read what's flushed right now:** `forge-read-trace … --since <cursor>` — **no `--await`**. Take whatever's there.
+2. **Author whatever is now complete**, to disk, this turn — then regenerate the INDEX. This is *opportunistic*: the chunk that just signalled may not be flushed yet, but an *earlier* one usually is, so you author that. (The login chunk gets written when the *search* signal arrives and login has flushed — still mid-drive, still concurrent, just one chunk behind.)
+3. **Go idle.** The next signal wakes you. Don't loop, don't poll, don't `--await` — let the signal do it.
+
+Don't chase a chunk you couldn't author yet: the cursor holds un-flushed actions back, the next signal re-reads them, and `drive complete` drains anything still outstanding — nothing is lost. The **only** thing you revise later is a snippet **boundary** a *later* chunk proves wrong (two chunks are really one unit, or one should split) — a retroactive touch-up, never a reason to defer the first author.
+
+When a signal lands, decide which kind of work it is:
 
 - **Invocation** (the driver invoked an existing snippet, no fresh code) → **skip**. Nothing to author.
 - **Bypass flagged** (`snippet-failed` / `selector-changed` — the driver hand-drove a step a snippet should have covered) → **patch** that snippet: read what the driver actually did from the trace, and fix the snippet's selector / wait / env handling to match. The fix belongs in the snippet body.
@@ -115,9 +119,13 @@ export async function run(page, args) {
 node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-snippet-index.mjs <PROJECT_FORGE_ROOT>
 ```
 
-## Phase 2 — Drive complete
+## Phase 2 — Drive complete: drain, then signal ready
 
-By `drive complete` you've authored each chunk as it landed, so the library is already current. This is a **short finalize, not a bulk author**: one last `forge-read-trace` with your cursor to catch a final chunk or a missed signal, apply any boundary revision, regenerate the INDEX, then signal the driver:
+`drive complete` is the terminal signal — **no more `chunk complete`s are coming, and (in spec mode) the driver is now blocked waiting on you.** So this is the one place you actively wait instead of idling:
+
+1. **Drain the trace:** `forge-read-trace … --since <cursor> --await 8`, repeating until it reports no new actions — `--await` waits for the final flush so you capture the last chunk(s).
+2. **Author everything still outstanding** (typically the last chunk or two you couldn't author opportunistically), apply any boundary revision, regenerate the INDEX.
+3. Signal the driver:
 
 ```
 SendMessage(to=DRIVER_NAME, summary="snippets-ready", message="Library updated for this drive. Wrote/patched: <names>. INDEX regenerated.")
