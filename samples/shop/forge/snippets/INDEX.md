@@ -1,19 +1,12 @@
-<!--
-  AUTO-GENERATED — do not edit by hand.
-  Refresh with:
-    node <plugin-root>/scripts/forge-snippet-index.mjs
-  (or pass an explicit forge root as the first arg)
--->
+# Snippet INDEX (auto-generated)
+# Refresh: node <plugin-root>/scripts/forge-snippet-index.mjs
 
-# Snippet library
+# 3 snippet(s) — grouped by flow:; ungrouped land in misc
 
-3 snippet(s) in this library.
+flow: browse
+  - search-for-product(query)  → Fill the search box and submit to filter the product listing [phase: search] [enters: product listing filtered by query]
 
-## Flow: `shop-checkout`
-
-| Name | Description | Args | Phase |
-|------|-------------|------|-------|
-| `add-product-to-cart` | Clicks the add-to-cart button on a product detail page and waits for the confirmation toast. | (none) | cart |
-| `open-first-search-result` | Clicks the first product card link in the results grid, navigating to that product's detail page. | (none) | discover |
-| `search-for-product` | Fills the search input with a query and submits the form, waiting for search results to appear in the product grid. | `query`: string | discover |
+misc
+  - add-product-to-cart()       → Click the Add to Cart button on a product detail page [enters: product added to shopping cart (toast confirms)] [requires: product detail page]
+  - open-first-search-result()  → Click the first product card in the search results to open its detail page [enters: product detail page] [requires: product listing with at least one result visible]
 

@@ -1,27 +1,15 @@
-// Authored by forge:snippet-author on 2026-06-15.
+// Authored by forge:snippet-curator on 2026-06-27.
 export const meta = {
-  description: "Fills the search input with a query and submits the form, waiting for search results to appear in the product grid.",
-  args: {
-    /** Search query string */
-    query: 'string',
-  },
-  tags: ['search'],
-  flow: 'shop-checkout',
-  phase: 'discover',
-  requires: 'home page (/)',
-  enters: 'search results visible on home page',
+  description: "Fill the search box and submit to filter the product listing.",
+  args: { query: { type: 'string', description: 'search term to enter' } },
+  tags: ['search', 'product', 'filter'],
+  flow: 'browse', phase: 'search',
+  enters: 'product listing filtered by query',
 }
-
 export async function run(page, args) {
   const { query } = args
   if (!query) throw new Error('query arg is required')
-
-  await page.locator('input[data-test="search-query"]').fill(query)
-  await page.locator('button[data-test="search-submit"]').click()
-
-  // Wait for the "N products found for 'query'" paragraph — this only renders once the
-  // search API responds, ensuring we're not resolving against the default catalog product
-  // links that are already visible before results arrive.
-  await page.locator('p').filter({ hasText: /products found for/i }).waitFor({ state: 'visible' })
-  await page.locator('a[data-test^="product-"]').first().waitFor({ state: 'visible' })
+  await page.locator('input[data-test=\'search-query\']').click()
+  await page.locator('input[data-test=\'search-query\']').fill(query)
+  await page.locator('button[data-test=\'search-submit\']').click()
 }

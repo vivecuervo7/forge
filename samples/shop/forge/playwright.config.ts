@@ -9,15 +9,11 @@
 // ENV LOADING
 //
 // Forge does NO env handling on its own. Whatever's in `process.env` at
-// run time is what your specs and snippets see. This sample has dotenv
-// enabled — it loads forge/.env (forge-specific overrides) and the
-// project's root .env (baseline) at config-load time. Comment out the
-// import + loadEnv calls below if you'd rather use direnv / shell exports
-// / dotenv-cli instead.
-//
-import { config as loadEnv } from 'dotenv'
-loadEnv({ path: resolve(__dirname, '.env') })
-loadEnv({ path: resolve(__dirname, '..', '.env') })
+// run time is what your specs and snippets see. **This sample enables
+// dotenv** (the import + loadEnv calls below the declares): it loads
+// forge/.env (forge-specific overrides) then the project root .env
+// (baseline) at config-load time. Prefer direnv / shell exports /
+// dotenv-cli instead? Delete those three lines.
 //
 // Customize this config when you want forge specs to use a config but
 // don't want a project-wide one. Common additions:
@@ -30,12 +26,18 @@ loadEnv({ path: resolve(__dirname, '..', '.env') })
 // Committed to the repo so teammates pick up the same fallback config.
 import { defineConfig } from '@playwright/test'
 import { resolve } from 'node:path'
+import { config as loadEnv } from 'dotenv'
 
 // Playwright's config loader compiles .ts files as CJS, so __dirname and
 // process are injected automatically. We declare them to satisfy
 // TypeScript without pulling in @types/node as a dep just for this.
 declare const __dirname: string
 declare const process: { env: Record<string, string | undefined> }
+
+// This sample loads env via dotenv (see ENV LOADING above): forge/.env
+// (forge-specific overrides) then the project root .env (baseline).
+loadEnv({ path: resolve(__dirname, '.env') })
+loadEnv({ path: resolve(__dirname, '..', '.env') })
 
 // FORGE_RECORD=1 enables Playwright's video capture for this run. Set by
 // `forge-run-spec.mjs --record` (used by `/forge run … record as
@@ -48,7 +50,16 @@ declare const process: { env: Record<string, string | undefined> }
 // is "video evidence of a passing flow," not "debugger artifact." Failures
 // still get a trace so you can diagnose them; passing runs get a clean
 // video-only artifact.
+//
+// FORGE_SLOW_MO=<ms> inserts a fixed pause after every Playwright action,
+// via launchOptions.slowMo. Set explicitly by `forge-run-spec.mjs --slow-mo
+// <ms>` as a retry lever for async-state-machine UI libraries (Kendo,
+// Angular Material with deferred change detection, etc.) where atomic
+// Playwright operations race the library's lifecycle. Set a baseline
+// directly in the fallback below if your project consistently benefits
+// from pacing (e.g. `?? 75`); leave unset for fast specs.
 const record = process.env.FORGE_RECORD === '1'
+const slowMo = process.env.FORGE_SLOW_MO ? parseInt(process.env.FORGE_SLOW_MO, 10) : 0
 
 export default defineConfig({
   testDir: './specs',
@@ -63,5 +74,6 @@ export default defineConfig({
   use: {
     video: record ? 'on' : 'off',
     trace: record ? 'retain-on-failure' : 'off',
+    launchOptions: slowMo ? { slowMo } : {},
   },
 })

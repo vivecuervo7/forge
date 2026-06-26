@@ -1,15 +1,11 @@
-// Authored by forge:snippet-author on 2026-06-15.
+// Authored by forge:snippet-curator on 2026-06-27.
 export const meta = {
-  description: "Clicks the add-to-cart button on a product detail page and waits for the confirmation toast.",
+  description: "Click the Add to Cart button on a product detail page.",
   args: {},
-  tags: ['cart'],
-  flow: 'shop-checkout',
-  phase: 'cart',
-  requires: 'product detail page (/product/:id)',
-  enters: 'product detail page with item in cart',
+  tags: ['cart', 'add', 'product'],
+  requires: 'product detail page',
+  enters: 'product added to shopping cart (toast confirms)',
 }
-
 export async function run(page, args) {
-  await page.locator('button[data-test="add-to-cart"]').click()
-  await page.locator('[role="alert"]').waitFor({ state: 'visible' })
+  await page.locator('button[data-test=\'add-to-cart\']').click()
 }

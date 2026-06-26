@@ -15,7 +15,7 @@ This sample is a project shaped like one that's had `/forge init` run on it — 
 | `forge/snippets/search-for-product.ts` | **Seeded** — produced by a real forge run against this hint set. Submits a search and waits for the result list. |
 | `forge/snippets/open-first-search-result.ts` | **Seeded** — clicks the first product card on the current page. |
 | `forge/snippets/add-product-to-cart.ts` | **Seeded** — adds the currently-displayed product to the cart. |
-| `forge/hints/snippet-author.md` | **Proposed** during the same seed run — `forge:snippet-author` noticed both search snippets above used the same precondition pattern (page URL doesn't change after Angular renders search results) and proposed lifting that into a hint. A worked example of the proposal mechanism; see the top-level README's "Hints grow during use" section. |
+| `forge/hints/snippet-author.md` | **Proposed** by the `snippet-curator` during a seed run — it noticed both search snippets above used the same precondition pattern (the catalog URL doesn't change after Angular renders results) and proposed lifting that into a hint. A worked example of the proposal mechanism. *(Regenerated when you walk the guide — only present if the run re-proposes it.)* |
 
 The seeded snippets and the proposed hint give the walkthrough below a starting library to reuse against. They're authentic forge output, not hand-edited.
 
@@ -34,7 +34,7 @@ Before you start: `cp .env.example .env`. The hint instructs the driver to load 
 The driver scans `forge/snippets/`, recognises that all three seeded snippets cover the steps it needs, and invokes them in sequence. No new snippets are authored.
 
 **What to look for:**
-- Driver narrates three "invoked …" steps to snippet-author.
+- The driver-worker invokes the three seeded snippets in sequence; the snippet-curator authors nothing new.
 - `forge/snippets/` is unchanged after the run.
 - Total time around 30–60 seconds.
 
@@ -46,14 +46,14 @@ The driver scans `forge/snippets/`, recognises that all three seeded snippets co
 /forge log in as customer, then add the first hammer to the cart
 ```
 
-Now the task includes a step the seeded library doesn't cover (login). The driver invokes the three seeded snippets for the cart steps, and snippet-author authors a new snippet for the login step.
+Now the task includes a step the seeded library doesn't cover (login). The driver-worker invokes the three seeded snippets for the cart steps, and the snippet-curator authors a new snippet for the login step.
 
 **What to look for:**
 - A new `forge/snippets/login.ts` (or similarly-named) appears.
 - The login snippet takes `email` and `password` as args — credentials reach it via shell expansion from `$PST_CUSTOMER_EMAIL` / `$PST_CUSTOMER_PASSWORD`.
 - The three seeded snippets are invoked, not re-authored.
 
-**What this demonstrates:** the library grows compositionally. Driver and snippet-author treat the existing library as the source of truth for what's already covered and only write what's genuinely new.
+**What this demonstrates:** the library grows compositionally. The driver-worker and snippet-curator treat the existing library as the source of truth for what's already covered and only author what's genuinely new.
 
 ### 3. Spec mode end-to-end — the full pipeline produces a CI-ready artifact
 
@@ -61,14 +61,14 @@ Now the task includes a step the seeded library doesn't cover (login). The drive
 /forge spec checkout a hammer with cash on delivery
 ```
 
-Same surface as before, but spec mode adds `forge:spec-writer` and `forge:spec-verifier` to the team. The driver runs the full checkout, snippet-author authors the new checkout-step snippets that didn't exist yet (billing address, payment, confirmation), spec-writer composes a self-contained `.spec.ts` that imports and calls those snippets, and spec-verifier runs the spec cold from a fresh browser context.
+Same two agents as before — spec mode doesn't add anyone. The driver-worker runs the full checkout, then composes a self-contained `.spec.ts` from its own drive trace and verifies it cold from a fresh browser context; the snippet-curator authors the new checkout-step snippets (billing address, payment, confirmation) as they're driven.
 
 **What to look for:**
 - New checkout-related snippets in `forge/snippets/`.
 - A `forge/specs/checkout-hammer-cash-on-delivery.spec.ts` (or similarly-named) lands.
-- Spec-verifier runs the spec. It may pass first-try, or it may iterate — that's normal. When a snippet's behaviour during the live drive diverges from cold-start behaviour (timing, ordering, hidden form state), the verifier surfaces the failure, asks driver/snippet-author for clarification, applies a patch, and re-runs. Up to 3 iterations before it escalates to the team-lead with the unresolved failure.
+- The driver-worker runs the spec cold and self-fixes. It may pass first-try, or iterate — that's normal. When a snippet's live-drive behaviour diverges from cold-start (timing, ordering, hidden form state), the driver-worker routes a patch-request to the snippet-curator, which fixes the snippet, and the spec re-runs. It converges or escalates to you.
 
-**What this demonstrates:** the full pipeline produces a CI-ready artifact *that has been verified to work from cold*. The verifier's iteration loop is part of the value — it surfaces snippet bugs and SUT quirks that the live drive happened to dodge. Re-running the spec downstream is a single `npx playwright test` against your own project's runner; nothing forge-specific at run time.
+**What this demonstrates:** the full pipeline produces a CI-ready artifact *that has been verified to work from cold*. The cold-verify loop is part of the value — it surfaces snippet bugs and SUT quirks the live drive happened to dodge. Re-running the spec downstream is a single `npx playwright test` against your own project's runner; nothing forge-specific at run time.
 
 ### 4. Parallel runs — two accounts, two browsers, side by side
 
@@ -117,14 +117,14 @@ This is the property that lets a team run concurrent test flows against differen
 /forge teach login
 ```
 
-Teach mode pilots forge step-by-step through a flow you want to capture deliberately. You drive the conversation; the driver executes one action at a time; snippet-author waits for explicit `cap as <name>` signals before writing.
+Teach mode is a collaborative drive: forge drives a step at a time while you walk it through, and the gotchas you flag get baked into the snippet body. Same two agents as any drive — the snippet-curator just has you in the loop, shaping what it captures.
 
 Useful when:
 - Login has fallback paths (auto-login short-circuit, retry on submit hang)
 - A UI has conditional branches the agent can't be expected to predict
 - You want gotcha annotations woven into the snippet body, not just discovered from a successful drive
 
-The seeded login from step 2 was authored opportunistically by snippet-author. Teach mode is the channel for the deliberately-curated version — same login flow, but with the user signalling "wait for auto-login redirect" and "retry on submit hang" as part of the body. Try it on a flow your team has wrestled with.
+The login from step 2 was authored opportunistically. Teach mode is the channel for the deliberately-curated version — same flow, but you flag "wait for the auto-login redirect" and "retry on submit hang" and the snippet-curator weaves them into the snippet body as real waits and retries. Try it on a flow your team has wrestled with.
 
 ## The auth pattern, in one diagram
 
@@ -170,7 +170,7 @@ Earlier forge runs against this target (during design-phase field tests) gave us
 
 - **Documented vs experimentally-discovered quirks.** The bare driver discovered the Angular zone.js / `dispatchEvent` quirk on the checkout finish button by trying `.click()`, observing no state change, and pivoting. It got there — but only after experimental discovery, and only sometimes within a verifier-iteration budget. Documenting the quirk in `driver.md` up-front means future drives bake the workaround in from the first action; spec-mode verification passes first try (observed: 22.5s cold-start verification, zero verifier iterations) instead of iterating through several rounds.
 
-- **Selectors-shape-snippets-shape-specs.** Without `a[data-test^="product-"]` documented as the product-card selector, a drive against "add a hammer to the cart" produces a snippet scoped to a specific product UUID and a spec that hardcodes whatever hammer UUID was on the page that day — re-runs break when that product gets depleted from the demo inventory. With the selector documented, snippet-author writes `open-first-search-result` as a standalone snippet, and the spec composes `search → open-first → add`. The hint's selector vocabulary directly shapes spec robustness against the live demo's mutating state.
+- **Selectors-shape-snippets-shape-specs.** Without `a[data-test^="product-"]` documented as the product-card selector, a drive against "add a hammer to the cart" produces a snippet scoped to a specific product UUID and a spec that hardcodes whatever hammer UUID was on the page that day — re-runs break when that product gets depleted from the demo inventory. With the selector documented, the snippet-curator writes `open-first-search-result` as a standalone snippet, and the spec composes `search → open-first → add`. The hint's selector vocabulary directly shapes spec robustness against the live demo's mutating state.
 
 - **Doc-grounded vs exploration-grounded hints.** This `driver.md` was written from the app's [official documentation](https://testsmith-io.github.io/practice-software-testing/), not from manual clicking. The docs catch things exploration misses: framework identity (Angular 20, not Vue 3 as exploration assumed), documented async patterns (search box 300ms debounce, postcode lookup 300ms with auto-fill of street + city), explicit role differences ("TOTP setup denied for customer and admin"). About an hour of reading docs produced a hint file that turns spec-mode forge from iterate-to-discover into first-try-pass.
 
