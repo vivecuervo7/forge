@@ -66,7 +66,7 @@ A forge spec is a re-runnable flow whose assertions each carry an expected outco
 
 | Command | What it does |
 |---|---|
-| `/forge teach <topic>` | User pilots forge turn-by-turn, signals snippet boundaries explicitly, and weaves project-specific gotchas (fallbacks, retries, conditional branches) into snippet bodies. The deliberate library-building channel — useful when the app has quirks the agent can't be expected to discover. Also fires on "teach forge how to …" / "let me show forge how to …" phrasings. |
+| `/forge teach <topic>` | A **collaborative drive**: forge drives a step at a time while you walk it through the quirky bits, and the gotchas you teach (fallbacks, retries, conditional branches) get baked into snippet bodies. Same `driver-worker` + `snippet-curator` as a normal drive, in collaborative posture — and you can slip into it mid-run ("let me walk you through this next bit") and back out ("you can take it from here"). The deliberate library-building channel for quirks the agent can't be expected to discover. Also fires on "teach forge how to …" / "let me show forge how to …" phrasings. |
 
 ### Re-running and shipping
 

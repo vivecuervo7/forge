@@ -22,7 +22,7 @@
 //      Optional metadata bracket-suffixes are only emitted when present.
 //   5. Idempotent — running twice produces the same file.
 //
-// Schema (see agents/snippet-author.md for the canonical doc):
+// Schema (see agents/snippet-curator.md for the canonical doc):
 //   description: string           (required, one-liner)
 //   args:        object           (required, may be empty)
 //   tags:        string[]         (optional, free-form)
@@ -288,9 +288,9 @@ function emitHygieneWarnings(records, opts = {}) {
     console.error(`forge-snippet-index: ${count} ${label}`)
   }
   if (total > 0 && !verbose) {
-    console.error('forge-snippet-index: re-run with --verbose for per-snippet detail; see agents/snippet-author.md for hygiene guidance')
+    console.error('forge-snippet-index: re-run with --verbose for per-snippet detail; see agents/snippet-curator.md for hygiene guidance')
   } else if (total > 0) {
-    console.error('forge-snippet-index: review hygiene warnings — see agents/snippet-author.md')
+    console.error('forge-snippet-index: review hygiene warnings — see agents/snippet-curator.md')
   }
 }
 

@@ -1,6 +1,6 @@
 # /forge — proposal-review reference
 
-Loaded on-demand by the lead (from `team-task.md` or `teach.md`) **only when at least one teammate reported proposals to review**. Skip entirely when all teammates report `proposals: 0`.
+Loaded on-demand by the lead (from `team-task.md`, including teach-route runs) **only when at least one teammate reported proposals to review**. Skip entirely when all teammates report `proposals: 0`.
 
 The caller has already:
 
@@ -126,7 +126,7 @@ forge/hints/driver.md       (+2 sections: <names>)
 forge/hints/snippet-author.md (+1 amendment, +1 new section)
 ```
 
-Return to the caller (`team-task.md` Phase 5 or `teach.md` Phase 6) for the "Hint files updated" line in the final report. Omit the line if nothing was accepted.
+Return to the caller (`team-task.md` Phase 5) for the "Hint files updated" line in the final report. Omit the line if nothing was accepted.
 
 ## Hard rules
 

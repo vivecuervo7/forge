@@ -1,10 +1,13 @@
 # /forge — team-task reference (base, drive mode)
 
-This reference is loaded by `/forge`'s router for the **task** and **spec** routes. The router has already:
+This reference is loaded by `/forge`'s router for the **task**, **spec**, and **teach** routes. The router has already:
 
-- Decided `MODE` (one of `drive` | `spec`)
-- Stripped any leading `spec` keyword from the task description
+- Decided `MODE` (one of `drive` | `spec`) — the teach route uses `drive`
+- Decided `COLLABORATION` (one of `autonomous` | `collaborative`) — `collaborative` for the teach route (the user is teaching forge a quirky flow) or a task the user asked to be walked through; `autonomous` otherwise
+- Stripped any leading `spec` / `teach` keyword from the task description
 - Resolved `PLUGIN_ROOT` to the plugin's install path (see SKILL.md phase 1.0)
+
+**Teach is a posture, not a separate mode.** The teach route is just `MODE=drive, COLLABORATION=collaborative` — the same two teammates and lifecycle, with the driver going step-by-step *with* the user so quirks they know get baked into snippets. There is no separate teach agent pair; everything below applies, and the collaborative-posture handling in Phase 4 is the only addition.
 
 **Placeholder note.** `<PLUGIN_ROOT>` in the bash commands below is a placeholder — substitute the literal path captured by the router. Do **not** use `${CLAUDE_PLUGIN_ROOT}` here: the env var isn't reliably populated in the bash context that runs from this reference.
 
@@ -114,6 +117,7 @@ Agent(
   subagent_type="forge:driver-worker",
   name="driver-worker",
   prompt="MODE: <MODE>
+COLLABORATION: <COLLABORATION>
 SESSION_NAME: <SESSION_NAME>
 PROJECT_FORGE_ROOT: <FORGE_ROOT>
 CURATOR_NAME: snippet-curator
@@ -159,6 +163,17 @@ After spawning, the teammates self-coordinate (the chunk/drive-complete/snippets
 - **Idle notifications** — informational; they fire after every turn. Treat the `task <id> complete` pings as authoritative.
 
 > **Note on `TaskList()`:** calling it from the lead does NOT surface team tasks reliably. Treat the completion pings as authoritative; don't gate phase 5 on TaskList.
+
+### 4.0a. Collaboration posture (teaching)
+
+When `COLLABORATION=collaborative` (the teach route, or a task the user asked to be walked through), you are an **active interlocutor**, not a passive ping-waiter. The driver drives a step at a time and surfaces what it's about to do; you carry that conversation with the user:
+
+- **Surface the driver's check-ins conversationally.** When the driver messages you "about to <step> — anything to flag?", relay it to the user as plain conversation (not `AskUserQuestion` — teaching is free-form). Pass the user's reply back: `SendMessage(to="driver-worker", summary="steer", message="<go-ahead | the gotcha to fold in | the correction>")`.
+- **Flip posture on the user's framing.** *"let me walk you through this next bit"* / *"collaborate here"* → `SendMessage(to="driver-worker", summary="posture", message="collaborate from here — surface each step and wait for the user")`. *"you can take it from here"* → `…message="autonomous from here — drive on your own"`. A normal drive can enter teaching this way and leave it just as easily.
+- **Takeover.** *"I'll take the wheel"* / *"let me set up some state"* → `SendMessage(to="driver-worker", summary="takeover", message="user is driving the browser directly — go idle until they hand back")`. When the user returns, ask where they ended up if they don't volunteer it, then relay the grounding: `…summary="resume", message="user handed back. Current state: <their grounding, verbatim>. Resume from here."`
+- **Relay library steers to the curator.** Naming / boundary / structure direction — *"cap that as `login-with-sso`"*, *"split this one"*, *"make `item` an arg"* — goes to `snippet-curator`, not the driver: `SendMessage(to="snippet-curator", summary="library steer", message="<the user's direction>")`.
+
+The lifecycle is otherwise unchanged — two teammates, two completion pings, the same Phase 5 shutdown. Collaborative is a *posture* layered on the normal flow, not a separate path.
 
 ### 4.1. Idle-notification stall watchdog
 
@@ -229,6 +244,8 @@ Compose a tight summary. Drive-mode shape:
 >
 > Browser session closed.
 
+For a **collaborative / teach** run, lead with the library line — the curated snippets (with the user's taught gotchas baked in) are the headline, not the drive result.
+
 In spec mode, use the extended shape in `team-task-spec.md` Phase 5.5 — it adds the spec + verification line.
 
 If anything didn't go to plan (`cannot-drive`, a spec parked unverified, snippet invocation failed mid-drive, etc.), surface prominently — the user wants the truth.
@@ -246,6 +263,7 @@ Non-blocking, once-per-run. Don't repeat if the user already cleaned this sessio
 
 - **You are an orchestrator and the investigation tier — not an actor on the app.** All browser driving, spec writing, and spec running belong to `driver-worker`; all snippet authoring/patching to `snippet-curator`. You set up the team, create the tasks, spawn the two teammates, manage lifecycle, AND own the user channel: STUCK → AskUserQuestion → SendMessage back, user steering → relayed to the relevant teammate. When a teammate hands up an **investigate** request, you also research it — reading the app's source/config (read-only) to answer how the app works. That read-only research is the one thing you reach for beyond orchestration; you still never invoke `playwright-cli`/`forge-pw`, drive the browser, write snippet or spec files, run specs, or mutate the app or its environment.
 - **The peer signals are direct — don't relay them.** chunk-complete / drive-complete / snippets-ready / patch-request flow between the driver and curator. You only handle messages addressed to `team-lead`.
+- **Collaborative posture makes you an active interlocutor.** When `COLLABORATION=collaborative` you carry the teaching conversation — relay the driver's per-step check-ins to the user as plain conversation, pass their guidance back, flip posture and relay library steers on request (Phase 4.0a). The lifecycle is unchanged: still two teammates, two pings, the same Phase 5.
 - **The verify loop lives inside the driver.** In spec mode the driver runs its spec cold, diagnoses, fixes spec-logic inline, and routes snippet-level fixes to the curator via patch-request. You don't triage or route snippet/spec fixes — but you do investigate app-knowledge the driver hands up (read-only), relay user steers, and surface STUCK.
 - **Wait for BOTH pings before shutdown.** The curator stays alive through the driver's verify loop (for patch-requests); it pings complete only after the run resolves. Don't shut anyone down early.
 - **Always close the chromium session — on every exit path.** Both pings, a watchdog timeout, `cannot-drive`, a rejected shutdown, or a user abort all still reach 5.4. You own `SESSION_NAME`; a run never ends with the browser left open.

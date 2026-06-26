@@ -1,6 +1,6 @@
 ---
 name: forge
-description: "Browser-automation agent team for Claude Code. Seven routes under one skill: `/forge init` (scaffold the forge/ directory convention in CWD), `/forge <task>` (drive mode — a driver-worker drives the task while a concurrent snippet-curator accretes the library), `/forge spec <task>` (spec mode — the driver-worker also composes and verifies a Playwright spec from the drive's own trace), `/forge teach <topic>` (teach mode — user pilots forge turn-by-turn to curate snippets with project-specific gotchas baked in), `/forge run <spec>` (re-run a verified spec, optionally recording a video for evidence), `/forge export <name>` (inline a composed spec for shipping outside forge/), `/forge clean [snippets|hints|both]` (scan the snippet library and hint files for accumulation and surface cleanup candidates). Each invocation launches a fresh chromium session, runs the user's task, and cleans up. Project-specific conventions (test accounts, env handling, setup/teardown) live in hints/forge.md; forge stays project-agnostic."
+description: "Browser-automation agent team for Claude Code. Seven routes under one skill: `/forge init` (scaffold the forge/ directory convention in CWD), `/forge <task>` (drive mode — a driver-worker drives the task while a concurrent snippet-curator accretes the library), `/forge spec <task>` (spec mode — the driver-worker also composes and verifies a Playwright spec from the drive's own trace), `/forge teach <topic>` (teach mode — a collaborative drive where the user walks forge through a quirky flow step by step; the same driver-worker + snippet-curator, in collaborative posture, bake the taught gotchas into snippets), `/forge run <spec>` (re-run a verified spec, optionally recording a video for evidence), `/forge export <name>` (inline a composed spec for shipping outside forge/), `/forge clean [snippets|hints|both]` (scan the snippet library and hint files for accumulation and surface cleanup candidates). Each invocation launches a fresh chromium session, runs the user's task, and cleans up. Project-specific conventions (test accounts, env handling, setup/teardown) live in hints/forge.md; forge stays project-agnostic."
 model: sonnet
 argument-hint: "[spec|run|init|export|clean] <args>"
 allowed-tools: Read, Edit, Write, Glob, Grep, Skill, AskUserQuestion, Bash(node **/forge/scripts/*), Bash(direnv:*), Bash(playwright-cli:*), Bash(mkdir:*), Bash(cat:*), Bash(echo:*), Bash(ls:*), Agent, SendMessage, TaskCreate, TaskList, TaskGet, TaskUpdate
@@ -19,7 +19,7 @@ First word of `$ARGUMENTS` (case-insensitive). Dispatch table:
 | `init` | scaffold a forge/ directory | `references/init.md` | optional target dir |
 | `export` | inline a composed spec for shipping | `references/export.md` | spec name + optional `--output <path>` |
 | `run` | re-run a verified spec, optionally recording | `references/run.md` | spec name / `last` / `latest`, plus optional `record as <label>` |
-| `teach` | teach mode — user pilots forge to curate snippets | `references/teach.md` | optional session-framing topic |
+| `teach` | teach mode — collaborative drive: the user walks forge through a quirky flow, snippets accrete | `references/team-task.md` (with `MODE=drive`, `COLLABORATION=collaborative`) | optional session-framing topic |
 | `clean` | tidy snippet library + hint files | `references/clean.md` | optional scope: `snippets` \| `hints` \| `both` |
 | `spec` | spec mode — drive + write spec + verify (intent: regression / red-green bug repro / assertion-less scenario) | `references/team-task.md` + `references/team-task-spec.md` (with `MODE=spec`) | the actual task description |
 | *(anything else)* | (see natural-language signals below; default fallback is the task route) | `references/team-task.md` (with `MODE=drive`) | the full args = task description |
@@ -99,6 +99,12 @@ For task and spec routes, set `MODE` before loading the reference. Skip for init
 
 Otherwise → **drive mode**. If intent is ambiguous, default to drive — spec creation is an explicit opt-in.
 
+**COLLABORATION posture** — set alongside `MODE`, then pass into `team-task.md`:
+
+- The **teach route** (Phase 0) → `collaborative` (the user is teaching forge a flow).
+- A task/spec whose framing asks to be walked through — "walk me through…", "I'll show you…", "let me teach you as we go" — → `collaborative`.
+- Otherwise → `autonomous` (the default). The user can still flip into collaborative mid-run; the lead handles that live.
+
 Within spec mode, the spec carries a mandatory **intent** — regression (assert correct behavior, expect green), repro (red-green bug reproduction: assert correct behavior, expect red until the bug is fixed), or scenario (no assertions, re-run via `/forge run`). A bug ticket / "reproduce …" / "failing spec for …" signals repro; the lead establishes and (when ambiguous) confirms the intent before authoring — see `team-task-spec.md` Phase 2.0.
 
 ## Phase 0b — Recording label detection (run route only)
@@ -142,8 +148,7 @@ cat <PLUGIN_ROOT>/skills/forge/references/<reference>.md
 (Substitute the literal value captured in 1.0 for `<PLUGIN_ROOT>`.)
 
 Where `<reference>` is one of:
-- `team-task.md` (for task/spec routes — carries `MODE` into its instructions). In spec mode, also load `team-task-spec.md` after it — the addendum carries the Phase 2.0 spec-intent decision and the spec-mode final-report shape.
-- `teach.md` (for teach route — carries the optional session-framing topic)
+- `team-task.md` (for task / spec / **teach** routes — carries `MODE` and `COLLABORATION` into its instructions; the teach route uses `MODE=drive, COLLABORATION=collaborative` with the framing topic as initial context). In spec mode, also load `team-task-spec.md` after it — the addendum carries the Phase 2.0 spec-intent decision and the spec-mode final-report shape.
 - `init.md` (for init route)
 - `export.md` (for export route)
 - `run.md` (for run route — carries `RECORD_AS` into its instructions)
@@ -154,8 +159,7 @@ Then **follow the instructions in the loaded reference** — it's authoritative 
 When passing context into the reference's work, include the captured route-specific values AND the resolved `PLUGIN_ROOT`. References use `<PLUGIN_ROOT>` as a placeholder; substitute the captured value when running their bash commands.
 
 - For all routes: `PLUGIN_ROOT` (the literal path captured in 1.0).
-- For team-task: `MODE` and the task description (args with route keyword stripped).
-- For teach: the optional session-framing topic (may be empty).
+- For team-task (task / spec / teach): `MODE`, `COLLABORATION`, and the task description (args with route keyword stripped). For the teach route, the framing topic is the task description and `COLLABORATION=collaborative`.
 - For init: optional target directory.
 - For export: spec name + optional `--output <path>` override.
 - For run: spec reference (explicit name / `last` / `latest` / unspecified) + `RECORD_AS`.

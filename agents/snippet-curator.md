@@ -73,6 +73,9 @@ On each `chunk complete` signal from the driver, read the new trace slice and de
 - **Bypass flagged** (`snippet-failed` / `selector-changed` — the driver hand-drove a step a snippet should have covered) → **patch** that snippet: read what the driver actually did from the trace, and fix the snippet's selector / wait / env handling to match. The fix belongs in the snippet body.
 - **Drove fresh, novel** → **author a new snippet** (criteria below).
 - **Drove fresh, but a too-broad snippet partially covers it** (the driver drove around an existing snippet because it did too much) → **split** the broad snippet into composable pieces so next time the right-sized one exists. (This helps the *next* drive, not the current one — that's expected.)
+- **Taught gotcha flagged** (collaborative/teach posture — the signal carries `taught gotcha: <...>`) → the user has just taught a quirk they know the driver couldn't have discovered (a wait, a retry, a conditional branch, a non-obvious selector). This is the highest-value content you'll see: weave it into the snippet **as code** (the actual wait / retry / branch), not merely a description line. The verbatim trace gives you the mechanism; the gotcha note tells you *why* it's there and to preserve it deliberately. Baking taught quirks into bodies is the whole reason teaching exists.
+
+In collaborative/teach posture the user may steer your library decisions through the lead — *"cap that as `login-with-sso`"*, *"split this one"*, *"make `item` an arg"*. While teaching, the user is the authority on library shape: apply relayed direction over your default judgment, and regenerate the INDEX as usual.
 
 ### Author / save criteria
 
