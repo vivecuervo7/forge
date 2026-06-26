@@ -193,7 +193,7 @@ A teammate that finished but forgot to ping appears as idle notifications with n
 SendMessage(to="<teammate>", summary="status check", message="What's your status — done? If finished, SendMessage team-lead a completion summary so we can shut down.")
 ```
 
-If it responds with a completion summary, treat it as the missing ping. If 2 more idle notifications arrive with no response, inspect on-disk artifacts (`ls <FORGE_ROOT>/snippets/`, `ls <FORGE_ROOT>/specs/`), surface state to the user, and proceed to Phase 5 — **the chromium close in 5.4 runs regardless of the missing ping** (a dangling teammate must never strand the browser). **Bounded waiting:** if 10+ minutes pass without both pings AND no check-in/cannot-drive, surface to the user and proceed to Phase 5 anyway.
+If it responds with a completion summary, treat it as the missing ping. If 2 more idle notifications arrive with no response, inspect on-disk artifacts (`ls <FORGE_ROOT>/snippets/`, `ls <FORGE_ROOT>/specs/`), surface state to the user, and proceed to Phase 5 — **the chromium close (5.1) runs regardless of the missing ping** (a dangling teammate must never strand the browser). **Bounded waiting:** if 10+ minutes pass without both pings AND no check-in/cannot-drive, surface to the user and proceed to Phase 5 anyway.
 
 ## Phase 4.5 — Review hint proposals (on-demand)
 
@@ -207,11 +207,19 @@ Follow its **§3 (Lead side)** for aggregation, user review, and application. Ho
 
 ## Phase 5 — Shut down and clean up
 
-A run can end several ways — normally both completion pings; also via the stall watchdog (4.1), a `cannot-drive`, or a user abort. **However it ends, you reach this phase and the chromium close (5.4) always runs** — you generated `SESSION_NAME` in 1.3 and own it, so you are the guaranteed backstop for the browser. The steps below describe the normal both-pings path; the other endings route here too and still execute 5.4.
+A run can end several ways — normally both completion pings; also via the stall watchdog (4.1), a `cannot-drive`, or a user abort. **However it ends, you reach this phase, and your first act is to close the browser (5.1)** — you generated `SESSION_NAME` in 1.3 and own it, so you are the guaranteed backstop. The close needs nothing from the teammates, so it goes first and never waits on the shutdown handshake.
 
 In the normal case — once **both** completion pings have arrived:
 
-### 5.1. Request shutdown (both teammates)
+### 5.1. Close the chromium session (first — gated on nothing)
+
+```bash
+node <PLUGIN_ROOT>/scripts/forge-pw.mjs -s=<SESSION_NAME> close
+```
+
+Do this **immediately, in this turn, before requesting teammate shutdown.** The close doesn't need the teammates' approvals, so it must never wait behind that async round-trip — waiting is exactly what leaves the browser lingering open after the work is visibly done. Route through `forge-pw`, not the bare `playwright-cli` binary (the guard hook blocks the bare binary). Closing by `SESSION_NAME` reliably catches the live browser however the run ended. Best-effort; fall back to killing the process tree if it survives. The driver may have already closed it — a no-op then.
+
+### 5.2. Request shutdown (both teammates)
 
 For each of `driver-worker` and `snippet-curator`:
 
@@ -219,9 +227,9 @@ For each of `driver-worker` and `snippet-curator`:
 SendMessage(to="<teammate>", summary="team work complete; shutdown", message={"type": "shutdown_request", "reason": "team work done"})
 ```
 
-Wait for each `{"type": "shutdown_response", "approve": true, ...}`. The response includes a `paneId` (e.g. `"%105"`) when the backend is tmux — capture each for pane cleanup. If a teammate rejects, surface the reason.
+Wait for each `{"type": "shutdown_response", "approve": true, ...}`. The response includes a `paneId` (e.g. `"%105"`) when the backend is tmux — capture each for pane cleanup. If a teammate rejects, surface the reason. (The browser is already closed by now, so this wait costs nothing user-visible.)
 
-### 5.2. Kill the leftover tmux panes
+### 5.3. Kill the leftover tmux panes
 
 ```bash
 tmux kill-pane -t <paneId>
@@ -229,17 +237,9 @@ tmux kill-pane -t <paneId>
 
 Once per teammate, using the `paneId` from each `shutdown_response`. Best-effort; skip if no `paneId`.
 
-### 5.3. Apply teardown instructions (optional)
+### 5.4. Apply teardown instructions (optional)
 
 Execute any `## Teardown after each run` section in `forge.md`. If absent, skip.
-
-### 5.4. Close the chromium session
-
-```bash
-node <PLUGIN_ROOT>/scripts/forge-pw.mjs -s=<SESSION_NAME> close
-```
-
-(Route the close through `forge-pw`, not the bare `playwright-cli` binary — the guard hook blocks the bare binary.) **This always runs — gated on nothing.** You generated `SESSION_NAME` in 1.3 and the driver only ever (re)opens under it, so closing by that name reliably catches the live browser however the run ended — both pings, a watchdog timeout, `cannot-drive`, a rejected shutdown, or a user abort. Best-effort; fall back to killing the process tree if it survives. The driver may have already closed it — a no-op then.
 
 ### 5.5. Report to the user
 
@@ -271,12 +271,12 @@ Non-blocking, once-per-run. Don't repeat if the user already cleaned this sessio
 
 ## Hard rules
 
-- **You are an orchestrator and the routing tier — not an actor on the app.** All browser driving, spec writing, and spec running belong to `driver-worker`; all snippet authoring/patching to `snippet-curator`. You set up the team, create the tasks, spawn the two teammates, manage lifecycle, AND own the user channel and the driver's **check-ins**: you decide whether a check-in is answered from the code (read-only research — `Glob`/`Grep`/`Read`/`Explore`), with a concrete steer, or by the user (`AskUserQuestion` → SendMessage back); you relay user steering to the relevant teammate. That read-only research is the one thing you reach for beyond orchestration; you still never drive the browser, write snippet or spec files, run specs, or mutate the app or its environment. The sole `forge-pw` call you make is the **teardown close** (5.4) — and only ever through `forge-pw`, never the bare `playwright-cli` binary.
+- **You are an orchestrator and the routing tier — not an actor on the app.** All browser driving, spec writing, and spec running belong to `driver-worker`; all snippet authoring/patching to `snippet-curator`. You set up the team, create the tasks, spawn the two teammates, manage lifecycle, AND own the user channel and the driver's **check-ins**: you decide whether a check-in is answered from the code (read-only research — `Glob`/`Grep`/`Read`/`Explore`), with a concrete steer, or by the user (`AskUserQuestion` → SendMessage back); you relay user steering to the relevant teammate. That read-only research is the one thing you reach for beyond orchestration; you still never drive the browser, write snippet or spec files, run specs, or mutate the app or its environment. The sole `forge-pw` call you make is the **browser close** (5.1) — and only ever through `forge-pw`, never the bare `playwright-cli` binary.
 - **The peer signals are direct — don't relay them.** chunk-complete / drive-complete / snippets-ready / patch-request flow between the driver and curator. You only handle messages addressed to `team-lead`.
 - **High collaborativeness makes you an active interlocutor.** `COLLABORATIVENESS` sets how readily you involve the user; at `guided`/`step-by-step` you carry the teaching conversation — relay the driver's per-step check-ins as plain conversation, pass guidance back, step the level and relay library steers on request (Phase 4.0a). The lifecycle is unchanged: still two teammates, two pings, the same Phase 5.
 - **The verify loop lives inside the driver.** In spec mode the driver runs its spec cold, diagnoses, fixes spec-logic inline, and routes snippet-level fixes to the curator via patch-request. You don't triage or route snippet/spec fixes — but you field the driver's check-ins (route them: a steer, read-only investigation of the code, or take it to the user), and relay user steers.
 - **Wait for BOTH pings before shutdown.** The curator stays alive through the driver's verify loop (for patch-requests); it pings complete only after the run resolves. Don't shut anyone down early.
-- **Always close the chromium session — on every exit path.** Both pings, a watchdog timeout, `cannot-drive`, a rejected shutdown, or a user abort all still reach 5.4. You own `SESSION_NAME`; a run never ends with the browser left open.
+- **Always close the chromium session — first, on every exit path.** Both pings, a watchdog timeout, `cannot-drive`, a rejected shutdown, or a user abort all still reach 5.1, and the close runs before the shutdown handshake (never gated behind it). You own `SESSION_NAME`; a run never ends with the browser left open.
 - **`forge.md` is the source of truth for test-account / credential resolution.** Don't invent accounts or hardcode credentials.
 
 ## Failure modes to recover from
