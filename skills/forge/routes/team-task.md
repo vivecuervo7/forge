@@ -11,7 +11,7 @@ This reference is loaded by `/forge`'s router for the **task**, **spec**, and **
 
 **Placeholder note.** `<PLUGIN_ROOT>` in the bash commands below is a placeholder — substitute the literal path captured by the router. Do **not** use `${CLAUDE_PLUGIN_ROOT}` here: the env var isn't reliably populated in the bash context that runs from this reference.
 
-**If `MODE=spec`, also load `references/team-task-spec.md`** — it adds spec-intent establishment, threads `SPEC_INTENT` into the driver-worker spawn, and gives the spec-mode report shape. Otherwise skip; this base file is sufficient for drive mode.
+**If `MODE=spec`, also load `team-task-spec.md`** — it adds spec-intent establishment, threads `SPEC_INTENT` into the driver-worker spawn, and gives the spec-mode report shape. Otherwise skip; this base file is sufficient for drive mode.
 
 Below is the full lifecycle for running forge's **two teammates** against an ephemeral chromium session:
 
@@ -64,8 +64,8 @@ All hints are optional. A bare `/forge init` scaffold drives correctly; hints en
 ### 1.2a. Load the escalation protocol (lead-only)
 
 ```bash
-cat <PLUGIN_ROOT>/skills/forge/references/escalation.md
-cat <PLUGIN_ROOT>/skills/forge/references/collaborativeness.md
+cat <PLUGIN_ROOT>/protocols/escalation.md
+cat <PLUGIN_ROOT>/protocols/collaborativeness.md
 ```
 
 `escalation.md` — you route the driver's check-ins per its **Lead side** (§3); loading it keeps the protocol and message shapes a single source of truth shared with the driver (it `cat`s the same file on friction). `collaborativeness.md` — you read the **deference** column to know how readily to involve the user at this run's `COLLABORATIVENESS`, and you hold/nudge that dial through the run.
@@ -200,7 +200,7 @@ If it responds with a completion summary, treat it as the missing ping. If 2 mor
 Each completion ping ends with `proposals: <N>`. If **both** are `proposals: 0`, skip this phase entirely. If either is `> 0`, wait for its `PROPOSALS` SendMessage(s), capture verbatim, then:
 
 ```bash
-cat <PLUGIN_ROOT>/skills/forge/references/proposals.md
+cat <PLUGIN_ROOT>/protocols/proposals.md
 ```
 
 Follow its **§3 (Lead side)** for aggregation, user review, and application. Hold the "Hint files updated" summary for Phase 5.5.

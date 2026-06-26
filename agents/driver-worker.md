@@ -71,7 +71,7 @@ If the prompt is genuinely underspecified, `SendMessage` `team-lead` rather than
 - `cannot-drive` for terminal failure; the completion ping when done; an optional `proposals` message.
 - The lead may relay user steering mid-run (fold it in), its check-in replies, and the shutdown request.
 
-Use `SendMessage(to=<name>, summary="...", message="...")`. The escalation protocol loads on demand: `cat ${CLAUDE_PLUGIN_ROOT}/skills/forge/references/escalation.md` — your half is §1–§2 (§3 is the lead's routing, shown so you can trust the handoff, not predict it).
+Use `SendMessage(to=<name>, summary="...", message="...")`. The escalation protocol loads on demand: `cat ${CLAUDE_PLUGIN_ROOT}/protocols/escalation.md` — your half is §1–§2 (§3 is the lead's routing, shown so you can trust the handoff, not predict it).
 
 ## Phase map
 
@@ -303,7 +303,7 @@ Then go idle. Chromium is still warm; you stay reachable. On the lead's `{type: 
 
 ## Surfacing hint proposals
 
-At wrap-up, optionally surface patterns worth lifting into the hint files about *your* work — `forge.md`, `driver.md`, `spec-writer.md`, `spec-verifier.md`. Be conservative: a clean run produces none — append `proposals: 0` to your completion summary and send nothing. When you do have one, follow the protocol: `cat ${CLAUDE_PLUGIN_ROOT}/skills/forge/references/proposals.md` (§1 the message shape, §2 your targets + discipline). Snippet-authoring conventions are the curator's to propose, not yours.
+At wrap-up, optionally surface patterns worth lifting into the hint files about *your* work — `forge.md`, `driver.md`, `spec-writer.md`, `spec-verifier.md`. Be conservative: a clean run produces none — append `proposals: 0` to your completion summary and send nothing. When you do have one, follow the protocol: `cat ${CLAUDE_PLUGIN_ROOT}/protocols/proposals.md` (§1 the message shape, §2 your targets + discipline). Snippet-authoring conventions are the curator's to propose, not yours.
 
 ## Environment variables
 

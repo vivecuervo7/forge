@@ -16,13 +16,13 @@ First word of `$ARGUMENTS` (case-insensitive). Dispatch table:
 
 | First word | Route | Loaded reference | Rest of args becomes |
 |---|---|---|---|
-| `init` | scaffold a forge/ directory | `references/init.md` | optional target dir |
-| `export` | inline a composed spec for shipping | `references/export.md` | spec name + optional `--output <path>` |
-| `run` | re-run a verified spec, optionally recording | `references/run.md` | spec name / `last` / `latest`, plus optional `record as <label>` |
-| `teach` | teach mode — collaborative drive: the user walks forge through a quirky flow, snippets accrete | `references/team-task.md` (with `MODE=drive`, `COLLABORATIVENESS=1.0`) | optional session-framing topic |
-| `clean` | tidy snippet library + hint files | `references/clean.md` | optional scope: `snippets` \| `hints` \| `both` |
-| `spec` | spec mode — drive + write spec + verify (intent: regression / red-green bug repro / assertion-less scenario) | `references/team-task.md` + `references/team-task-spec.md` (with `MODE=spec`) | the actual task description |
-| *(anything else)* | (see natural-language signals below; default fallback is the task route) | `references/team-task.md` (with `MODE=drive`) | the full args = task description |
+| `init` | scaffold a forge/ directory | `routes/init.md` | optional target dir |
+| `export` | inline a composed spec for shipping | `routes/export.md` | spec name + optional `--output <path>` |
+| `run` | re-run a verified spec, optionally recording | `routes/run.md` | spec name / `last` / `latest`, plus optional `record as <label>` |
+| `teach` | teach mode — collaborative drive: the user walks forge through a quirky flow, snippets accrete | `routes/team-task.md` (with `MODE=drive`, `COLLABORATIVENESS=1.0`) | optional session-framing topic |
+| `clean` | tidy snippet library + hint files | `routes/clean.md` | optional scope: `snippets` \| `hints` \| `both` |
+| `spec` | spec mode — drive + write spec + verify (intent: regression / red-green bug repro / assertion-less scenario) | `routes/team-task.md` + `routes/team-task-spec.md` (with `MODE=spec`) | the actual task description |
+| *(anything else)* | (see natural-language signals below; default fallback is the task route) | `routes/team-task.md` (with `MODE=drive`) | the full args = task description |
 
 ### Natural-language route signals (when first word doesn't match)
 
@@ -99,7 +99,7 @@ For task and spec routes, set `MODE` before loading the reference. Skip for init
 
 Otherwise → **drive mode**. If intent is ambiguous, default to drive — spec creation is an explicit opt-in.
 
-**COLLABORATIVENESS** — a `0.0`–`1.0` dial set alongside `MODE`, then passed into `team-task.md` (see `references/collaborativeness.md`):
+**COLLABORATIVENESS** — a `0.0`–`1.0` dial set alongside `MODE`, then passed into `team-task.md` (see `protocols/collaborativeness.md`):
 
 - The **teach route** (Phase 0) → `1.0` (the user is teaching forge a flow, step by step).
 - A task/spec whose framing asks to be walked through — "walk me through…", "I'll show you…", "let me teach you as we go" — → high (≈`0.7`).
@@ -142,7 +142,7 @@ Then stop.
 ### 1.1. Read the reference
 
 ```bash
-cat <PLUGIN_ROOT>/skills/forge/references/<reference>.md
+cat <PLUGIN_ROOT>/skills/forge/routes/<reference>.md
 ```
 
 (Substitute the literal value captured in 1.0 for `<PLUGIN_ROOT>`.)
