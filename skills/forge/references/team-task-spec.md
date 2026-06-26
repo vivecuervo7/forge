@@ -2,13 +2,13 @@
 
 This file is loaded by the team-lead **only** when `MODE=spec`. It adds two things to the base `team-task.md`: establishing the spec's **intent** before spawning, and the spec-mode **final-report** shape. Integrate them at the indicated phases.
 
-In the single-worker design the spec is composed, run cold, and fixed **inside the worker** — it holds the drive's verbatim trace, so the freeze-and-verify loop has no context boundary to cross. There is no separate spec-writer or spec-verifier, and **no lead-orchestrated verify loop**. Your spec-mode additions are therefore small: decide the intent, thread it into the one worker spawn, and report what came back.
+Spec composition, cold verification, and self-fix all live **inside the `driver-worker`** — it holds the drive's verbatim trace, so the freeze-and-verify loop has no context boundary to cross. There is no separate spec-writer or spec-verifier, and **no lead-orchestrated verify loop** (the driver routes snippet-level fixes to the `snippet-curator` itself). Your spec-mode additions are small: decide the intent, thread it into the driver-worker spawn, and report what came back.
 
-Lifecycle is unchanged from drive mode — still **1 task, 1 worker, 1 completion ping**. The only deltas are the intent decision (Phase 2.0) and the report (Phase 5.5).
+Lifecycle is unchanged from drive mode — still **2 tasks, 2 teammates, 2 completion pings**. The only deltas are the intent decision (Phase 2.0) and the report (Phase 5.5).
 
 ## Phase 2.0 — Establish the spec intent (before Phase 2.1 / 3)
 
-A forge spec is a re-runnable flow whose assertions each carry an *expected outcome*. It determines what a passing or failing run *means*, so decide it explicitly — never let the worker infer it silently. Every spec is exactly one of:
+A forge spec is a re-runnable flow whose assertions each carry an *expected outcome*. It determines what a passing or failing run *means*, so decide it explicitly — never let the driver-worker infer it silently. Every spec is exactly one of:
 
 - **regression** — assert correct behavior with hard `expect(...)`; expected to **pass** (green). Default for "create a spec for X", "write a spec that …".
 - **repro** — a red-green bug reproduction: assert the *correct* behavior with `expect.soft(...)` so the spec is honestly **red** against the current build until the bug is fixed. The failure *is* the reproduction — the desired outcome. Signals: a bug ticket, "reproduce …", "write a failing spec for …", "capture the bug where …".
@@ -28,15 +28,15 @@ AskUserQuestion({
 })
 ```
 
-Hold the answer as `SPEC_INTENT`. For a **repro**, also confirm the bug claim — *what correct behavior should hold once the bug is fixed* — so the worker asserts the right thing. Thread `SPEC_INTENT` (and, for repro, the bug claim) into the worker spawn prompt in `team-task.md` Phase 3.
+Hold the answer as `SPEC_INTENT`. For a **repro**, also confirm the bug claim — *what correct behavior should hold once the bug is fixed* — so the driver-worker asserts the right thing. Thread `SPEC_INTENT` (and, for repro, the bug claim) into the driver-worker spawn prompt in `team-task.md` Phase 3.
 
 ## Phase 5.5 — Spec-mode final-report shape
 
 Override the base file's drive-mode report with the spec-mode version:
 
-> <worker's final-result one-liner>
+> <driver's final-result one-liner>
 >
-> Snippets: wrote N (<names>) — or "none — covered by existing library".
+> Library: curator wrote N new (<names>), patched M (<names>), split K (<names>) — or "no changes — covered by the existing library".
 >
 > Spec: `<name>.spec.ts` (intent: <regression | repro | scenario>) composing <snippets> and asserting <one-liner>.
 >
