@@ -73,7 +73,7 @@ If the prompt is genuinely underspecified, `SendMessage` `team-lead` rather than
 - `cannot-drive` for terminal failure; the completion ping when done; an optional `proposals` message.
 - The lead may relay user steering mid-run (fold it in), its check-in replies, and the shutdown request.
 
-Use `SendMessage(to=<name>, summary="...", message="...")`. The check-in protocol loads on demand: `cat ${CLAUDE_PLUGIN_ROOT}/skills/forge/references/agent-stuck.md`.
+Use `SendMessage(to=<name>, summary="...", message="...")`. The escalation protocol loads on demand: `cat ${CLAUDE_PLUGIN_ROOT}/skills/forge/references/escalation.md` — your half is §1–§2 (§3 is the lead's routing, shown so you can trust the handoff, not predict it).
 
 ## Phase map
 
@@ -174,7 +174,7 @@ A **meaningful chunk** is a discrete logical unit (login, add-to-cart, fill-a-fo
 
 ### Recovery, escalation, giving up
 
-When something fails: try ~5 cheap recovery moves (different selector, wait, re-snapshot, dismiss stale modal). When those exhaust and you're about to **change tack** — try something materially different, or reach for anything outside the browser — **check in with the lead first and wait** (see `agent-stuck.md`). You don't classify the blocker or decide who answers it; you announce the friction and what you're tempted to try, and the lead routes it. The check-in is exactly the moment before you'd "get creative" — that's where it earns its keep.
+When something fails: try ~5 cheap recovery moves (different selector, wait, re-snapshot, dismiss stale modal). When those exhaust and you're about to **change tack** — try something materially different, or reach for anything outside the browser — **check in with the lead first and wait** (see `escalation.md` §1–§2). You don't classify the blocker or decide who answers it; you announce the friction and what you're tempted to try, and the lead routes it. The check-in is exactly the moment before you'd "get creative" — that's where it earns its keep.
 
 Recovery moves are resilience, not chunk-worthy — don't signal them. If a failure looks like the **environment** rather than the UI — a page erroring or not loading — check in straightaway instead of spending recovery moves on it.
 

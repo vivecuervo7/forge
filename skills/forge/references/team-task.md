@@ -61,6 +61,14 @@ You need `forge.md` for persona/account resolution and the optional setup/teardo
 
 All hints are optional. A bare `/forge init` scaffold drives correctly; hints encode project-specific knowledge the teammates can't derive from the app.
 
+### 1.2a. Load the escalation protocol (lead-only)
+
+```bash
+cat <PLUGIN_ROOT>/skills/forge/references/escalation.md
+```
+
+You route the driver's check-ins per its **Lead side** (§3). Loading it now keeps the protocol — and the message shapes you parse and reply with — a single source of truth shared with the driver, rather than re-specified here. The driver `cat`s the same file when it hits friction.
+
 ### 1.3. Generate a session name
 
 ```bash
@@ -155,11 +163,7 @@ After spawning, the teammates self-coordinate (the chunk/drive-complete/snippets
 
 - **Completion pings** — `driver-worker` pings `team-lead` when its run is done; `snippet-curator` pings when the library work (and, in spec mode, the verify-patch window) has resolved. Proceed to phase 5 only after **both**.
 - **Messages addressed to you (`team-lead`)**:
-  - **check-in** (usually from the driver) — `CHECK-IN` first, then `STUCK ON:` + `TEMPTED TO:` + optional `HUNCH:`. The driver has hit friction and handed *you* the routing rather than classifying it or reaching outside the browser itself. **Deciding what it needs is your job, not the driver's.** Pick the response that fits and reply (the driver is idle, waiting — route promptly):
-    - **It's app-knowledge you can read** (why a control is gated, what feeds a value, an unobvious precondition) → investigate the code and answer. Consult `forge.md` for where the source lives (if undocumented, ask the user once, then proceed); `Glob`/`Grep`/`Read` it, or spawn an `Explore` agent for a broad sweep. If it'll take a moment, first `SendMessage(to=<teammate>, summary="wait", message="wait — investigating")` so it stays idle, then follow up with the answer. **Read-only research only** — never edit the app, mutate data, or touch the environment.
-    - **You know the next move** (or the driver's "tempted to" is fine) → `SendMessage(to=<teammate>, summary="steer", message="try this: <X>")` or `"carry on — go ahead with <their instinct>"`.
-    - **Only the user can answer** (a product decision, a missing account, an intentional gate, CAPTCHA) → surface via `AskUserQuestion` (built from the check-in; "Other" is always allowed), then `SendMessage(to=<teammate>, summary="steer", message="<the user's answer>")`.
-    - **It's a teaching moment** → a check-in is a natural place to offer the user a walk-through ("want me to walk forge through this part?"); on a yes, flip to collaborative posture (4.0a).
+  - **check-in** (usually from the driver) — `CHECK-IN` / `STUCK ON:` / `TEMPTED TO:` / optional `HUNCH:`. The driver has hit friction and handed *you* the routing rather than classifying it or reaching outside the browser. **Route it per `escalation.md` §3 (Lead side)**, loaded in Phase 1.2a: answer from the code (read-only — `Glob`/`Grep`/`Read`/`Explore`), hand a concrete steer, take it to the user (`AskUserQuestion` → relay), or offer a teach walk-through (→ 4.0a). The message shapes and reply vocabulary live there; the driver is idle until you reply, so route promptly.
   - **`cannot-drive`** from the driver — terminal failure. Surface in the report; proceed to cleanup.
   - **Status / questions** — answer concisely or relay context.
 - **The user steers mid-run** — relay it to the **driver**: `SendMessage(to="driver-worker", summary="steer", message="<the user's instruction>")`. Relay promptly so it lands at the driver's next turn boundary. (Library/snippet steers go to `snippet-curator` instead.)
