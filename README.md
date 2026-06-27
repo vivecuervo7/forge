@@ -1,6 +1,6 @@
 # Forge
 
-A browser-automation team for Claude Code. Forge spawns a small mesh of agents that drive a real browser, capture reusable snippets, and (on request) compose verified Playwright specs from the work.
+A browser-automation team for Claude Code. Forge spawns a small team — a driver and a concurrent snippet curator, coordinated by a lead — that drives a real browser, accretes reusable snippets, and (on request) composes verified Playwright specs from the work.
 
 The default mode just does the thing you asked for. Spec mode is opt-in for when a flow is worth pinning into CI. If the team gets genuinely stuck, it escalates back to you with what it tried and what blocked it rather than spinning.
 
@@ -40,7 +40,7 @@ Supported on macOS, Linux, and Windows.
    /forge <describe what you want done>
    ```
 
-   That launches a fresh chromium and goes. For sites with auth or other project-specific behaviour, author hint files in `forge/hints/` (see `forge/hints/README.md` for guidance). All five hints are optional and additive: write only what you need.
+   That launches a fresh chromium and goes. For sites with auth or other project-specific behaviour, author hint files in `forge/hints/` (see `forge/hints/README.md` for guidance). All four hints are optional and additive: write only what you need.
 
    **Want to see forge run end-to-end before adopting it?** [Try the samples](./samples) — three project-shaped directories with hints already authored and prompt-by-prompt walkthroughs against public test sites. 5–15 minutes per walkthrough.
 
@@ -51,12 +51,12 @@ Supported on macOS, Linux, and Windows.
 | Command | What it does |
 |---|---|
 | `/forge init` | Scaffolds the `forge/` directory convention into the current project. Idempotent — the starting point for any new project. |
-| `/forge <task>` | **Drive mode.** Driver + snippet-author. Does the task end-to-end, accretes reusable snippets from novel work. The everyday command. |
-| `/forge spec <task>` | **Spec mode.** Adds spec-writer + spec-verifier. Composes a self-contained `.spec.ts` and verifies it from a cold start against its declared **intent** — a *regression* test (assert correct behavior, expect green), a *red-green bug repro* (assert correct behavior, expect **red** until the bug is fixed), or an assertion-less *scenario* (re-run via `/forge run`). Also fires on natural-language signals — "create a spec for PROJ-123", "write a failing spec that reproduces…", "capture as a spec". |
+| `/forge <task>` | **Drive mode.** A driver-worker does the task end-to-end while a concurrent snippet-curator accretes reusable snippets from novel work. The everyday command. |
+| `/forge spec <task>` | **Spec mode.** Same two agents — the driver-worker also composes a self-contained `.spec.ts` from the drive's own trace and verifies it from a cold start against its declared **intent** — a *regression* test (assert correct behavior, expect green), a *red-green bug repro* (assert correct behavior, expect **red** until the bug is fixed), or an assertion-less *scenario* (re-run via `/forge run`). Also fires on natural-language signals — "create a spec for PROJ-123", "write a failing spec that reproduces…", "capture as a spec". |
 
 ### Spec intents: one artifact, per-assertion expected outcomes
 
-A forge spec is a re-runnable flow whose assertions each carry an expected outcome; it *verifies* when the run matches that expectation. The intent is mandatory and explicit (the lead asks if the task is ambiguous), so the verifier never has to guess whether a red is success or a defect:
+A forge spec is a re-runnable flow whose assertions each carry an expected outcome; it *verifies* when the run matches that expectation. The intent is mandatory and explicit (the lead asks if the task is ambiguous), so the driver never has to guess whether a red is success or a defect:
 
 - **regression** — all hard `expect(...)`, expected green. The default.
 - **repro** — the bug claim is `expect.soft(...)` asserting the **correct** behavior, so the spec is honestly **red** against the buggy build (the failure *is* the reproduction) and goes **green** once the fix lands. Setup assertions stay hard/green. The verifier treats *red at the bug claim* as success; a green run signals the bug appears fixed → promote the soft claim to a hard regression assertion. Same artifact, red→green across the fix — no annotations, no `test.fail()`, portable through `npx playwright test` and `/forge export`.
@@ -89,7 +89,7 @@ Try a sample before adopting forge for your own project. Each sample is a projec
 
 | Sample | What you'll see |
 |---|---|
-| [`samples/shop/`](./samples/shop) | Authentication, multi-account hint pattern, full spec-mode pipeline with the lead-orchestrated verify loop, and **two browsers running in parallel under different accounts** |
+| [`samples/shop/`](./samples/shop) | Authentication, multi-account hint pattern, full spec-mode pipeline with the driver's cold-verify loop, and **two browsers running in parallel under different accounts** |
 | [`samples/internet/`](./samples/internet) | Variant-arg parameterisation — one snippet covers a family of probe pages |
 | [`samples/widgets/`](./samples/widgets) | Compositional decomposition — fill + read snippets compose into larger flows |
 
@@ -109,7 +109,7 @@ Forge accretes — snippets, hints, proposals — and that accretion needs a lig
 - **`/forge clean`.** The periodic sweep — run it weekly or whenever a session feels like it accreted noise. The cleanup-scan script surfaces snippet overlaps, hint sections that should be snippets or scripts, Jira-keyed snippet names (which date fast), and stale meta. Each finding surfaces via `AskUserQuestion`; nothing is applied without your approval. `/forge clean snippets` also regenerates `forge/snippets/INDEX.md`.
 - **Phase 0 staleness nudge.** After any `/forge` run, if the last `/forge clean` was more than 7 days ago, the lead adds a one-line tail nudge to its summary. Non-blocking — you can ignore it and keep working.
 
-Sub-agent discipline supports the lint from the authoring side. Driver, snippet-author, and spec-writer each scan `forge/snippets/INDEX.md` before authoring to avoid overlap, and decline to emit code-shaped proposals when they could write a snippet or script instead. When a spec fails verification, the team fixes the snippet or spec body that caused it — diagnosed from a live cold re-drive — rather than patching around it. Details live in [`agents/driver.md`](./agents/driver.md), [`agents/snippet-author.md`](./agents/snippet-author.md), and [`agents/spec-verifier.md`](./agents/spec-verifier.md).
+Sub-agent discipline supports the lint from the authoring side. The driver-worker and snippet-curator scan `forge/snippets/INDEX.md` before authoring to avoid overlap, and decline to emit code-shaped proposals when they could write a snippet or script instead. When a spec fails cold verification, the driver fixes the spec body inline or routes the snippet-level fix to the curator (via `patch-request`) — fixing the cause rather than patching around it. Details live in [`agents/driver-worker.md`](./agents/driver-worker.md) and [`agents/snippet-curator.md`](./agents/snippet-curator.md).
 
 ## Snippet library
 
@@ -135,49 +135,39 @@ The `forge-pw` wrapper around `playwright-cli` accepts `--json` (or `FORGE_JSON=
 
 ## Architecture
 
-Four agents communicate in a mesh via `SendMessage`. The `/forge` skill is the **team lead** — it spawns teammates, manages the lifecycle (session start, team creation, shutdown), and bridges the user channel for STUCK escalations.
+Two teammates plus the lead, coordinating via `SendMessage`. The `/forge` skill is the **team lead** — it spawns the teammates, manages the lifecycle (session start, the browser close, shutdown), fields the driver's **check-ins** (answering from the code or taking them to you), and owns the user channel.
 
 ```mermaid
 flowchart LR
     User([User])
     Lead[/"/forge skill<br/>(team lead)"/]
-    Driver(["forge:driver"])
-    Author(["forge:snippet-author"])
-    Writer(["forge:spec-writer<br/><i>spec mode only</i>"])
-    Verifier(["forge:spec-verifier<br/><i>spec mode only</i>"])
+    Driver(["forge:driver-worker"])
+    Curator(["forge:snippet-curator"])
     Chrome[("chromium<br/>+ playwright-cli")]
     Snippets[("forge/snippets/")]
     Specs[("forge/specs/")]
 
-    User <-->|"STUCK / report"| Lead
+    User <-->|"ask / report"| Lead
     Lead -->|spawn| Driver
-    Lead -->|spawn| Author
-    Lead -.->|spawn| Writer
-    Lead -.->|spawn| Verifier
+    Lead -->|spawn| Curator
+    Driver -.->|"check-in (stuck)"| Lead
+    Lead -.->|"answer: steer /<br/>read code / ask user"| Driver
 
-    Driver <-->|"narrate steps"| Author
-    Driver -.->|"final-state"| Writer
-    Writer -.->|"spec ready"| Verifier
-    Verifier -.->|"pass / fail artifact"| Lead
-    Lead -.->|"diagnose (cold re-drive)"| Driver
-    Lead -.->|"fix directive"| Writer
-    Lead -.->|"fix directive"| Author
-    Lead -.->|"re-run"| Verifier
-
-    Driver -->|"drive / invoke"| Chrome
-    Author -->|writes| Snippets
-    Writer -.->|writes| Specs
-    Verifier -.->|runs| Specs
+    Driver -->|"signals: chunk ·<br/>drive-complete · patch-request"| Curator
+    Curator -.->|"reads verbatim trace"| Driver
+    Driver -->|"drive / invoke (forge-pw)"| Chrome
+    Curator -->|"author / patch"| Snippets
+    Driver -.->|"compose + verify cold<br/><i>spec mode</i>"| Specs
 ```
 
 | Agent | Model | Role |
 |---|---|---|
-| `forge:driver` | sonnet | Drives the browser via `playwright-cli` against a fresh chromium session. Invokes existing snippets where they match; drives fresh otherwise. |
-| `forge:snippet-author` | sonnet | Listens to driver narration during the drive. Writes per-step snippets for novel work into `forge/snippets/`. |
-| `forge:spec-writer` *(spec mode)* | sonnet | Composes a self-contained `.spec.ts` after the drive completes. Imports snippets for invoked steps; inlines code for fresh-drive steps. |
-| `forge:spec-verifier` *(spec mode)* | sonnet | A thin gate: runs the spec via `forge-run-spec.mjs` against a fresh browser context and reports a distilled pass/fail artifact to the lead. It doesn't debug — on failure the lead orchestrates the fix loop. |
+| `forge:driver-worker` | sonnet | Drives the browser via `playwright-cli` (wrapped by `forge-pw`) — invoking existing snippets where they match, driving fresh otherwise. In **spec mode** it also composes a self-contained `.spec.ts` from its *own verbatim trace*, verifies it cold, and self-fixes until it matches the declared intent. |
+| `forge:snippet-curator` | sonnet | Runs **concurrently** with the driver: reads the driver's verbatim action-stream (its on-disk transcript, via `forge-read-trace`) and owns `forge/snippets/` — authoring, patching, and splitting snippets as the drive proceeds. |
 
-Dashed edges fire only in spec mode. Drive mode runs the top two agents (driver + snippet-author) and stops once the task is done; spec mode adds the bottom two for spec composition + verification. On a spec failure the **lead is the hub**: the verifier reports the failure, the lead triages it by failure-class — routing app-behavior failures to the driver for a *cold re-drive* (driving the failing slice fresh to observe the real cause, rather than trusting the warm drive's memory) and spec-logic / assertion failures to the spec-writer — then routes the resulting fix to spec-writer / snippet-author and tells the verifier to re-run. The lead owns the convergence judgment and is the only agent that escalates to the user. Teach mode also runs just driver + snippet-author, but the lead's role is much more active — it pipes user input to the driver turn-by-turn, and snippet-author only writes when the user explicitly caps a snippet.
+**Both modes run the same two teammates** — spec mode doesn't add anyone. The driver signals the curator as it goes (`chunk complete` per meaningful chunk, `drive complete` at the end); the curator authors from the verbatim trace, so the library is built from *what the driver actually ran*, never a paraphrase. In spec mode the **verify loop lives inside the driver**: it composes from its trace, runs the spec cold, fixes spec-logic inline, and routes snippet-level failures to the curator via `patch-request` — so a cold-verify fix accretes into the library (fixed once, for every future spec) rather than being worked around per-spec.
+
+When the driver hits something it can't resolve through the browser — a gated control, a value it can't trace, an environment failure — it **checks in** with the lead rather than reaching outside its lane. The lead is the investigation tier: it reads the app's source/config (read-only) to answer, or takes the question to you. It owns the convergence judgment and is the only one that escalates to the user. **Collaborativeness** is a dial (`autonomous` → `light-touch` → `guided` → `step-by-step`): at the low end the driver runs on its own and the lead resolves what it can; turned up, the lead loops you in more readily, and at the top — the `/forge teach` door — the driver goes step-by-step while you teach it the quirks, which the curator bakes into the snippet bodies.
 
 **Token usage:** every agent and the `/forge` skill itself declare `model: sonnet` in their frontmatter — no Opus tokens are spent on forge work.
 
@@ -193,21 +183,20 @@ For parallel runs against the same project, the constraint is whatever your back
 
 | File | Read by |
 |---|---|
-| `forge.md` | The skill + driver (env contract, app-level setup, teardown, any project-specific account/role conventions) |
-| `driver.md` | `forge:driver` (app structure, selector inventory, gotchas) |
-| `snippet-author.md` | `forge:snippet-author` (project-specific snippet conventions) |
-| `spec-writer.md` | `forge:spec-writer` (spec naming, imports) |
-| `spec-verifier.md` | `forge:spec-verifier` (verification conventions) |
+| `forge.md` | The lead + both teammates (env contract, app-level setup, teardown, account/role conventions) |
+| `driver.md` | `driver-worker` (app structure, selector inventory, gotchas) |
+| `spec.md` | `driver-worker` in spec mode (spec naming, imports, verification + reset patterns) |
+| `snippet-author.md` | `snippet-curator` (project-specific snippet conventions) |
 
 **All hints are optional.** Forge drives correctly against the bare scaffold — the defaults cover unauthenticated sites with no special setup. Author hint files only to encode project-specific knowledge the agents can't discover on their own:
 
 - **`forge.md`** — usually the first one worth writing if your site has auth, a custom provisioning recipe, or pre-/post-run state needs.
 - **`driver.md`** — worth writing once you've watched a few drives and noticed the driver enumerating selectors the docs could've handed it.
-- **The other three** — write only if the project-default behaviour collides with what you want.
+- **The others** — write only if the project-default behaviour collides with what you want.
 
 ### Hints grow during use
 
-Hints don't need to be complete at start. Each agent surfaces **proposals** at the end of a session — patterns it noticed during the run that belong in a hint file. The lead relays them with an observation, evidence, and a suggested edit; you accept, modify, or reject. Start with the env contract in `forge.md` and canonical selectors in `driver.md`; the rest accretes from real driving. See [`samples/shop/forge/hints/snippet-author.md`](./samples/shop/forge/hints/snippet-author.md) for a worked example — proposed by `forge:snippet-author` during a real drive, not hand-authored.
+Hints don't need to be complete at start. Each teammate surfaces **proposals** at the end of a session — patterns it noticed during the run that belong in a hint file. The lead lints them, then relays each with an observation, evidence, and a suggested edit; you accept, modify, or reject. Start with the env contract in `forge.md` and canonical selectors in `driver.md`; the rest accretes from real driving. See the shop sample's [`driver.md`](./samples/shop/forge/hints/driver.md) for a worked, doc-grounded example of what a mature hint file looks like.
 
 ### Setup / teardown
 
@@ -220,10 +209,9 @@ Hints don't need to be complete at start. Each agent surfaces **proposals** at t
 ├── hints/                  # committed — your project's knowledge
 │   ├── forge.md
 │   ├── driver.md
-│   ├── snippet-author.md
-│   ├── spec-writer.md
-│   └── spec-verifier.md
-├── snippets/               # gitignored — accreted via snippet-author
+│   ├── spec.md
+│   └── snippet-author.md
+├── snippets/               # gitignored — accreted by the snippet-curator
 ├── specs/                  # gitignored — composed during spec mode
 ├── videos/                 # gitignored — recordings from /forge run
 ├── node_modules/           # gitignored — lazy-installed runner deps
