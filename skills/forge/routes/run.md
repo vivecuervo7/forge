@@ -77,9 +77,11 @@ Compose the invocation. Add `--record-as <RECORD_AS>` only when `RECORD_AS != no
 
 ```bash
 node <PLUGIN_ROOT>/scripts/forge-run-spec.mjs \
-  --spec <FORGE_ROOT>/specs/<resolved-name>.spec.ts
+  --spec <FORGE_ROOT>/specs/<resolved-name>.spec.ts --headed
 # If RECORD_AS is set, append: --record-as <RECORD_AS>
 ```
+
+Run **`--headed`** — `/forge run` is the watch-it / evidence path, so the browser should be visible (matching the cold-verify, which is also headed). For a headless CI check the user runs the spec through their own runner (`npx playwright test`) directly.
 
 The script handles project-runner detection vs plugin-fallback (lazy-installs on first use). With `--record-as`, it persists `video.webm` to `<FORGE_ROOT>/videos/<spec-basename>-<RECORD_AS>.webm`.
 
