@@ -1,6 +1,6 @@
-# Project hint: driver-worker
+# Project hint: driver
 
-Consumed by the `driver-worker` when driving against practicesoftwaretesting.com.
+Consumed by the `driver` when driving against practicesoftwaretesting.com.
 
 Sourced from the official documentation at https://testsmith-io.github.io/practice-software-testing/. This is what "comprehensive hints, post-docs-review" looks like for this app.
 

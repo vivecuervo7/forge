@@ -1,6 +1,6 @@
 # Proposals — the hint-proposal protocol
 
-During a run, forge's agents notice patterns worth lifting into the project's hint files, and surface them at wrap-up for the user to accept or reject. This file is the one place that protocol lives: the **producers** (`driver-worker`, `snippet-curator`) emit per §1–§2; the **lead** reviews and applies per §3. One format, one set of rules, no drift.
+During a run, forge's agents notice patterns worth lifting into the project's hint files, and surface them at wrap-up for the user to accept or reject. This file is the one place that protocol lives: the **producers** (`driver`, `curator`) emit per §1–§2; the **lead** reviews and applies per §3. One format, one set of rules, no drift.
 
 Loaded on-demand: a producer `cat`s §1–§2 when it actually has something to surface (clean runs have nothing, so usually never); the lead `cat`s §3 only when a teammate reported `proposals: N > 0`.
 
@@ -49,15 +49,14 @@ Be **conservative** — a clean run produces none. Proposals carry genuine, reus
 
 **Targets — propose against the hint files about your own work:**
 
-*Driver-worker:*
+*Driver:*
 
 - `forge.md` — SUT facts useful to everyone: a framework quirk + workaround, a selector mismatch, a route, an env-key gap, a cold-start timing pattern, a single-session-collision warning.
-- `driver.md` — project-specific driving discipline.
-- `spec.md` — spec-composition shapes and data-passing idioms, plus verification-level patterns: cold-start timing, env setup, test-isolation gaps.
+- `driver.md` — project-specific driving discipline, plus (in spec mode) spec-composition shapes and data-passing idioms and verification-level patterns: cold-start timing, env setup, test-isolation gaps.
 
-*Snippet-curator:*
+*Curator:*
 
-- `snippet-author.md` — composition conventions: naming patterns, arg-shape conventions, composable pairings.
+- `curator.md` — composition conventions: naming patterns, arg-shape conventions, composable pairings.
 - `forge.md` — selector vocabulary / framework patterns applied repeatedly.
 
 ## 3. Lead side — review and apply
@@ -131,8 +130,8 @@ Apply in order; re-read between each to handle shifting offsets.
 Build a one-line-per-file summary:
 
 ```
-forge/hints/driver.md         (+2 sections: <names>)
-forge/hints/snippet-author.md (+1 amendment, +1 new section)
+forge/hints/driver.md  (+2 sections: <names>)
+forge/hints/curator.md (+1 amendment, +1 new section)
 ```
 
 Return to `team-task.md` Phase 5 for the "Hint files updated" line in the final report. Omit the line if nothing was accepted.

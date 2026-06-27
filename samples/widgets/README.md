@@ -26,10 +26,10 @@ Run these from inside `samples/widgets/`.
 The driver invokes both seeded snippets in sequence: `fill-text-box-form` for the fill, `submit-text-box-form` for the submit + read. No new authoring.
 
 **What to look for:**
-- Driver narrates two `invoked …` steps to snippet-author.
+- The driver logs two `invoked …` steps; the curator sees them in the trace and authors nothing new.
 - `forge/snippets/` is unchanged after the run.
 
-**What this demonstrates:** when a UI workflow has natural composable boundaries (fill vs read here), snippet-author writes one snippet per concern, and future tasks compose them. The seeded library already encodes the pair; the user's task is satisfied by invoking, not authoring.
+**What this demonstrates:** when a UI workflow has natural composable boundaries (fill vs read here), the curator writes one snippet per concern, and future tasks compose them. The seeded library already encodes the pair; the user's task is satisfied by invoking, not authoring.
 
 ### 2. Drive a different widget — see decomposition emerge fresh
 
@@ -37,11 +37,11 @@ The driver invokes both seeded snippets in sequence: `fill-text-box-form` for th
 /forge open the autocomplete page, add three colour chips, then capture the chip list
 ```
 
-Another natural pair — add and read. Snippet-author writes two snippets, not one.
+Another natural pair — add and read. The curator writes two snippets, not one.
 
 **What to look for:** two new snippets in `forge/snippets/` (one for adding, one for reading).
 
-**What this demonstrates:** library decomposition is consistent. The hint's structure suggests boundaries; snippet-author follows them every time.
+**What this demonstrates:** library decomposition is consistent. The hint's structure suggests boundaries; the curator follows them every time.
 
 ### 3. Optional — drive any of the other widgets
 
@@ -51,13 +51,13 @@ Another natural pair — add and read. Snippet-author writes two snippets, not o
 /forge open the large modal, capture its title, close it
 ```
 
-Each adds a parameterised snippet. The modal snippet should take `size` as an arg (small / large); the sortable should take `listSelector` + `itemText` + `targetIndex`. The hint names the variants; snippet-author parameterises along them.
+Each adds a parameterised snippet. The modal snippet should take `size` as an arg (small / large); the sortable should take `listSelector` + `itemText` + `targetIndex`. The hint names the variants; the curator parameterises along them.
 
 ## Why this hint shape — findings from earlier runs
 
 Earlier forge runs against this target (design-phase field tests) gave us evidence for several choices the hint encodes:
 
-- **Hint-driven decomposition.** Where the hint's selector inventory named separate concerns (text-box fill vs read output, autocomplete add vs get-chips), snippet-author authored separate snippets rather than fusing them. Future tests compose them; the library is more reusable. Without the hint's vocabulary, snippet-author tends to fuse along the boundaries of the user's instruction — one snippet per drive instruction, even when the natural reusable unit is smaller.
+- **Hint-driven decomposition.** Where the hint's selector inventory named separate concerns (text-box fill vs read output, autocomplete add vs get-chips), the curator authored separate snippets rather than fusing them. Future tests compose them; the library is more reusable. Without the hint's vocabulary, the curator tends to fuse along the boundaries of the user's instruction — one snippet per drive instruction, even when the natural reusable unit is smaller.
 
 - **Defensive code lands where hints warn.** With the ad-occlusion / `scrollIntoViewIfNeeded()` rule documented in the hint, snippets produced from drives include the safety call. Without it, the snippets are fragile against the page's ad clutter — they work the day they're written, then occasionally fail later as the ad layout changes. The hint converts an observed flake into a structural defence in every snippet that touches the affected widgets.
 

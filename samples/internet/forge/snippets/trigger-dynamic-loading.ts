@@ -1,4 +1,4 @@
-// Authored by forge:snippet-author on 2026-06-15.
+// Authored by forge:curator on 2026-06-15.
 export const meta = {
   description: "Navigate to a dynamic-loading variant, click Start, wait for the hidden element to appear, and return its rendered text.",
   args: {

@@ -13,15 +13,14 @@ A reasonable approach: drive a task with no hints, observe what the agents misse
 Each hint file is named after the role that reads it. Forge looks for files matching these specific names:
 
 - `forge.md` — read by the `/forge` skill (the lead)
-- `driver.md` — read by the `driver-worker` (driving)
-- `spec.md` — read by the `driver-worker` in spec mode (composition + verification)
-- `snippet-author.md` — read by the `snippet-curator` (snippet conventions)
+- `driver.md` — read by the `driver` (driving, and spec authoring in spec mode)
+- `curator.md` — read by the `curator` (snippet conventions)
 
 ## Where the leverage is
 
 The most consequential hint is **`driver.md`'s selector inventory**. Here's the mechanism:
 
-When the snippet-curator sees a selector listed in `driver.md` (e.g. "product card: `a[data-test^="product-"]`"), it tends to author a snippet whose scope maps 1:1 to that selector ("click first product card"). Narrow snippets compose well; the driver-worker, composing the spec, ends up parameterising over snippet args rather than embedding the specific value it happened to encounter during the drive.
+When the curator sees a selector listed in `driver.md` (e.g. "product card: `a[data-test^="product-"]`"), it tends to author a snippet whose scope maps 1:1 to that selector ("click first product card"). Narrow snippets compose well; the driver, composing the spec, ends up parameterising over snippet args rather than embedding the specific value it happened to encounter during the drive.
 
 Concretely: in field tests, the same drive task produced two very different specs depending on hints:
 
@@ -40,10 +39,11 @@ Hints are written in your own words. There are no required headings; forge reads
 
 The highest-leverage hint. What tends to help most:
 
-- **Canonical selectors per element class.** "Search submit: `button[data-test="search-submit"]`", "Product card: `a[data-test^="product-"]`", "Cart icon: `a[data-test="nav-cart"]`". One selector per element class. The driver uses these to act; the snippet-author uses them to scope each snippet to one concern.
+- **Canonical selectors per element class.** "Search submit: `button[data-test="search-submit"]`", "Product card: `a[data-test^="product-"]`", "Cart icon: `a[data-test="nav-cart"]`". One selector per element class. The driver uses these to act; the curator uses them to scope each snippet to one concern.
 - **Routes / URL patterns** the driver will navigate. "Home `/`, category `/category/<slug>`, product `/product/<slug>`, checkout `/checkout`." Lets the driver build URLs without inspecting the page first.
 - **App shape** — a sentence or two: "Vue 3 SPA with paginated catalog, real form validation, multi-step checkout."
 - **Known gotchas** — UI quirks the driver would otherwise discover by trial and error. "Search box debounces 300ms — wait for network settle," "Cart badge updates async via the Pinia store — wait on the badge text, not URL change," "Password-strength meter blocks register submit until 'Strong'."
+- **Spec-mode deviations** *(spec mode only)* — naming, imports, or verification/reset idioms specific to this project. "Specs name themselves `<feature>-<scenario>.spec.ts`." Most projects need none; the spec defaults cover them.
 
 ### `forge.md` — project-level overview, mostly auth and setup
 
@@ -55,12 +55,12 @@ Worth writing if your site has auth or other run-level concerns the driver can't
 - **Setup before each run** *(optional)* — write this only when the SUT has real server-side state worth resetting before each run. "Run `bun run db:seed`," "wipe the events table," "don't reset anything — runs share state intentionally." For read-mostly or public sites, skip.
 - **Teardown after each run** *(optional)* — same shape, fires at end-of-work. There's no default teardown; opt-in only.
 
-### `snippet-author.md`, `spec.md`
+### `curator.md`
 
-Usually quite small or absent. Project-specific exceptions to the universal defaults the agents ship with:
+Usually quite small or absent. Project-specific exceptions to the universal snippet-authoring defaults the curator ships with:
 
-- "Specs in this project name themselves `<feature>-<scenario>.spec.ts`."
 - "Snippets should treat `process.env.LOCALE` as required."
+- "Compose multi-step flows from single-concern snippets rather than fusing them."
 
 If you don't have deviations, don't write the file. Defaults apply.
 
@@ -93,5 +93,5 @@ Paste this into Claude (or your AI of choice) at the start of a project session.
 > - **Setup before each run** *(optional)* — if the project needs SQL seeding, a database reset, or other state preparation, describe it in plain language.
 > - **Teardown after each run** *(optional)* — same shape, for end-of-run cleanup the agent defaults won't cover.
 >
-> Use plain language, not configuration syntax. If something isn't documented and isn't obvious from the code, note the gap rather than guessing. Skip `snippet-author.md` and `spec.md` unless you spot a clear project-specific deviation worth recording — the agent defaults usually cover those.
+> Use plain language, not configuration syntax. If something isn't documented and isn't obvious from the code, note the gap rather than guessing. Skip `curator.md` unless you spot a clear project-specific deviation worth recording — the agent defaults usually cover it.
 

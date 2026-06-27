@@ -20,8 +20,8 @@ Each sample is a project root containing a `forge/` subdir — the layout you ge
 
 Everything not committed (gitignored, populated automatically when you run forge):
 
-- New `forge/snippets/` entries beyond the seeded ones — produced by `forge:snippet-author` during your drives.
-- `forge/specs/` — produced by `forge:spec-writer` during your spec-mode runs.
+- New `forge/snippets/` entries beyond the seeded ones — produced by `forge:curator` during your drives.
+- `forge/specs/` — composed by `forge:driver` during your spec-mode runs.
 - `forge/node_modules/` + `forge/package.json` — Playwright runner deps. Forge lazy-installs them on first invocation (~30s, one-time per sample). No manual `npm install` needed.
 - `forge/videos/`, `forge/test-results/`, `.env` — local working state and your filled-in credentials.
 
@@ -30,5 +30,5 @@ Everything not committed (gitignored, populated automatically when you run forge
 1. **Pick the closest match.** Shop for auth-bearing apps; internet for probe-shaped public sites; widgets for legacy-UI-library-heavy sites.
 2. **Read the chosen sample's `README.md` and `forge/hints/`.** Note the structure — account tables in `forge.md`, selector inventories and gotchas in `driver.md`. Adapt the structure to your project.
 3. **Walk through the prompts.** Each sample's README has a sequence of `/forge` invocations that demonstrate library reuse, new authoring, spec mode, and (for shop) teach mode. Run them. Watch the library grow.
-4. **Author your own `forge/hints/{forge,driver}.md`** following the same shape against your project. The smaller hint files (`snippet-author.md`, `spec-writer.md`, `spec-verifier.md`) are usually unnecessary; the agent defaults cover them.
-5. **Run forge against your project.** Drive a task; the snippet-author accretes a library; spec-mode adds verified specs on top.
+4. **Author your own `forge/hints/{forge,driver}.md`** following the same shape against your project. The smaller hint file (`curator.md`) is usually unnecessary; the agent defaults cover it.
+5. **Run forge against your project.** Drive a task; the curator accretes a library; spec-mode adds verified specs on top.

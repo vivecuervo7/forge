@@ -1,6 +1,6 @@
-# Project hint: driver-worker
+# Project hint: driver
 
-Consumed by the `driver-worker` when driving against demoqa.com.
+Consumed by the `driver` when driving against demoqa.com.
 
 ## What this project is
 

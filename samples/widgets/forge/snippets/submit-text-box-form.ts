@@ -1,4 +1,4 @@
-// Authored by forge:snippet-author on 2026-06-15.
+// Authored by forge:curator on 2026-06-15.
 export const meta = {
   description: "Click the Submit button on the demoqa text-box page and return the output panel text.",
   args: {},

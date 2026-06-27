@@ -1,4 +1,4 @@
-// Authored by forge:snippet-curator on 2026-06-27.
+// Authored by forge:curator on 2026-06-27.
 export const meta = {
   description: "Click the Add to Cart button on a product detail page and wait for the success toast to confirm the cart API call has completed.",
   args: {},

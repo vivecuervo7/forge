@@ -26,7 +26,7 @@ The driver finds the seeded snippet and invokes it with `variant: 2`. No new aut
 
 **What to look for:** one "invoked" step, no new files in `forge/snippets/`.
 
-**What this demonstrates:** when the hint flags a variant in advance, snippet-author writes a single parameterised snippet that covers the variant space. Future tasks that hit any variant reuse the same snippet.
+**What this demonstrates:** when the hint flags a variant in advance, the curator writes a single parameterised snippet that covers the variant space. Future tasks that hit any variant reuse the same snippet.
 
 ### 2. Fresh authoring — drive a different probe
 
@@ -34,7 +34,7 @@ The driver finds the seeded snippet and invokes it with `variant: 2`. No new aut
 /forge accept the JS alert and capture the result text
 ```
 
-Different probe (JS alerts), no library coverage yet. Snippet-author authors a new snippet.
+Different probe (JS alerts), no library coverage yet. The curator authors a new snippet.
 
 **What to look for:** a new `forge/snippets/javascript-alerts-confirm-and-capture.ts` (or similarly-named) appears.
 
@@ -55,7 +55,7 @@ Earlier forge runs against this target (design-phase field tests) gave us eviden
 
 - **The bare driver already handles modern Playwright idioms.** Drives against five probes in this collection (login, dynamic loading, JS alerts, drag-and-drop, shadow DOM) all succeeded without a `driver.md` — five for five. The bare driver picks `data-test` / `#id` selectors over text matchers, uses modern primitives (`dragTo`, `page.once('dialog', d => d.accept())` ordered before the click, `<select>` options for React date pickers), and pierces shadow DOM via plain `locator()`. **The hint file is not for teaching Playwright** — it's for encoding coverage intent and project-specific gotchas the driver can't derive from looking at the page.
 
-- **Hints shape parameterisation, not pass-rate.** With probes flagged as variants in the hint (`dialogAction = accept | dismiss`, dynamic-loading `variant = 1 | 2`, drag-and-drop `sourceId` / `targetId`), snippet-author writes generic snippets. Without the hint, snippet-author scopes each snippet to the specific case the driver encountered. **Same drives, different snippet shape** — and snippet shape determines whether future specs compose cleanly or have to write fresh code each time.
+- **Hints shape parameterisation, not pass-rate.** With probes flagged as variants in the hint (`dialogAction = accept | dismiss`, dynamic-loading `variant = 1 | 2`, drag-and-drop `sourceId` / `targetId`), the curator writes generic snippets. Without the hint, the curator scopes each snippet to the specific case the driver encountered. **Same drives, different snippet shape** — and snippet shape determines whether future specs compose cleanly or have to write fresh code each time.
 
 - **Defensive choices encoded in hints stick.** The hint flags HTML5 drag-and-drop's `dragTo` as unreliable on the target page, so the resulting snippet uses `dispatchEvent` instead. Earlier runs confirmed both approaches work on this page — the hint encodes a defensive preference rather than a fix. Useful if your team has real production pain with the easier primitive; informative if your hint has a stale rule.
 

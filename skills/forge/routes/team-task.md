@@ -11,12 +11,12 @@ This reference is loaded by `/forge`'s router for the **task**, **spec**, and **
 
 **Placeholder note.** `<PLUGIN_ROOT>` in the bash commands below is a placeholder — substitute the literal path captured by the router. Do **not** use `${CLAUDE_PLUGIN_ROOT}` here: the env var isn't reliably populated in the bash context that runs from this reference.
 
-**If `MODE=spec`, also load `team-task-spec.md`** — it adds spec-intent establishment, threads `SPEC_INTENT` into the driver-worker spawn, and gives the spec-mode report shape. Otherwise skip; this base file is sufficient for drive mode.
+**If `MODE=spec`, also load `team-task-spec.md`** — it adds spec-intent establishment, threads `SPEC_INTENT` into the driver spawn, and gives the spec-mode report shape. Otherwise skip; this base file is sufficient for drive mode.
 
 Below is the full lifecycle for running forge's **two teammates** against an ephemeral chromium session:
 
-- **`driver-worker`** — drives the browser and, in spec mode, composes a spec from its own verbatim trace, verifies it cold, and self-fixes.
-- **`snippet-curator`** — runs concurrently, watches the driver's action-stream (its on-disk transcript), and owns the snippet library: authoring, patching, splitting.
+- **`driver`** — drives the browser and, in spec mode, composes a spec from its own verbatim trace, verifies it cold, and self-fixes.
+- **`curator`** — runs concurrently, watches the driver's action-stream (its on-disk transcript), and owns the snippet library: authoring, patching, splitting.
 
 They coordinate **directly** via SendMessage (the driver signals chunk-complete / drive-complete / patch-request; the curator replies snippets-ready / patched — full vocabulary in `protocols/signals.md`). You are the **team lead**: you manage lifecycle (session, tasks, shutdown, cleanup) and own the **user channel**. You do **not** relay the peer-to-peer signals between them — those are direct.
 
@@ -24,7 +24,7 @@ Drive-mode lifecycle at a glance:
 
 | Step | drive mode |
 |---|---|
-| Tasks created in phase 2.1 | 2 (driver-worker, snippet-curator) |
+| Tasks created in phase 2.1 | 2 (driver, curator) |
 | Teammates spawned in phase 3 | 2 |
 | Completion pings to wait for in phase 4 | 2 |
 | Final report | "drove the task + library updated" |
@@ -57,7 +57,7 @@ If it fails (exit non-zero), relay verbatim and stop. The user needs `/forge ini
 cat <FORGE_ROOT>/hints/forge.md 2>/dev/null || echo ""
 ```
 
-You need `forge.md` for persona/account resolution and the optional setup/teardown sections (Phases 1.4 and 5.3). The role hints (`driver.md`, `spec.md`, `snippet-author.md`) are read by the teammates themselves. Empty string is fine.
+You need `forge.md` for persona/account resolution and the optional setup/teardown sections (Phases 1.4 and 5.3). The role hints (`driver.md`, `curator.md`) are read by the teammates themselves. Empty string is fine.
 
 All hints are optional. A bare `/forge init` scaffold drives correctly; hints encode project-specific knowledge the teammates can't derive from the app.
 
@@ -101,13 +101,13 @@ The team auto-forms when the first teammate spawns. Skip straight to task creati
 ```
 TaskCreate(
   subject="forge driver: <USER_TASK>",
-  description="Drive the user's browser task end-to-end via playwright-cli session <SESSION_NAME>, scanning <FORGE_ROOT>/snippets/ and invoking matching snippets; signal each meaningful chunk to snippet-curator. MODE=<MODE>: in spec mode, after the curator sends snippets-ready, compose a self-contained .spec.ts in <FORGE_ROOT>/specs/ from the drive's own verbatim trace, run it cold via forge-run-spec.mjs, and self-fix (routing snippet-level fixes to the curator). Claim with TaskUpdate(status='in_progress') at start; keep in_progress through the whole run; TaskUpdate(status='completed') at the final report."
+  description="Drive the user's browser task end-to-end via playwright-cli session <SESSION_NAME>, scanning <FORGE_ROOT>/snippets/ and invoking matching snippets; signal each meaningful chunk to curator. MODE=<MODE>: in spec mode, after the curator sends snippets-ready, compose a self-contained .spec.ts in <FORGE_ROOT>/specs/ from the drive's own verbatim trace, run it cold via forge-run-spec.mjs, and self-fix (routing snippet-level fixes to the curator). Claim with TaskUpdate(status='in_progress') at start; keep in_progress through the whole run; TaskUpdate(status='completed') at the final report."
 )
 # Note as DRIVER_TASK_ID.
 
 TaskCreate(
-  subject="forge snippet-curator: <USER_TASK>",
-  description="Watch the driver-worker's action-stream (its transcript) and curate <FORGE_ROOT>/snippets/ in real time — author/patch/split from the driver's VERBATIM trace, triggered by its chunk signals. On drive-complete, finish + send snippets-ready. Stay alive through the driver's spec-verify loop to handle patch-requests. Claim with TaskUpdate(status='in_progress') at start; keep in_progress until the driver's run resolves; TaskUpdate(status='completed') at your completion ping."
+  subject="forge curator: <USER_TASK>",
+  description="Watch the driver's action-stream (its transcript) and curate <FORGE_ROOT>/snippets/ in real time — author/patch/split from the driver's VERBATIM trace, triggered by its chunk signals. On drive-complete, finish + send snippets-ready. Stay alive through the driver's spec-verify loop to handle patch-requests. Claim with TaskUpdate(status='in_progress') at start; keep in_progress until the driver's run resolves; TaskUpdate(status='completed') at your completion ping."
 )
 # Note as CURATOR_TASK_ID.
 ```
@@ -123,30 +123,30 @@ Spawn as **teammates** — no `run_in_background` (a teammate already keeps you 
 ```
 Agent(
   description="Forge <MODE> drive: <short USER_TASK>",
-  subagent_type="forge:driver-worker",
-  name="driver-worker",
+  subagent_type="forge:driver",
+  name="driver",
   prompt="MODE: <MODE>
 COLLABORATIVENESS: <COLLABORATIVENESS>
 SESSION_NAME: <SESSION_NAME>
 PROJECT_FORGE_ROOT: <FORGE_ROOT>
-CURATOR_NAME: snippet-curator
+CURATOR_NAME: curator
 USER_TASK: <user's task verbatim>
 <if MODE == spec, include:> SPEC_INTENT: <regression | repro | scenario>  (for repro: the bug claim to assert as correct behavior)
 
-Your task ID is <DRIVER_TASK_ID>. Claim it with TaskUpdate(taskId=<DRIVER_TASK_ID>, status='in_progress'), read your hints, and begin. Signal each meaningful chunk to snippet-curator. When the run is finished, TaskUpdate(status='completed') and ping team-lead."
+Your task ID is <DRIVER_TASK_ID>. Claim it with TaskUpdate(taskId=<DRIVER_TASK_ID>, status='in_progress'), read your hints, and begin. Signal each meaningful chunk to curator. When the run is finished, TaskUpdate(status='completed') and ping team-lead."
 )
 ```
 
-The spawn response carries the agent id as `driver-worker@<TEAM_NAME>` (e.g. `session-36180256`). **Capture `<TEAM_NAME>`** — the curator needs it to locate the driver's transcript. Then:
+The spawn response carries the agent id as `driver@<TEAM_NAME>` (e.g. `session-36180256`). **Capture `<TEAM_NAME>`** — the curator needs it to locate the driver's transcript. Then:
 
 ```
 Agent(
   description="Forge <MODE> curator: <short USER_TASK>",
-  subagent_type="forge:snippet-curator",
-  name="snippet-curator",
+  subagent_type="forge:curator",
+  name="curator",
   prompt="MODE: <MODE>
 PROJECT_FORGE_ROOT: <FORGE_ROOT>
-DRIVER_NAME: driver-worker
+DRIVER_NAME: driver
 TEAM_NAME: <TEAM_NAME>
 USER_TASK: <user's task verbatim>
 
@@ -162,12 +162,12 @@ After spawning, the teammates self-coordinate (the chunk/drive-complete/snippets
 
 **What to watch for:**
 
-- **Completion pings** — `driver-worker` pings `team-lead` when its run is done; `snippet-curator` pings when the library work (and, in spec mode, the verify-patch window) has resolved. Proceed to phase 5 only after **both**.
+- **Completion pings** — `driver` pings `team-lead` when its run is done; `curator` pings when the library work (and, in spec mode, the verify-patch window) has resolved. Proceed to phase 5 only after **both**.
 - **Messages addressed to you (`team-lead`)**:
   - **check-in** (usually from the driver) — `CHECK-IN` / `STUCK ON:` / `TEMPTED TO:` / optional `HUNCH:`. The driver has hit friction and handed *you* the routing rather than classifying it or reaching outside the browser. **Route it per `escalation.md` §3 (Lead side)**, loaded in Phase 1.2a: answer from the code (read-only — `Glob`/`Grep`/`Read`/`Explore`), hand a concrete steer, take it to the user (`AskUserQuestion` → relay), or offer a teach walk-through (→ 4.0a). The message shapes and reply vocabulary live there; the driver is idle until you reply, so route promptly.
   - **`cannot-drive`** from the driver — terminal failure. Surface in the report; proceed to cleanup.
   - **Status / questions** — answer concisely or relay context.
-- **The user steers mid-run** — relay it to the **driver**: `SendMessage(to="driver-worker", summary="steer", message="<the user's instruction>")`. Relay promptly so it lands at the driver's next turn boundary. (Library/snippet steers go to `snippet-curator` instead.)
+- **The user steers mid-run** — relay it to the **driver**: `SendMessage(to="driver", summary="steer", message="<the user's instruction>")`. Relay promptly so it lands at the driver's next turn boundary. (Library/snippet steers go to `curator` instead.)
 - **Idle notifications** — informational; they fire after every turn. Treat the `task <id> complete` pings as authoritative.
 
 > **Note on `TaskList()`:** calling it from the lead does NOT surface team tasks reliably. Treat the completion pings as authoritative; don't gate phase 5 on TaskList.
@@ -178,10 +178,10 @@ After spawning, the teammates self-coordinate (the chunk/drive-complete/snippets
 
 When collaborativeness is high you're an **active interlocutor**, not a passive ping-waiter:
 
-- **Surface the driver's check-ins conversationally.** When the driver messages you "about to <step> — anything to flag?", relay it to the user as plain conversation (not `AskUserQuestion` — teaching is free-form). Pass the user's reply back: `SendMessage(to="driver-worker", summary="steer", message="<go-ahead | the gotcha to fold in | the correction>")`.
-- **Relay the cadence change when you nudge the dial.** *"walk me through this next bit"* → `SendMessage(to="driver-worker", summary="cadence", message="collaborate from here — surface each step and wait for the user")`; *"you can take it from here"* → `…message="autonomous from here — drive on your own"`. A normal drive can enter teaching this way and leave it just as easily.
-- **Takeover.** *"I'll take the wheel"* / *"let me set up some state"* → `SendMessage(to="driver-worker", summary="takeover", message="user is driving the browser directly — go idle until they hand back")`. When the user returns, ask where they ended up if they don't volunteer it, then relay the grounding: `…summary="resume", message="user handed back. Current state: <their grounding, verbatim>. Resume from here."`
-- **Relay library steers to the curator.** Naming / boundary / structure direction — *"cap that as `login-with-sso`"*, *"split this one"*, *"make `item` an arg"* — goes to `snippet-curator`, not the driver: `SendMessage(to="snippet-curator", summary="library steer", message="<the user's direction>")`.
+- **Surface the driver's check-ins conversationally.** When the driver messages you "about to <step> — anything to flag?", relay it to the user as plain conversation (not `AskUserQuestion` — teaching is free-form). Pass the user's reply back: `SendMessage(to="driver", summary="steer", message="<go-ahead | the gotcha to fold in | the correction>")`.
+- **Relay the cadence change when you nudge the dial.** *"walk me through this next bit"* → `SendMessage(to="driver", summary="cadence", message="collaborate from here — surface each step and wait for the user")`; *"you can take it from here"* → `…message="autonomous from here — drive on your own"`. A normal drive can enter teaching this way and leave it just as easily.
+- **Takeover.** *"I'll take the wheel"* / *"let me set up some state"* → `SendMessage(to="driver", summary="takeover", message="user is driving the browser directly — go idle until they hand back")`. When the user returns, ask where they ended up if they don't volunteer it, then relay the grounding: `…summary="resume", message="user handed back. Current state: <their grounding, verbatim>. Resume from here."`
+- **Relay library steers to the curator.** Naming / boundary / structure direction — *"cap that as `login-with-sso`"*, *"split this one"*, *"make `item` an arg"* — goes to `curator`, not the driver: `SendMessage(to="curator", summary="library steer", message="<the user's direction>")`.
 
 The lifecycle is otherwise unchanged — two teammates, two completion pings, the same Phase 5 shutdown. Collaborativeness is a *disposition* layered on the normal flow, not a separate path.
 
@@ -221,7 +221,7 @@ Do this **immediately, in this turn, before requesting teammate shutdown.** The 
 
 ### 5.2. Request shutdown (both teammates)
 
-For each of `driver-worker` and `snippet-curator`:
+For each of `driver` and `curator`:
 
 ```
 SendMessage(to="<teammate>", summary="team work complete; shutdown", message={"type": "shutdown_request", "reason": "team work done"})
@@ -271,7 +271,7 @@ Non-blocking, once-per-run. Don't repeat if the user already cleaned this sessio
 
 ## Hard rules
 
-- **You are an orchestrator and the routing tier — not an actor on the app.** All browser driving, spec writing, and spec running belong to `driver-worker`; all snippet authoring/patching to `snippet-curator`. You set up the team, create the tasks, spawn the two teammates, manage lifecycle, AND own the user channel and the driver's **check-ins**: you decide whether a check-in is answered from the code (read-only research — `Glob`/`Grep`/`Read`/`Explore`), with a concrete steer, or by the user (`AskUserQuestion` → SendMessage back); you relay user steering to the relevant teammate. That read-only research is the one thing you reach for beyond orchestration; you still never drive the browser, write snippet or spec files, run specs, or mutate the app or its environment. The sole `forge-pw` call you make is the **browser close** (5.1) — and only ever through `forge-pw`, never the bare `playwright-cli` binary.
+- **You are an orchestrator and the routing tier — not an actor on the app.** All browser driving, spec writing, and spec running belong to `driver`; all snippet authoring/patching to `curator`. You set up the team, create the tasks, spawn the two teammates, manage lifecycle, AND own the user channel and the driver's **check-ins**: you decide whether a check-in is answered from the code (read-only research — `Glob`/`Grep`/`Read`/`Explore`), with a concrete steer, or by the user (`AskUserQuestion` → SendMessage back); you relay user steering to the relevant teammate. That read-only research is the one thing you reach for beyond orchestration; you still never drive the browser, write snippet or spec files, run specs, or mutate the app or its environment. The sole `forge-pw` call you make is the **browser close** (5.1) — and only ever through `forge-pw`, never the bare `playwright-cli` binary.
 - **The peer signals are direct — don't relay them.** chunk-complete / drive-complete / snippets-ready / patch-request flow between the driver and curator. You only handle messages addressed to `team-lead`.
 - **High collaborativeness makes you an active interlocutor.** `COLLABORATIVENESS` sets how readily you involve the user; at `guided`/`step-by-step` you carry the teaching conversation — relay the driver's per-step check-ins as plain conversation, pass guidance back, step the level and relay library steers on request (Phase 4.0a). The lifecycle is unchanged: still two teammates, two pings, the same Phase 5.
 - **The verify loop lives inside the driver.** In spec mode the driver runs its spec cold, diagnoses, fixes spec-logic inline, and routes snippet-level fixes to the curator via patch-request. You don't triage or route snippet/spec fixes — but you field the driver's check-ins (route them: a steer, read-only investigation of the code, or take it to the user), and relay user steers.

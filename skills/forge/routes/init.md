@@ -13,10 +13,10 @@ Scaffolds the canonical `forge/` layout into a project. Run once at the start of
 ```
 <target-dir>/
 └── forge/
-    ├── .gitignore          # committed: self-documenting policy
-    ├── README.md           # committed: points at the conventions doc
-    ├── playwright.config.ts # committed: fallback Playwright config
-    └── hints/              # committed dir; only forge artifact in version control
+    ├── .gitignore          # gitignored: self-documenting policy (matched by its own `*`)
+    ├── README.md           # gitignored: points at the conventions doc
+    ├── playwright.config.ts # gitignored: fallback Playwright config
+    └── hints/              # tracked: the hint files you author are the only forge content in version control
         └── README.md       # gitignored: local guidance for authoring hints
 ```
 

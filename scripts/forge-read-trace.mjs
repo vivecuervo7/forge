@@ -1,5 +1,5 @@
-// forge-read-trace.mjs — the snippet-curator's reliable window into the
-// driver-worker's verbatim browser actions.
+// forge-read-trace.mjs — the curator's reliable window into the
+// driver's verbatim browser actions.
 //
 // Locates the driver's transcript by IDENTITY (its own agentName + teamName,
 // not a substring mention — so it can't be fooled by the lead/curator
@@ -31,7 +31,7 @@ const opt = (name, def) => {
 const team = opt('--team')
 const since = parseInt(opt('--since', '0'), 10) || 0
 const awaitSec = parseInt(opt('--await', '0'), 10) || 0
-const driver = opt('--driver', 'driver-worker')
+const driver = opt('--driver', 'driver')
 const projectDir = opt(
   '--project-dir',
   join(homedir(), '.claude', 'projects', process.cwd().replace(/\//g, '-')),

@@ -27,4 +27,4 @@ The shape that matters: **deference rises rung by rung; cadence holds at its rea
 
 - **Router** (`SKILL.md`) sets the initial level from the user's language: the teach route → `step-by-step`; a task framed "walk me through" / "I'll show you" → `guided`; otherwise `autonomous`.
 - **Lead** (`team-task.md`) reads the **deference** column — it biases how readily each check-in is routed to the user (`escalation.md` §3), and at `guided`/`step-by-step` makes the lead an active interlocutor (`team-task.md` Phase 4.0a). The lead **holds the level and steps it mid-run** on the user's framing: "walk me through this next bit" → up a rung; "you can take it from here" → back to `autonomous`.
-- **Driver** (`driver-worker.md`) reads the **cadence** column — at `autonomous` it surfaces only via the reactive check-in; the higher the level, the more proactively it surfaces, up to per-step at `step-by-step`.
+- **Driver** (`driver.md`) reads the **cadence** column — at `autonomous` it surfaces only via the reactive check-in; the higher the level, the more proactively it surfaces, up to per-step at `step-by-step`.

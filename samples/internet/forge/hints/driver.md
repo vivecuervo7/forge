@@ -1,6 +1,6 @@
-# Project hint: driver-worker
+# Project hint: driver
 
-Consumed by the `driver-worker` when driving against the-internet.herokuapp.com.
+Consumed by the `driver` when driving against the-internet.herokuapp.com.
 
 ## What this project is
 

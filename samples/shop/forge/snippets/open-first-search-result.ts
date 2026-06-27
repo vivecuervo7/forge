@@ -1,4 +1,4 @@
-// Authored by forge:snippet-curator on 2026-06-27.
+// Authored by forge:curator on 2026-06-27.
 export const meta = {
   description: "Click the first product card in the search results to open its detail page.",
   args: {},

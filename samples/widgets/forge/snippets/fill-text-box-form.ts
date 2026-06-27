@@ -1,4 +1,4 @@
-// Authored by forge:snippet-author on 2026-06-15.
+// Authored by forge:curator on 2026-06-15.
 export const meta = {
   description: "Navigate to the demoqa text-box page and fill all four form fields.",
   args: {

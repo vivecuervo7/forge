@@ -7,7 +7,7 @@ Two coordination channels have their own protocol files and aren't repeated here
 - **check-ins** (driver → lead, when stuck or changing tack) → `escalation.md`
 - **proposals** (teammate → lead, at wrap-up) → `proposals.md`
 
-## Peer signals — driver-worker ↔ snippet-curator (direct, async)
+## Peer signals — driver ↔ curator (direct, async)
 
 | signal | direction | meaning | shape |
 |---|---|---|---|
