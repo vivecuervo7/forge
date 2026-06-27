@@ -1,18 +1,9 @@
-<!--
-  AUTO-GENERATED — do not edit by hand.
-  Refresh with:
-    node <plugin-root>/scripts/forge-snippet-index.mjs
-  (or pass an explicit forge root as the first arg)
--->
+# Snippet INDEX (auto-generated)
+# Refresh: node <plugin-root>/scripts/forge-snippet-index.mjs
 
-# Snippet library
+# 2 snippet(s) — grouped by flow:; ungrouped land in misc
 
-2 snippet(s) in this library.
-
-## Flow: `widgets-text-box`
-
-| Name | Description | Args | Phase |
-|------|-------------|------|-------|
-| `fill-text-box-form` | Navigate to the demoqa text-box page and fill all four form fields. | `fullName`: string; `email`: string; `currentAddress`: string; `permanentAddress`: string | fill |
-| `submit-text-box-form` | Click the Submit button on the demoqa text-box page and return the output panel text. | (none) | submit→read |
+flow: widgets-text-box
+  - fill-text-box-form(fullName, email, currentAddress, permanentAddress)  → Navigate to the demoqa text-box page and fill all four form fields [phase: fill] [enters: demoqa text-box page with all fields populated]
+  - submit-text-box-form()                                    → Click the Submit button on the demoqa text-box page and return the output panel text [phase: submit→read] [enters: demoqa text-box page with output panel visible] [requires: demoqa text-box page with form fields filled]
 

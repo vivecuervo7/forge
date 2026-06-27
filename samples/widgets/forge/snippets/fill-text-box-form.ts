@@ -2,14 +2,10 @@
 export const meta = {
   description: "Navigate to the demoqa text-box page and fill all four form fields.",
   args: {
-    /** Full name to enter in the Full Name field */
-    fullName: "string",
-    /** Email address to enter in the Email field */
-    email: "string",
-    /** Current address to enter in the Current Address field */
-    currentAddress: "string",
-    /** Permanent address to enter in the Permanent Address field */
-    permanentAddress: "string",
+    fullName: { type: 'string', description: 'name for the Full Name field' },
+    email: { type: 'string', description: 'address for the Email field' },
+    currentAddress: { type: 'string', description: 'text for the Current Address field' },
+    permanentAddress: { type: 'string', description: 'text for the Permanent Address field' },
   },
   tags: ['form', 'fill'],
   flow: 'widgets-text-box',
