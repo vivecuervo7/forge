@@ -1,6 +1,8 @@
-# Project hint: driver
+# Project hint: forge — demoqa.com
 
-Consumed by the `driver` when driving against demoqa.com.
+The single operate-the-app hint, read by the lead and the driver. This site has
+no auth, so it's all drive-the-app knowledge: a per-probe map and the gotchas for
+each widget class.
 
 ## What this project is
 

@@ -2,9 +2,10 @@
 // forge-init.mjs — scaffold the forge/ project convention into a directory.
 //
 // Creates forge/ with the canonical layout: a gitignored data root, a hints/
-// directory for project-specific knowledge, and a fallback Playwright config.
-// Template content lives at `templates/init/` and is copied verbatim into
-// the target on missing files.
+// directory for project-specific knowledge (two empty hint stubs — forge.md
+// and curator.md — pre-created so the naming convention can't be missed), and
+// a fallback Playwright config. Template content lives at `templates/init/`
+// and is copied verbatim into the target on missing files.
 //
 // No .env file is scaffolded. Env handling is delegated to the user's shell
 // (direnv, dotenv-cli, manual exports, or whatever the project's hints
@@ -73,6 +74,8 @@ function scaffold(template, destRel) {
 scaffold('gitignore',            '.gitignore')
 scaffold('README.md',            'README.md')
 scaffold('hints-README.md',      'hints/README.md')
+scaffold('hints-forge.md',       'hints/forge.md')
+scaffold('hints-curator.md',     'hints/curator.md')
 scaffold('playwright.config.ts', 'playwright.config.ts')
 
 // Report
@@ -98,7 +101,8 @@ if (existsSync(runnerScript)) {
 }
 
 console.log('')
-console.log(`Next: author hint files in ${hintsDir}/ to describe your project's`)
-console.log(`env contract, provisioning recipe, and any project-specific conventions.`)
+console.log(`Next: fill in the empty hint stubs in ${hintsDir}/ to describe your`)
+console.log(`project — forge.md (env, accounts, app structure, selectors, gotchas) and,`)
+console.log(`rarely, curator.md (snippet conventions). Both are optional; empty = defaults.`)
 console.log(`See ${hintsDir}/README.md for guidance — including a starter prompt`)
 console.log(`for AI-assisted hint authoring.`)

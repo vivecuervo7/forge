@@ -13,11 +13,14 @@ them.
 
 ## Quick reference
 
-| File              | Consumer                  | Typical content                                  |
-|-------------------|---------------------------|--------------------------------------------------|
-| `hints/forge.md`  | `/forge` skill (the lead) | env contract, provisioning recipe, setup, teardown |
-| `hints/driver.md` | `driver`                  | app structure, routes, personas, gotchas — plus any spec naming/verification/reset deviations (spec mode) |
-| `hints/curator.md` | `curator`                | snippet conventions for this project             |
+Two hint files, one boundary — **operating the app** vs **curating the library**:
 
-Minimum-viable hint files are very small. Forge has sensible defaults for
-everything; hints encode only project-specific deviations.
+| File               | Read by         | Typical content                                  |
+|--------------------|-----------------|--------------------------------------------------|
+| `hints/forge.md`   | lead + driver   | the operate contract — env, accounts, setup/teardown, app structure, routes, selectors, gotchas, spec deviations |
+| `hints/curator.md` | curator         | snippet-authoring conventions (usually empty)    |
+
+Both are scaffolded empty; fill in only what your project needs. Forge has
+sensible defaults for everything — hints encode only project-specific
+deviations. A project can opt an agent into another file with an in-hint
+pointer ("the selectors live in `selectors.md`") and the agent will follow it.

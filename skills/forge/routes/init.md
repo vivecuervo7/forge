@@ -16,9 +16,13 @@ Scaffolds the canonical `forge/` layout into a project. Run once at the start of
     ├── .gitignore          # gitignored: self-documenting policy (matched by its own `*`)
     ├── README.md           # gitignored: points at the conventions doc
     ├── playwright.config.ts # gitignored: fallback Playwright config
-    └── hints/              # tracked: the hint files you author are the only forge content in version control
+    └── hints/              # tracked: the hint files are the only forge content in version control
+        ├── forge.md        # tracked: empty stub — operate hint (lead + driver); you fill it in
+        ├── curator.md      # tracked: empty stub — snippet conventions (curator); usually stays empty
         └── README.md       # gitignored: local guidance for authoring hints
 ```
+
+The two hint files are scaffolded **empty** (a one-line comment pointing at `README.md`) so the names forge loads are pre-created — a user fills them in rather than guessing the filename. Empty = forge uses its defaults.
 
 Everything else under `forge/` (snippets, specs, videos, transcripts) is created lazily by other routes. After scaffolding, the user authors hint files in `forge/hints/`.
 
@@ -42,7 +46,7 @@ The script preserves existing files (`.gitignore`, `README.md`, hints README, pl
 
 - **Invoke the script; don't write files yourself.** It's the source of truth for scaffold contents and ensures idempotency.
 - **Surface the script's output verbatim.** It reports what it created and preserved.
-- **Hint authoring is the user's job.** The script creates the scaffold; authoring `forge.md`, `driver.md`, etc. is the user's responsibility (with optional help in subsequent invocations).
+- **Hint authoring is the user's job.** The script creates the scaffold; authoring `forge.md` and (rarely) `curator.md` is the user's responsibility (with optional help in subsequent invocations).
 
 ## Output expected
 
@@ -53,11 +57,14 @@ forge-init: scaffolded /path/to/project/forge
   Created:
     + forge/.gitignore
     + forge/README.md
-    + forge/playwright.config.ts
     + forge/hints/README.md
+    + forge/hints/forge.md
+    + forge/hints/curator.md
+    + forge/playwright.config.ts
 
-Next: author hint files in /path/to/project/forge/hints/ to describe your project's
-env contract, provisioning recipe, and any project-specific conventions.
+Next: fill in the empty hint stubs in /path/to/project/forge/hints/ to describe your
+project — forge.md (env, accounts, app structure, selectors, gotchas) and,
+rarely, curator.md (snippet conventions). Both are optional; empty = defaults.
 See /path/to/project/forge/hints/README.md for guidance.
 ```
 

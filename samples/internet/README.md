@@ -8,7 +8,7 @@ This sample is a project shaped like one that's had `/forge init` run on it — 
 
 | File | Purpose |
 |---|---|
-| [`forge/hints/driver.md`](./forge/hints/driver.md) | A per-probe map (interaction class → path), known gotchas (HTML5 drag-and-drop's `dispatchEvent` fallback, dialog-listener ordering, iframe descent), and the public test credentials for the login probe. **Shows what a `driver.md` looks like when it's a guidebook rather than a selector dump.** |
+| [`forge/hints/forge.md`](./forge/hints/forge.md) | A per-probe map (interaction class → path), known gotchas (HTML5 drag-and-drop's `dispatchEvent` fallback, dialog-listener ordering, iframe descent), and the public test credentials for the login probe. **Shows what a `forge.md` looks like when it's a guidebook rather than a selector dump.** |
 | `forge/playwright.config.ts` | Scaffolded by `/forge init`. |
 | `forge/snippets/dynamic-loading-start-and-capture.ts` | **Seeded** — produced by a real forge run. Parameterised on `variant: '1' \| '2'` so one snippet covers both example pages. |
 
@@ -53,7 +53,7 @@ Each adds a snippet. The hint flags HTML5 `dragTo` as unreliable on this page, s
 
 Earlier forge runs against this target (design-phase field tests) gave us evidence for several choices the hint encodes:
 
-- **The bare driver already handles modern Playwright idioms.** Drives against five probes in this collection (login, dynamic loading, JS alerts, drag-and-drop, shadow DOM) all succeeded without a `driver.md` — five for five. The bare driver picks `data-test` / `#id` selectors over text matchers, uses modern primitives (`dragTo`, `page.once('dialog', d => d.accept())` ordered before the click, `<select>` options for React date pickers), and pierces shadow DOM via plain `locator()`. **The hint file is not for teaching Playwright** — it's for encoding coverage intent and project-specific gotchas the driver can't derive from looking at the page.
+- **The bare driver already handles modern Playwright idioms.** Drives against five probes in this collection (login, dynamic loading, JS alerts, drag-and-drop, shadow DOM) all succeeded without a `forge.md` — five for five. The bare driver picks `data-test` / `#id` selectors over text matchers, uses modern primitives (`dragTo`, `page.once('dialog', d => d.accept())` ordered before the click, `<select>` options for React date pickers), and pierces shadow DOM via plain `locator()`. **The hint file is not for teaching Playwright** — it's for encoding coverage intent and project-specific gotchas the driver can't derive from looking at the page.
 
 - **Hints shape parameterisation, not pass-rate.** With probes flagged as variants in the hint (`dialogAction = accept | dismiss`, dynamic-loading `variant = 1 | 2`, drag-and-drop `sourceId` / `targetId`), the curator writes generic snippets. Without the hint, the curator scopes each snippet to the specific case the driver encountered. **Same drives, different snippet shape** — and snippet shape determines whether future specs compose cleanly or have to write fresh code each time.
 

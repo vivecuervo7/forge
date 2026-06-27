@@ -2,7 +2,7 @@
 
 This file is loaded by the team-lead **only** when `MODE=spec`. It adds two things to the base `team-task.md`: establishing the spec's **intent** before spawning, and the spec-mode **final-report** shape. Integrate them at the indicated phases.
 
-Spec composition, cold verification, and self-fix all live **inside the `driver`** — it holds the drive's verbatim trace, so the freeze-and-verify loop has no context boundary to cross. There is no separate spec-writer or spec-verifier, and **no lead-orchestrated verify loop** (the driver routes snippet-level fixes to the `curator` itself). Your spec-mode additions are small: decide the intent, thread it into the driver spawn, and report what came back.
+Spec composition, cold verification, and self-fix all live **inside the `driver`** — it holds the drive's verbatim trace, so the freeze-and-verify loop has no context boundary to cross. The verify loop is the driver's own (it routes snippet-level fixes to the `curator` directly), not lead-orchestrated. Your spec-mode additions are small: decide the intent, thread it into the driver spawn, and report what came back.
 
 Lifecycle is unchanged from drive mode — still **2 tasks, 2 teammates, 2 completion pings**. The only deltas are the intent decision (Phase 2.0) and the report (Phase 5.5).
 

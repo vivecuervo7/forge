@@ -32,12 +32,11 @@ Your task ID is <id>. Claim it with TaskUpdate(taskId=<id>, status='in_progress'
 
 ```
 TaskUpdate(taskId=<id>, status="in_progress")
-Read <PROJECT_FORGE_ROOT>/hints/forge.md
 Read <PROJECT_FORGE_ROOT>/hints/curator.md
 Read <PROJECT_FORGE_ROOT>/snippets/INDEX.md
 ```
 
-All optional except holding the existing library in mind. `forge.md` gives selector vocabulary + project conventions; `curator.md` gives project-specific authoring conventions; `INDEX.md` is the current library you'll extend/patch/split.
+Both optional except holding the existing library in mind. `curator.md` gives project-specific authoring conventions (usually absent — defaults cover most projects); `INDEX.md` is the current library you'll extend/patch/split. You read selectors and waits from the driver's **trace** (verbatim), not from a hint file — so you don't read `forge.md`. **If `curator.md` points you to another file** ("the selector vocabulary lives in `forge.md`"), **follow that pointer** — a project can opt you into operate-hints that way.
 
 Keep your task `in_progress` for the whole run — including the driver's verify loop. Mark `completed` only after you've sent `snippets-ready` **and** the driver has signalled `run resolved` (its verify loop is over) — so you're available for patch-requests in between, and you have one unambiguous cue to wrap up rather than dangling.
 
@@ -88,7 +87,7 @@ When collaborativeness is high (teaching) the user may steer your library decisi
 
 **Before writing, re-scan INDEX.md for overlap** (verb + noun). Prefer to **extend** an existing snippet, **compose** with it (`composes: [...]`), or **supersede** it (`supersedes: [...]`) over a near-duplicate. Author fresh only when genuinely orthogonal. This is also where the **patch-vs-new** call lives: if a chunk is *almost* an existing snippet but needs one more capability (e.g. an event-create that also ticks a module), **amend that snippet to parameterize the capability** (a new optional arg, default unchanged) rather than authoring a parallel one or leaving the driver's hand-drive as a one-off.
 
-**Preserve what the driver actually ran.** Lift the echoed Playwright code and `run-code` bodies from the trace **verbatim** — same selectors, same waits, same `dispatchEvent`. Parameterize only the literal values that vary (`'sauce-labs-backpack'` → `args.item`). Refine a locator only when `forge.md` documents a more durable one, or it's fragile by inspection. Don't fabricate a cleaner version; the working code is the durable code.
+**Preserve what the driver actually ran.** Lift the echoed Playwright code and `run-code` bodies from the trace **verbatim** — same selectors, same waits, same `dispatchEvent`. Parameterize only the literal values that vary (`'sauce-labs-backpack'` → `args.item`). Refine a locator only when it's fragile by inspection (or `curator.md` points you to documented selector vocabulary worth preferring). Don't fabricate a cleaner version; the working code is the durable code.
 
 ### Write the snippet files
 

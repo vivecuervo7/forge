@@ -12,7 +12,7 @@ Three exemplar projects, each shaped like one that's had `/forge init` run on it
 
 Each sample is a project root containing a `forge/` subdir — the layout you get after running `/forge init` in a project, plus a couple of real forge runs:
 
-- `forge/hints/` — the authored hints (`forge.md`, `driver.md`) demonstrating what good hint authoring looks like for this kind of site.
+- `forge/hints/` — the authored hints (`forge.md`, plus `curator.md` if snippet conventions deviate) demonstrating what good hint authoring looks like for this kind of site.
 - `forge/playwright.config.ts` — the scaffolded fallback Playwright config `/forge init` would create.
 - `forge/snippets/` — seeded with a small set of real forge output. The walkthrough builds on these.
 - `README.md` (at the sample root) — meta-documentation explaining what the sample demonstrates, plus the walkthrough.
@@ -28,7 +28,7 @@ Everything not committed (gitignored, populated automatically when you run forge
 ## How to use these samples for your own project
 
 1. **Pick the closest match.** Shop for auth-bearing apps; internet for probe-shaped public sites; widgets for legacy-UI-library-heavy sites.
-2. **Read the chosen sample's `README.md` and `forge/hints/`.** Note the structure — account tables in `forge.md`, selector inventories and gotchas in `driver.md`. Adapt the structure to your project.
+2. **Read the chosen sample's `README.md` and `forge/hints/`.** Note the structure — `forge.md` is the single operate-the-app file: account tables, then selector inventories and gotchas. Adapt the structure to your project.
 3. **Walk through the prompts.** Each sample's README has a sequence of `/forge` invocations that demonstrate library reuse, new authoring, spec mode, and (for shop) teach mode. Run them. Watch the library grow.
-4. **Author your own `forge/hints/{forge,driver}.md`** following the same shape against your project. The smaller hint file (`curator.md`) is usually unnecessary; the agent defaults cover it.
+4. **Author your own `forge/hints/forge.md`** following the same shape against your project. The smaller hint file (`curator.md`) is usually unnecessary; the agent defaults cover it.
 5. **Run forge against your project.** Drive a task; the curator accretes a library; spec-mode adds verified specs on top.

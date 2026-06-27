@@ -8,7 +8,7 @@ This sample is a project shaped like one that's had `/forge init` run on it — 
 
 | File | Purpose |
 |---|---|
-| [`forge/hints/driver.md`](./forge/hints/driver.md) | A 14-widget probe map, an ad-occlusion / `scrollIntoViewIfNeeded` rule, Kendo-intercept warnings for date pickers, the manual-mouse-event pattern for the drag-drop family. **Shows what a `driver.md` looks like when the app's UI library is the source of pain.** |
+| [`forge/hints/forge.md`](./forge/hints/forge.md) | A 14-widget probe map, an ad-occlusion / `scrollIntoViewIfNeeded` rule, Kendo-intercept warnings for date pickers, the manual-mouse-event pattern for the drag-drop family. **Shows what a `forge.md` looks like when the app's UI library is the source of pain.** |
 | `forge/playwright.config.ts` | Scaffolded by `/forge init`. |
 | `forge/snippets/fill-text-box-form.ts` | **Seeded** — produced by a real forge run. Navigates to the text-box page and fills the four form fields from args. |
 | `forge/snippets/submit-text-box-form.ts` | **Seeded** — produced by the same run. Clicks Submit and returns the rendered output panel text. The compositional pair to `fill-text-box-form`. |

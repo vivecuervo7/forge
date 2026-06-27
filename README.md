@@ -40,7 +40,7 @@ Supported on macOS, Linux, and Windows.
    /forge <describe what you want done>
    ```
 
-   That launches a fresh chromium and goes. For sites with auth or other project-specific behaviour, author hint files in `forge/hints/` (see `forge/hints/README.md` for guidance). All three hints are optional and additive: write only what you need.
+   That launches a fresh chromium and goes. For sites with auth or other project-specific behaviour, author hint files in `forge/hints/` (see `forge/hints/README.md` for guidance). Both hint files are optional and additive: fill in only what you need.
 
    **Want to see forge run end-to-end before adopting it?** [Try the samples](./samples) — three project-shaped directories with hints already authored and prompt-by-prompt walkthroughs against public test sites. 5–15 minutes per walkthrough.
 
@@ -179,23 +179,23 @@ For parallel runs against the same project, the constraint is whatever your back
 
 ## Hints
 
-`/forge init` scaffolds `forge/hints/` with authoring guidance; you write the hint files as needed — one per actor in a forge run. Hints are natural-language instructions to the agents, not config.
+`/forge init` scaffolds two empty hint files; you fill in what your project needs. Hints are natural-language instructions to the agents, not config — and they split on one boundary, **operating the app vs curating the library**:
 
-| File | Read by |
-|---|---|
-| `forge.md` | The **lead** — env contract, app-level setup, teardown, account/role conventions (the teammates also read it for the shared facts they need) |
-| `driver.md` | The **driver** — app structure, selector inventory, gotchas; plus any spec naming/verification/reset deviations (spec mode) |
-| `curator.md` | The **curator** — project-specific snippet conventions |
+| File | Read by | Holds |
+|---|---|---|
+| `forge.md` | The **lead + driver** | the operate contract — env, accounts, setup/teardown, app structure, routes, selectors, gotchas, spec deviations |
+| `curator.md` | The **curator** | snippet-authoring conventions (usually empty) |
 
-**All hints are optional.** Forge drives correctly against the bare scaffold — the defaults cover unauthenticated sites with no special setup. Author hint files only to encode project-specific knowledge the agents can't discover on their own:
+**Both files are optional.** Forge drives correctly against the empty scaffold — the defaults cover unauthenticated sites with no special setup. Fill in a hint file only to encode project-specific knowledge the agents can't discover on their own:
 
-- **`forge.md`** — usually the first one worth writing if your site has auth, a custom provisioning recipe, or pre-/post-run state needs.
-- **`driver.md`** — worth writing once you've watched a few drives and noticed the driver enumerating selectors the docs could've handed it.
+- **`forge.md`** — the high-leverage one. Worth writing once your site has auth, or once you've watched a few drives and noticed the driver enumerating selectors / hitting gotchas the docs could've handed it. The lead reads it too, so a documented gotcha lets it resolve a driver check-in without escalating to you.
 - **`curator.md`** — write only if the project's snippet conventions deviate from the curator's defaults.
+
+A project can opt an agent into another file with an in-hint pointer ("the selectors live in `selectors.md`"); agents follow such pointers, so the strict defaults stay overridable.
 
 ### Hints grow during use
 
-Hints don't need to be complete at start. Each teammate surfaces **proposals** at the end of a session — patterns it noticed during the run that belong in a hint file. The lead lints them, then relays each with an observation, evidence, and a suggested edit; you accept, modify, or reject. Start with the env contract in `forge.md` and canonical selectors in `driver.md`; the rest accretes from real driving. See the shop sample's [`driver.md`](./samples/shop/forge/hints/driver.md) for a worked, doc-grounded example of what a mature hint file looks like.
+Hints don't need to be complete at start. Each teammate surfaces **proposals** at the end of a session — patterns it noticed during the run that belong in a hint file. The lead lints them, then relays each with an observation, evidence, and a suggested edit; you accept, modify, or reject. Start with the env contract and canonical selectors in `forge.md`; the rest accretes from real driving. See the shop sample's [`forge.md`](./samples/shop/forge/hints/forge.md) for a worked, doc-grounded example of what a mature hint file looks like.
 
 ### Setup / teardown
 
@@ -206,9 +206,8 @@ Hints don't need to be complete at start. Each teammate surfaces **proposals** a
 ```
 <project>/forge/
 ├── hints/                  # the only tracked content
-│   ├── forge.md            # you author — lead: env, accounts, setup/teardown
-│   ├── driver.md           # you author — driver: app shape, selectors, gotchas
-│   ├── curator.md          # you author — curator: snippet conventions
+│   ├── forge.md            # scaffolded empty — fill in (lead + driver: env, accounts, app facts)
+│   ├── curator.md          # scaffolded empty — snippet conventions (curator); usually stays empty
 │   └── README.md           # init-scaffolded (gitignored) — authoring guidance
 ├── snippets/               # gitignored — accreted by the curator
 ├── specs/                  # gitignored — composed during spec mode
@@ -220,7 +219,7 @@ Hints don't need to be complete at start. Each teammate surfaces **proposals** a
 └── README.md               # init-scaffolded (gitignored) — explains the layout
 ```
 
-`/forge init` creates the `forge/` skeleton — `.gitignore`, `README.md`, `playwright.config.ts`, and `hints/README.md` (the authoring guide). The **hint files themselves you author** (all optional); everything under `snippets/`, `specs/`, and `videos/` accretes as you drive. Only the hint files you write are tracked in version control — every other path is local per-machine, regenerated from convention. See the scaffold's inline comments for adapting to projects with their own Playwright runner.
+`/forge init` creates the `forge/` skeleton — `.gitignore`, `README.md`, `playwright.config.ts`, `hints/README.md` (the authoring guide), and the two hint files **as empty stubs** (so the names forge loads are pre-created — fill them in, both optional, empty = defaults). Everything under `snippets/`, `specs/`, and `videos/` accretes as you drive. Only the hint files are tracked in version control — every other path is local per-machine, regenerated from convention. See the scaffold's inline comments for adapting to projects with their own Playwright runner.
 
 On first spec run (or first snippet invocation), forge lazy-installs its Playwright runner directly into the project's `forge/` directory (standard `package.json` + `node_modules/` layout). Self-contained per project, visible in the IDE, removed cleanly by `rm -rf forge/` if you ever want to uninstall.
 

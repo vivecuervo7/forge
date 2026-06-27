@@ -14,7 +14,7 @@ count: <N>
 
 ---
 ID: 1
-CATEGORY: <hint file name, e.g. driver.md>
+CATEGORY: <hint file name, e.g. forge.md>
 ACTION: ADD | AMEND | REMOVE
 TARGET: <section heading, quoted prose, or empty for ADD-new>
 OBSERVATION: <one-line>
@@ -49,15 +49,14 @@ Be **conservative** — a clean run produces none. Proposals carry genuine, reus
 
 **Targets — propose against the hint files about your own work:**
 
-*Driver:*
+*Driver:* → `forge.md` (the operate contract — its only target)
 
-- `forge.md` — SUT facts useful to everyone: a framework quirk + workaround, a selector mismatch, a route, an env-key gap, a cold-start timing pattern, a single-session-collision warning.
-- `driver.md` — project-specific driving discipline, plus (in spec mode) spec-composition shapes and data-passing idioms and verification-level patterns: cold-start timing, env setup, test-isolation gaps.
+- A framework quirk + workaround, a selector mismatch, a route, an env-key gap, a cold-start timing pattern, a single-session-collision warning, project-specific driving discipline, and (in spec mode) spec-composition shapes, data-passing idioms, and verification-level patterns (cold-start timing, env setup, test-isolation gaps).
 
-*Curator:*
+*Curator:* → `curator.md` (composition conventions), or `forge.md`
 
 - `curator.md` — composition conventions: naming patterns, arg-shape conventions, composable pairings.
-- `forge.md` — selector vocabulary / framework patterns applied repeatedly.
+- `forge.md` — selector vocabulary / framework patterns applied repeatedly (the curator may propose here even though it doesn't read it: the lead applies the proposal).
 
 ## 3. Lead side — review and apply
 
@@ -130,7 +129,7 @@ Apply in order; re-read between each to handle shifting offsets.
 Build a one-line-per-file summary:
 
 ```
-forge/hints/driver.md  (+2 sections: <names>)
+forge/hints/forge.md   (+2 sections: <names>)
 forge/hints/curator.md (+1 amendment, +1 new section)
 ```
 
