@@ -4,6 +4,8 @@ A browser-automation team for Claude Code. Forge spawns a small team — a drive
 
 The default mode just does the thing you asked for. Spec mode is opt-in for when a flow is worth pinning into CI. If the team gets genuinely stuck, it escalates back to you with what it tried and what blocked it rather than spinning.
 
+See [`CHANGELOG.md`](./CHANGELOG.md) for the high-level history.
+
 ## Requirements
 
 - **Node.js** — any recent version (tested on 24).
