@@ -6,8 +6,6 @@ One coordination channel has its own protocol file and isn't repeated here:
 
 - **check-ins** (driver → lead, when stuck or changing tack) → `escalation.md`
 
-(There's no proposals protocol. At wrap-up the driver may append a single optional `Hint worth adding: …` line to its completion ping; the lead surfaces it to the user as a gentle, non-blocking suggestion. Nothing structured.)
-
 ## Peer signals — driver ↔ curator (direct, async)
 
 | signal | direction | meaning | shape |

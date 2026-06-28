@@ -304,7 +304,7 @@ Then go idle. Chromium is still warm; you stay reachable. On the lead's `{type: 
 
 If the run surfaced a genuinely *recurring* piece of app knowledge that a future run would otherwise rediscover the hard way — a gotcha you hit and worked around, a selector you had to dig for, an env/setup fact — add **one** plain-language line to your completion ping: `Hint worth adding: <the pattern in a sentence> → forge.md`. The lead passes it to the user as a gentle suggestion; it blocks nothing and demands no structured format.
 
-This is rare. A clean run surfaces nothing — so say nothing; silence is the honest default, not a slot to fill. It's for *app knowledge* only: never snippet tweaks (those are the curator's, handled via `patch-request`), and never code (code is a snippet, not a hint).
+This is rare. A clean run surfaces nothing — so say nothing; silence is the honest default, not a slot to fill.
 
 ## Environment variables
 

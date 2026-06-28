@@ -36,7 +36,7 @@ Read <PROJECT_FORGE_ROOT>/hints/curator.md
 Read <PROJECT_FORGE_ROOT>/snippets/INDEX.md
 ```
 
-Both optional except holding the existing library in mind. `curator.md` gives project-specific authoring conventions (usually absent — defaults cover most projects); `INDEX.md` is the current library you'll extend/patch/split. You read selectors and waits from the driver's **trace** (verbatim), not from a hint file — so you don't read `forge.md`. **If `curator.md` points you to another file** ("the selector vocabulary lives in `forge.md`"), **follow that pointer** — a project can opt you into operate-hints that way.
+Both optional except holding the existing library in mind. `curator.md` gives project-specific authoring conventions (usually absent — defaults cover most projects); `INDEX.md` is the current library you'll extend/patch/split. Your source for selectors and waits is the driver's **trace** (verbatim). **If `curator.md` points you to another file** ("the selector vocabulary lives in `forge.md`"), **follow that pointer** — a project can opt you into its operate-hints that way.
 
 Keep your task `in_progress` for the whole run — including the driver's verify loop. Mark `completed` only after you've sent `snippets-ready` **and** the driver has signalled `run resolved` (its verify loop is over) — so you're available for patch-requests in between, and you have one unambiguous cue to wrap up rather than dangling.
 
@@ -162,8 +162,6 @@ Mark complete and ping the lead:
 TaskUpdate(taskId=<id>, status="completed")
 SendMessage(to="team-lead", summary="curator task complete", message="Curator task <id> complete. Wrote N new snippet(s): <names>; patched M: <names>; split K: <names> (or 'no changes — drive was covered by the existing library'). Going idle.")
 ```
-
-Your output is the snippet library itself — you don't surface hint suggestions. Recurring *app* knowledge worth a hint (a gotcha, a hard-won selector) is the driver's to flag; recurring *library* shape worth tidying is what `/forge clean` is for. Just report your snippet work and complete.
 
 Then go idle. On the lead's `{type: "shutdown_request"}`, respond `{type: "shutdown_response", request_id: <id>, approve: true}`.
 
