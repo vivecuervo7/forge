@@ -1,6 +1,6 @@
 # Escalation protocol — the check-in
 
-forge's teammates don't carry a blocker alone, and they don't reach past their own scope to solve it. When the driver hits friction it can't clear with routine recovery, it **checks in** with the team-lead; the lead **routes**. This file is the one place that protocol lives — both sides read it, so the message shapes never drift and each knows what the other will do.
+forge's teammates hand a blocker up rather than carrying it alone or reaching past their own scope to solve it. When the driver hits friction that routine recovery won't clear, it **checks in** with the team-lead; the lead **routes**. This file is the one place that protocol lives — both sides read it, so the message shapes never drift and each knows what the other will do.
 
 Loaded on-demand: the **driver** `cat`s it when it hits friction; the **lead** has it from setup. The driver acts on §1–§2; the lead acts on §1 + §3.
 

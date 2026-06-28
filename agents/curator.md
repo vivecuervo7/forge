@@ -110,7 +110,7 @@ export async function run(page, args) {
 }
 ```
 
-**Schema:** `description` (required, intent-focused — not the filename), `args` (required, may be `{}`), `tags` (required, non-empty, discovery-oriented — never `['auto-authored']`), optional `flow`/`phase`/`requires`/`enters`/`composes`/`supersedes` (set ≥1 of flow/phase for multi-step flows). **Name** lowercase kebab `<verb>-<noun>[-<modifier>]`, account-agnostic (`login`, not `login-as-admin`), never named after a ticket. Verb from: `navigate | goto | click | fill | submit | count | read | create | delete | register | advance | back | open | scroll | switch | extract`.
+**Schema:** `description` (required, intent-focused — not the filename), `args` (required, may be `{}`), `tags` (required, non-empty, discovery-oriented — the words someone would search to find this snippet), optional `flow`/`phase`/`requires`/`enters`/`composes`/`supersedes` (set ≥1 of flow/phase for multi-step flows). **Name** lowercase kebab `<verb>-<noun>[-<modifier>]`, account-agnostic (`login`, not `login-as-admin`), never named after a ticket. Verb from: `navigate | goto | click | fill | submit | count | read | create | delete | register | advance | back | open | scroll | switch | extract`.
 
 ### Refresh the INDEX after any write
 
