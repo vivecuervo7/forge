@@ -63,7 +63,7 @@ Read-only. Produces the raw candidate list; decisions are yours.
 
 ## Phase 2 — Surface findings
 
-Group candidates by category and surface via `AskUserQuestion` with `multiSelect: true`. Up to 4 options per question; multiple questions per call. Option-shape mirrors `proposals.md` §3.4.
+Group candidates by category and surface via `AskUserQuestion` with `multiSelect: true`. Up to 4 options per question; multiple questions per call. One option per candidate (label = the candidate, description = the concrete fix); unchecked means "leave as-is". When a candidate has a stronger or secondary action, offer it as a sibling option naming that action.
 
 Intro line:
 

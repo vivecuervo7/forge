@@ -105,13 +105,13 @@ Try a sample before adopting forge for your own project. Each sample is a projec
 
 ## Maintenance
 
-Forge accretes — snippets, hints, proposals — and that accretion needs a light periodic sweep to stay clean. Two mechanisms keep the library healthy without manual policing:
+Forge accretes — snippets and hints — and that accretion needs a light touch to stay clean. A few mechanisms keep the library healthy without manual policing:
 
-- **Proposal-review lint.** When sub-agents emit end-of-session hint proposals, the lead lints them before relaying. Code-shaped proposals (TypeScript / Playwright snippets disguised as hint prose) and cross-file duplicates are caught before they bloat `forge/hints/`. Hint files stay lean by construction.
+- **Gentle end-of-run hint nudge.** When a run keeps tripping over the same thing — a gotcha hit repeatedly, a selector the driver had to dig for — it may flag it, and the lead offers in its wrap-up summary to add a line to `forge.md`. At most one suggestion, never a blocking gauntlet; a clean run says nothing. Snippet-level fixes don't go through this — the curator patches snippets directly during the run.
 - **`/forge clean`.** The periodic sweep — run it weekly or whenever a session feels like it accreted noise. The cleanup-scan script surfaces snippet overlaps, hint sections that should be snippets or scripts, Jira-keyed snippet names (which date fast), and stale meta. Each finding surfaces via `AskUserQuestion`; nothing is applied without your approval. `/forge clean snippets` also regenerates `forge/snippets/INDEX.md`.
 - **Phase 0 staleness nudge.** After any `/forge` run, if the last `/forge clean` was more than 7 days ago, the lead adds a one-line tail nudge to its summary. Non-blocking — you can ignore it and keep working.
 
-Sub-agent discipline supports the lint from the authoring side. The driver and curator scan `forge/snippets/INDEX.md` before authoring to avoid overlap, and decline to emit code-shaped proposals when they could write a snippet or script instead. When a spec fails cold verification, the driver fixes the spec body inline or routes the snippet-level fix to the curator (via `patch-request`) — fixing the cause rather than patching around it. Details live in [`agents/driver.md`](./agents/driver.md) and [`agents/curator.md`](./agents/curator.md).
+Sub-agent discipline supports this from the authoring side. The driver and curator scan `forge/snippets/INDEX.md` before authoring to avoid overlap. When a spec fails cold verification, the driver fixes the spec body inline or routes the snippet-level fix to the curator (via `patch-request`) — fixing the cause rather than patching around it. Details live in [`agents/driver.md`](./agents/driver.md) and [`agents/curator.md`](./agents/curator.md).
 
 ## Snippet library
 
@@ -197,7 +197,7 @@ A project can opt an agent into another file with an in-hint pointer ("the selec
 
 ### Hints grow during use
 
-Hints don't need to be complete at start. Each teammate surfaces **proposals** at the end of a session — patterns it noticed during the run that belong in a hint file. The lead lints them, then relays each with an observation, evidence, and a suggested edit; you accept, modify, or reject. Start with the env contract and canonical selectors in `forge.md`; the rest accretes from real driving. See the shop sample's [`forge.md`](./samples/shop/forge/hints/forge.md) for a worked, doc-grounded example of what a mature hint file looks like.
+Hints don't need to be complete at start. When a run keeps tripping over the same thing — a gotcha, a selector the driver had to dig for — it surfaces a single gentle suggestion at wrap-up: *want this in `forge.md` so the next run handles it from the start?* Accept it or ignore it — nothing is forced, and a clean run suggests nothing. Start with the env contract and canonical selectors in `forge.md`; the rest accretes from real driving. See the shop sample's [`forge.md`](./samples/shop/forge/hints/forge.md) for a worked, doc-grounded example of what a mature hint file looks like.
 
 ### Setup / teardown
 

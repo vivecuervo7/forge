@@ -195,16 +195,6 @@ SendMessage(to="<teammate>", summary="status check", message="What's your status
 
 If it responds with a completion summary, treat it as the missing ping. If 2 more idle notifications arrive with no response, inspect on-disk artifacts (`ls <FORGE_ROOT>/snippets/`, `ls <FORGE_ROOT>/specs/`), surface state to the user, and proceed to Phase 5 — **the chromium close (5.1) runs regardless of the missing ping** (a dangling teammate must never strand the browser). **Bounded waiting:** if 10+ minutes pass without both pings AND no check-in/cannot-drive, surface to the user and proceed to Phase 5 anyway.
 
-## Phase 4.5 — Review hint proposals (on-demand)
-
-Each completion ping ends with `proposals: <N>`. If **both** are `proposals: 0`, skip this phase entirely. If either is `> 0`, wait for its `PROPOSALS` SendMessage(s), capture verbatim, then:
-
-```bash
-cat <PLUGIN_ROOT>/protocols/proposals.md
-```
-
-Follow its **§3 (Lead side)** for aggregation, user review, and application. Hold the "Hint files updated" summary for Phase 5.5.
-
 ## Phase 5 — Shut down and clean up
 
 A run can end several ways — normally both completion pings; also via the stall watchdog (4.1), a `cannot-drive`, or a user abort. **However it ends, you reach this phase, and your first act is to close the browser (5.1)** — you generated `SESSION_NAME` in 1.3 and own it, so you are the guaranteed backstop. The close needs nothing from the teammates, so it goes first and never waits on the shutdown handshake.
@@ -249,8 +239,8 @@ Compose a tight summary. Drive-mode shape:
 >
 > Library: curator wrote N new (<names>), patched M (<names>), split K (<names>) — or "no changes — covered by the existing library".
 >
-> Hint files updated: <one line per file>.
-> (Omit this header if no proposals were surfaced or all were rejected.)
+> Worth a hint? <if the driver's ping carried a "Hint worth adding" line — one gentle sentence: "the `finish` button needed `dispatchEvent` again — want me to add a note to `forge.md` so future runs handle it from the start?">
+> (Include this line **only** if the driver flagged a recurring pattern; otherwise omit it entirely. It's a suggestion, never a blocking question — the run is already wrapped. If the user says yes, `Edit` the one line into `forge.md` then; if they don't, drop it.)
 >
 > Browser session closed.
 

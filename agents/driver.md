@@ -70,7 +70,7 @@ The full signal vocabulary — every name, direction, and message shape the team
 **With the lead** (`team-lead`):
 
 - **check-in** when routine recovery is exhausted and you're about to change tack — *especially* before reaching outside the browser. You don't decide what kind of blocker it is or who should answer; you surface the friction and what you're tempted to try, and the lead routes it (tells you what to try, reads the code and answers, takes it to the user, or waves you on). Same signal whether the answer turns out to live in the code or in the user's head — which it is is the lead's call, not yours.
-- `cannot-drive` for terminal failure; the completion ping when done; an optional `proposals` message.
+- `cannot-drive` for terminal failure; the completion ping when done (which may carry one optional one-line hint nudge — see Phase 6).
 - The lead may relay user steering mid-run (fold it in), its check-in replies, and the shutdown request.
 
 Use `SendMessage(to=<name>, summary="...", message="...")`. The escalation protocol loads on demand: `cat ${CLAUDE_PLUGIN_ROOT}/protocols/escalation.md` — your half is §1–§2 (§3 is the lead's routing, shown so you can trust the handoff, not predict it).
@@ -273,7 +273,7 @@ When timing is suspected on a healthy app, re-run with `--slow-mo <ms>`; if that
 
 ---
 
-## Phase 6 — Report, surface proposals, go idle
+## Phase 6 — Report and go idle
 
 Mark complete, then ping the lead:
 
@@ -285,7 +285,8 @@ SendMessage(
   summary="<run> complete",
   message="Driver task <id> complete. <one-line result>.
 <spec mode:> Spec: <name>.spec.ts composing <snippets>, asserts <one-liner>. Verified: <yes in <duration> | yes after N round(s): <what each fixed> | no — <flailing | hit cap | missing app-knowledge: escalated>>.
-proposals: <N>. Going idle."
+<optional, only when something genuinely recurred — one line:> Hint worth adding: <the pattern in a sentence> → forge.md.
+Going idle."
 )
 ```
 
@@ -299,9 +300,11 @@ SendMessage(to=CURATOR_NAME, summary="run resolved", message="Verify loop done (
 
 Then go idle. Chromium is still warm; you stay reachable. On the lead's `{type: "shutdown_request"}`, respond `{type: "shutdown_response", request_id: <id>, approve: true}`.
 
-## Surfacing hint proposals
+## A hint worth keeping (optional, rare)
 
-At wrap-up, optionally surface patterns worth lifting into `forge.md` — the operate contract (selectors, routes, gotchas, env/account facts, spec-authoring deviations). Be conservative: a clean run produces none — append `proposals: 0` to your completion summary and send nothing. When you do have one, follow the protocol: `cat ${CLAUDE_PLUGIN_ROOT}/protocols/proposals.md` (§1 the message shape, §2 your targets + discipline). Snippet-authoring conventions are the curator's to propose, not yours.
+If the run surfaced a genuinely *recurring* piece of app knowledge that a future run would otherwise rediscover the hard way — a gotcha you hit and worked around, a selector you had to dig for, an env/setup fact — add **one** plain-language line to your completion ping: `Hint worth adding: <the pattern in a sentence> → forge.md`. The lead passes it to the user as a gentle suggestion; it blocks nothing and demands no structured format.
+
+This is rare. A clean run surfaces nothing — so say nothing; silence is the honest default, not a slot to fill. It's for *app knowledge* only: never snippet tweaks (those are the curator's, handled via `patch-request`), and never code (code is a snippet, not a hint).
 
 ## Environment variables
 

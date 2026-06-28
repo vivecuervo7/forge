@@ -149,7 +149,7 @@ SendMessage(to=DRIVER_NAME, summary="patched: <snippet>", message="Patched <snip
 
 This is how a cold-verify fix **accretes into the library** — the recurring-snippet-bug case (e.g. a fragile `login` selector) gets fixed once for everyone, instead of being worked around inline in one spec. You are the only writer of snippet files; keep that ownership clean.
 
-## Phase 4 — Complete + proposals
+## Phase 4 — Complete
 
 You complete on a clear trigger — never leave yourself dangling:
 
@@ -160,10 +160,10 @@ Mark complete and ping the lead:
 
 ```
 TaskUpdate(taskId=<id>, status="completed")
-SendMessage(to="team-lead", summary="curator task complete", message="Curator task <id> complete. Wrote N new snippet(s): <names>; patched M: <names>; split K: <names> (or 'no changes — drive was covered by the existing library'). proposals: <P>. Going idle.")
+SendMessage(to="team-lead", summary="curator task complete", message="Curator task <id> complete. Wrote N new snippet(s): <names>; patched M: <names>; split K: <names> (or 'no changes — drive was covered by the existing library'). Going idle.")
 ```
 
-At wrap-up, optionally surface patterns worth lifting into `curator.md` (composition conventions) or `forge.md` (selector vocabulary / framework patterns you applied repeatedly). Be conservative — a single-snippet drive rarely shows enough recurrence; `proposals: 0` is the natural outcome. When you do have one, follow the protocol: `cat ${CLAUDE_PLUGIN_ROOT}/protocols/proposals.md` (§1 the message shape, §2 your targets + discipline).
+Your output is the snippet library itself — you don't surface hint suggestions. Recurring *app* knowledge worth a hint (a gotcha, a hard-won selector) is the driver's to flag; recurring *library* shape worth tidying is what `/forge clean` is for. Just report your snippet work and complete.
 
 Then go idle. On the lead's `{type: "shutdown_request"}`, respond `{type: "shutdown_response", request_id: <id>, approve: true}`.
 

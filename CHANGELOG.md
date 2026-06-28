@@ -5,6 +5,19 @@ every version bump. The full granular history is in the git log. Forge is young
 and pre-1.0 (built over June 2026), so a minor version can still carry a
 meaningful architecture change.
 
+## 0.41.0 — Hint proposals become a gentle nudge (2026-06-28)
+
+- Removed the formal end-of-run hint-proposal protocol (`protocols/proposals.md`,
+  the structured `PROPOSALS` message, the lead's lint, and the per-item
+  accept/reject review). A mandatory "emit proposals" slot manufactured noise —
+  pulling agents toward marginal, snippet-adjacent suggestions even when the
+  honest answer was nothing — and its review blocked teardown.
+- In its place: the driver may append a single optional `Hint worth adding: …`
+  line to its completion ping, and the lead surfaces it in the wrap-up summary as
+  a gentle, non-blocking offer to add a line to `forge.md`. A clean run says
+  nothing. App knowledge only — snippet fixes stay the curator's (via patches),
+  and `/forge clean` remains the deliberate library-curation sweep.
+
 ## 0.40.0 — Operate vs curate hints (2026-06-28)
 
 - Hint files collapse onto a single boundary: **`forge.md`** (operate the app —

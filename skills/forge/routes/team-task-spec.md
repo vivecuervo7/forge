@@ -48,8 +48,7 @@ Override the base file's drive-mode report with the spec-mode version:
 > (or: "Verified after <N> round(s): <one line on what each round fixed — e.g. 'round 1 found the Size combobox disabled until the options fetch resolved → added a waitFor to the snippet'>".)
 > (or: "Did not match intent after <N> round(s) — **verified: no**. <landing-fixes-but-hit-cap | flailing | missing app-knowledge: escalated to user>. See <details>.")
 >
-> Hint files updated: <one line per file with summary>.
-> (Omit this header entirely if no proposals were surfaced or all were rejected.)
+> Worth a hint? <only if the driver's ping carried a "Hint worth adding" line — one gentle sentence offering to add it to `forge.md`; never a blocking question. Omit entirely otherwise.>
 >
 > Browser session closed.
 
