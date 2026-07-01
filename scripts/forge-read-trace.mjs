@@ -135,16 +135,22 @@ function runCodeBody(cmd) {
 function format(a, results) {
   const cmd = a.command
   const res = results.get(a.id) || ''
-  if (cmd.includes('forge-invoke-snippet.mjs')) {
-    const m = cmd.match(/--snippet\s+\S*\/([\w-]+)\.ts/)
+  // The driver may wrap a command across lines with `\`-continuations. A
+  // `\`<newline> isn't whitespace, so it defeats the verb / run-code-body /
+  // snippet regexes below — silently dropping the echoed code (a run-code body
+  // renders as `—`). Collapse each continuation to a single space so matching
+  // sees one flat command regardless of how the driver formatted it.
+  const normCmd = cmd.replace(/\s*\\\n\s*/g, ' ')
+  if (normCmd.includes('forge-invoke-snippet.mjs')) {
+    const m = normCmd.match(/--snippet\s+\S*\/([\w-]+)\.ts/)
     return `── invoked snippet ──\n  ${m ? m[1] : '(unknown)'}  (reuse — not new authoring)`
   }
-  const vm = cmd.match(/forge-pw\.mjs\s+-s=\S+\s+([\w-]+)/)
+  const vm = normCmd.match(/forge-pw\.mjs\s+-s=\S+\s+([\w-]+)/)
   const verb = vm ? vm[1] : '(?)'
   if (verb === 'snapshot' || verb === 'open') {
     return `── ${verb} ──  (orientation — no snippet code)`
   }
-  const echo = extractEcho(res) || (verb === 'run-code' ? runCodeBody(cmd) : null)
+  const echo = extractEcho(res) || (verb === 'run-code' ? runCodeBody(normCmd) : null)
   const returned = extractReturned(res)
   let block = `── drove fresh: ${verb === 'run-code' ? 'run-code' : `forge-pw ${verb}`} ──\n`
   block += `  playwright:\n${echo ? echo.split('\n').map((l) => '    ' + l).join('\n') : '    —'}`
