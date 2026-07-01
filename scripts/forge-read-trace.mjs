@@ -128,7 +128,10 @@ function extractReturned(text) {
 }
 
 function runCodeBody(cmd) {
-  const m = cmd.match(/run-code\s+(['"])([\s\S]*)\1\s*$/)
+  // No end-anchor: the driver appends flags (e.g. `--json`) after the body, so
+  // the closing quote isn't at end-of-command. Greedy `[\s\S]*` still lands on
+  // the true closing quote — trailing flags carry no quote of their own.
+  const m = cmd.match(/run-code\s+(['"])([\s\S]*)\1/)
   return m ? m[2] : null
 }
 
