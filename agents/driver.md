@@ -164,6 +164,16 @@ Each native command echoes the equivalent Playwright code in a `### Ran Playwrig
 
 **Locator stability** — trust the snapshot's semantic `getByRole`/`getByLabel` locators by default. Override when `forge.md` documents a more durable selector or the echoed locator looks fragile.
 
+**Cheap perception via `forge-observe`** (experimental) — a raw snapshot re-read every turn is mostly structural `generic` wrappers and static text you never act on. Instead, snapshot to a file and read the *filtered* view: interactable elements with their `[ref]` handles + error/alert signals, and change markers (`+` new / `~` changed / `-` gone) since your last observe.
+
+```bash
+mkdir -p <PROJECT_FORGE_ROOT>/.observe
+node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-pw.mjs -s=<SESSION_NAME> snapshot --filename=<PROJECT_FORGE_ROOT>/.observe/<SESSION_NAME>.yaml
+node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-observe.mjs <PROJECT_FORGE_ROOT>/.observe/<SESSION_NAME>.yaml --session=<SESSION_NAME>
+```
+
+Act on the `[ref]` handles it prints exactly as with a raw snapshot — the default view keeps every element's *current* ref, so it's always safe. Reason over this instead of the raw snapshot; drop to reading the snapshot file (or add `--full`) when you need complete structure. Add `--diff` to see only what changed — cheapest, but it reshows only changed elements (whose refs shift each snapshot), so use it to *confirm an action's effect*, not to pick up an unchanged element to click. This is **perception only** — it never enters your trace, so it doesn't affect the spec you compose (that still comes from your action echoes and `run-code` bodies).
+
 ### Signal each meaningful chunk to the curator
 
 A **meaningful chunk** is a discrete logical unit (login, add-to-cart, fill-a-form-section), a multi-action sequence accomplishing one purpose, or a value extraction worth preserving — **not** orientation snapshots, recovery attempts, or mid-step probes. As each completes, fire the async `chunk complete` signal (above) and keep driving. The curator authors concurrently from your trace; you don't wait.
