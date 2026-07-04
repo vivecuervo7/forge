@@ -23,14 +23,20 @@
 //   --session=<name>  namespaces the diff state (default: "default")
 //   --state=<path>    where prior state is kept (default: alongside the snapshot,
 //                     `.forge-observe-<session>.json`)
-//   --full            always print the full filtered view (skip diffing)
+//   --diff            aggressive: print only what changed since the last observe
+//   --full            print a plain full view and reset the comparison baseline
 //
 // Behaviour:
-//   - No prior state for the session, or churn vs prior is high (a navigation) →
-//     prints the full filtered view and re-baselines.
-//   - Otherwise prints the diff (+ added / - removed / ~ value-changed) keyed on
-//     role+name (NOT ref — refs are reassigned every snapshot; and NOT id —
-//     ids are volatile, e.g. GUID-suffixed error ids).
+//   - Default → full filtered list with change markers (+ new / ~ changed /
+//     blank unchanged, and - removed lines). Every element keeps its CURRENT
+//     ref, so it's always safe to act on, while the markers still surface what
+//     moved. Changes are keyed on role+name (NOT ref — refs are reassigned every
+//     snapshot; and NOT id — ids are volatile, e.g. GUID-suffixed error ids).
+//   - `--diff` → only the changed lines. Cheapest, but unchanged elements aren't
+//     reshown and their refs shift per snapshot — use to confirm an action's
+//     effect, not to pick up an unchanged element to click. High churn (a
+//     navigation) auto-falls back to the full view.
+//   - No prior state, or `--full` → plain full view (baseline).
 //
 // Exit codes:
 //   0  observed (full or diff printed)
@@ -53,9 +59,10 @@ const REBASELINE_CHURN = 0.6
 const approxTok = s => Math.ceil((s?.length || 0) / 4)
 
 function parseArgs(argv) {
-  const opts = { session: 'default', state: null, full: false, file: null }
+  const opts = { session: 'default', state: null, full: false, diff: false, file: null }
   for (const a of argv) {
     if (a === '--full') opts.full = true
+    else if (a === '--diff') opts.diff = true
     else if (a.startsWith('--session=')) opts.session = a.slice('--session='.length)
     else if (a.startsWith('--state=')) opts.state = a.slice('--state='.length)
     else if (!a.startsWith('--')) opts.file = a
@@ -93,10 +100,41 @@ function extract(yaml) {
   return items
 }
 
+function line(it, marker = '  ') {
+  return `${marker}[${it.ref || '?'}] ${it.role} ${JSON.stringify(it.name)}` +
+    (it.state ? ` = ${JSON.stringify(it.state)}` : '')
+}
 function renderFull(items) {
-  return items.map(it =>
-    `[${it.ref || '?'}] ${it.role} ${JSON.stringify(it.name)}` +
-    (it.state ? ` = ${JSON.stringify(it.state)}` : '')).join('\n')
+  return items.map(it => line(it)).join('\n')
+}
+
+// Full list with change markers vs prior (+ new, ~ changed, blank unchanged),
+// plus removed lines. Every current element keeps its CURRENT ref — safe to act
+// on — while the markers still surface what moved. This is the default: refs are
+// reassigned per snapshot, so a pure diff (--diff) can leave stale refs for
+// unchanged elements the driver still needs to click.
+function renderAnnotated(prev, curr) {
+  const pstate = new Map(prev.map(it => [it.key, it.state || '']))
+  const pkeys = new Map()
+  for (const it of prev) pkeys.set(it.key, (pkeys.get(it.key) || 0) + 1)
+  const seen = new Map()
+  const lines = curr.map(it => {
+    const n = (seen.get(it.key) || 0) + 1; seen.set(it.key, n)
+    let marker = '  '
+    if (!pkeys.has(it.key) || n > pkeys.get(it.key)) marker = '+ '
+    else if ((pstate.get(it.key) || '') !== (it.state || '')) marker = '~ '
+    return line(it, marker)
+  })
+  const ckeys = new Map()
+  for (const it of curr) ckeys.set(it.key, (ckeys.get(it.key) || 0) + 1)
+  for (const it of prev) {
+    if ((ckeys.get(it.key) || 0) < (pkeys.get(it.key) || 0)) {
+      lines.push(`- ${it.role} ${JSON.stringify(it.name)}`)
+      pkeys.set(it.key, pkeys.get(it.key) - 1) // emit each removal once
+    }
+  }
+  const changed = lines.filter(l => l[0] === '+' || l[0] === '~' || l[0] === '-').length
+  return { body: lines.join('\n'), changed }
 }
 
 // Diff two extracted lists. Collapses duplicate keys (presence-based): a signal
@@ -125,7 +163,7 @@ function diff(prev, curr) {
 // --- main ---
 const opts = parseArgs(process.argv.slice(2))
 if (!opts.file) {
-  console.error('forge-observe: usage: forge-observe.mjs <snapshot.yaml> [--session=<name>] [--state=<path>] [--full]')
+  console.error('forge-observe: usage: forge-observe.mjs <snapshot.yaml> [--session=<name>] [--state=<path>] [--diff] [--full]')
   process.exit(2)
 }
 
@@ -151,26 +189,30 @@ if (!opts.full && existsSync(statePath)) {
 }
 
 const rawTok = approxTok(yaml)
-let out, mode, tok
+let out, mode
 if (!prior) {
-  const body = renderFull(items)
-  out = body
+  // No prior (or --full forced a reset): plain full baseline.
+  out = renderFull(items)
   mode = opts.full ? 'full (forced)' : 'full (baseline)'
-  tok = approxTok(body)
-} else {
+} else if (opts.diff) {
+  // Aggressive: only what changed. Cheapest, but refs for unchanged elements
+  // are not reshown (and shift per snapshot) — use to confirm effects, not to
+  // pick up an unchanged element to act on.
   const d = diff(prior, items)
   if (d.churn >= REBASELINE_CHURN) {
-    const body = renderFull(items)
-    out = body
+    out = renderFull(items)
     mode = `full (re-baseline: churn ${(d.churn * 100).toFixed(0)}%)`
-    tok = approxTok(body)
   } else {
-    const body = d.lines.length ? d.lines.join('\n') : '(no interactable changes)'
-    out = body
+    out = d.lines.length ? d.lines.join('\n') : '(no interactable changes)'
     mode = `diff (${d.lines.length} change${d.lines.length === 1 ? '' : 's'})`
-    tok = approxTok(body)
   }
+} else {
+  // Default: full filtered list with change markers — current refs everywhere.
+  const a = renderAnnotated(prior, items)
+  out = a.body
+  mode = `full+marks (${a.changed} changed)`
 }
+const tok = approxTok(out)
 
 try {
   writeFileSync(statePath, JSON.stringify({ session: opts.session, items }))
