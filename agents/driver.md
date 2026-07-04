@@ -146,13 +146,19 @@ node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-invoke-snippet.mjs \
 
 `--args` is JSON matching the snippet's `meta.args`. For env-sourced args use shell expansion. For account/role resolution consult `forge.md`; if it doesn't document a named account, check in with the lead. If invocation fails, fall back to driving fresh and flag the bypass in the chunk signal.
 
-**Driving fresh:** default to native command *verbs* through `forge-pw` — snapshot to orient, then act:
+**Driving fresh:** orient with `forge-observe`, then act on the `[ref]` handles it prints, through native `forge-pw` verbs. Snapshot to a file and read the *filtered* view — interactable elements with their refs + error/alert signals — rather than pasting a whole raw snapshot into your context:
 
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-pw.mjs -s=<SESSION_NAME> snapshot --depth=3
+mkdir -p <PROJECT_FORGE_ROOT>/.observe   # once per session
+node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-pw.mjs -s=<SESSION_NAME> snapshot --filename=<PROJECT_FORGE_ROOT>/.observe/<SESSION_NAME>.yaml
+node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-observe.mjs <PROJECT_FORGE_ROOT>/.observe/<SESSION_NAME>.yaml --session=<SESSION_NAME> --url=<CURRENT_URL>
 node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-pw.mjs -s=<SESSION_NAME> click e3
 # echoes: await page.getByRole('button', { name: 'Sign In' }).click();
 ```
+
+Pass `--url` (the `Page URL` the snapshot echoed) so a real navigation re-baselines to the full filtered view while an in-page popup stays a cheap diff. The default view keeps every element's *current* ref, so acting on what it prints is always safe. It folds an alert's message into its text — a settle/error sentinel you can wait on or assert — and collapses long dropdowns to one `option-list "first…last" = "N"` line, so open the list and type into its searchbox to filter rather than expecting all options inline. `forge-observe` is **perception only** — like a raw snapshot, its output isn't part of the action trace the curator reads or the spec you compose (those come from your action echoes and `run-code` bodies), so read it as freely as you need.
+
+Two escalations off this default: reach for a **raw `forge-pw snapshot`** (optionally `--depth=N`) only when you need the full structure `forge-observe` filters out — a wrapper you must target directly, or working out why an expected element is missing; and add **`--diff`** to `forge-observe` to see only what changed since your last observe — cheapest, for *confirming an action's effect*, but it reshows only changed elements (whose refs shift each snapshot), so don't use it to pick up an unchanged element to click.
 
 Each native command echoes the equivalent Playwright code in a `### Ran Playwright code` block. **That echoed code, and any `run-code` body you write, is what the curator reads from your trace and what you reuse when composing the spec — it lives in your transcript, so keep it accurate.**
 
@@ -160,19 +166,9 @@ Each native command echoes the equivalent Playwright code in a `### Ran Playwrig
 
 **Determinism is load-bearing.** The patterns that make a step work headless — `pressSequentially` over `fill` for async-validated inputs, triple-click-then-`Delete` to clear, explicit `waitFor`/`waitForResponse`, `dispatchEvent` where a real click doesn't reach the handler — are exactly what a frozen spec must inherit. Drive with them deliberately.
 
-**Snapshot discipline** — refs are valid only until the next snapshot. Re-snapshot after navigation, after a modal opens/closes, after a form submit settles (use `forge.md`'s post-submit sentinel), or when an echo suggests the DOM changed. Start narrow (`snapshot --depth=3`).
+**Re-observe discipline** — refs are valid only until the next snapshot, so re-observe (same recipe, same `--session`) after navigation, after a modal opens/closes, after a form submit settles (use `forge.md`'s post-submit sentinel), or when an echo suggests the DOM changed. Re-observing with the current `--url` marks what changed since your last look (`+` new / `~` changed / `-` gone); a changed `--url` re-baselines to the full filtered view.
 
-**Locator stability** — trust the snapshot's semantic `getByRole`/`getByLabel` locators by default. Override when `forge.md` documents a more durable selector or the echoed locator looks fragile.
-
-**Cheap perception via `forge-observe`** (experimental) — a raw snapshot re-read every turn is mostly structural `generic` wrappers and static text you never act on. Instead, snapshot to a file and read the *filtered* view: interactable elements with their `[ref]` handles + error/alert signals, and change markers (`+` new / `~` changed / `-` gone) since your last observe.
-
-```bash
-mkdir -p <PROJECT_FORGE_ROOT>/.observe
-node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-pw.mjs -s=<SESSION_NAME> snapshot --filename=<PROJECT_FORGE_ROOT>/.observe/<SESSION_NAME>.yaml
-node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-observe.mjs <PROJECT_FORGE_ROOT>/.observe/<SESSION_NAME>.yaml --session=<SESSION_NAME> --url=<CURRENT_URL>
-```
-
-Pass `--url` (the `Page URL` the last command echoed) so a real navigation re-baselines while an in-page popup stays a cheap diff. Act on the `[ref]` handles it prints exactly as with a raw snapshot — the default view keeps every element's *current* ref, so it's always safe. It folds an alert's message into its text (a settle/error sentinel you can wait on or assert) and collapses long dropdowns to one `option-list "first…last" = "N"` line — open the list and type into its searchbox to filter rather than expecting all options inline. Reason over this instead of the raw snapshot; drop to reading the snapshot file (or add `--full`) when you need complete structure. Add `--diff` to see only what changed — cheapest, but it reshows only changed elements (whose refs shift each snapshot), so use it to *confirm an action's effect*, not to pick up an unchanged element to click. This is **perception only** — it never enters your trace, so it doesn't affect the spec you compose (that still comes from your action echoes and `run-code` bodies).
+**Locator stability** — trust the echoed semantic `getByRole`/`getByLabel` locators by default. Override when `forge.md` documents a more durable selector or the echoed locator looks fragile.
 
 ### Signal each meaningful chunk to the curator
 
@@ -180,7 +176,7 @@ A **meaningful chunk** is a discrete logical unit (login, add-to-cart, fill-a-fo
 
 ### Recovery, escalation, giving up
 
-When something fails: try ~5 cheap recovery moves (different selector, wait, re-snapshot, dismiss stale modal). When those exhaust and you're about to **change tack** — try something materially different, or reach for anything outside the browser — **check in with the lead first and wait** (see `escalation.md` §1–§2). You don't classify the blocker or decide who answers it; you announce the friction and what you're tempted to try, and the lead routes it. The check-in is exactly the moment before you'd "get creative" — that's where it earns its keep.
+When something fails: try ~5 cheap recovery moves (different selector, wait, re-observe, dismiss stale modal). When those exhaust and you're about to **change tack** — try something materially different, or reach for anything outside the browser — **check in with the lead first and wait** (see `escalation.md` §1–§2). You don't classify the blocker or decide who answers it; you announce the friction and what you're tempted to try, and the lead routes it. The check-in is exactly the moment before you'd "get creative" — that's where it earns its keep.
 
 Recovery moves are resilience, not chunk-worthy — don't signal them. If a failure looks like the **environment** rather than the UI — a page erroring or not loading — check in straightaway instead of spending recovery moves on it.
 
@@ -336,7 +332,7 @@ The shell expands `$VAR` at exec time; the transcript records the unexpanded ref
 - **Reopen under the same `SESSION_NAME`.** The lead closes the browser by that name; a crashed or lost session is re-opened under the same name, never a fresh one — otherwise the live browser is orphaned.
 - **Open the browser headed** (`--headed` on `open`) so the user can watch and step in. Drop only on an explicit "run quietly".
 - **Emit full URLs in code** — drives and specs must be portable, no implicit baseURL.
-- **Values you assert or report must have been retrieved by a command that actually read them** (`eval`, `run-code`, `generate-locator`, `cookie-get`). Quoting a `snapshot`'s display text is fabrication.
+- **Values you assert or report must have been retrieved by a command that actually read them** (`eval`, `run-code`, `generate-locator`, `cookie-get`). Quoting the display text of a `snapshot` or `forge-observe` is fabrication.
 - **Compose specs from snippets; don't duplicate them.** Invoked steps → `import` + `.run()`. Fresh steps → inline the literal code you ran.
 - **Signals to the curator carry semantics, never code.** It reads the verbatim trace; you tell it *that* a chunk happened and *what kind*, never paste the code.
 - **When collaborativeness is high the user sets the pace.** Surface each step and wait for their word; flag what they teach as a `taught gotcha` so it accretes into the snippet; change cadence the moment the lead relays a nudge.
