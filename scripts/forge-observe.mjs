@@ -17,14 +17,22 @@
 // perception half — the driver still reasons over the result.
 //
 // Usage:
-//   forge-observe.mjs <snapshot.yaml> [--session=<name>] [--state=<path>] [--full]
+//   forge-observe.mjs <snapshot.yaml> [--session=<name>] [--url=<url>] [--state=<path>] [--diff] [--full]
 //   forge-observe.mjs -            (read snapshot YAML from stdin)
 //
 //   --session=<name>  namespaces the diff state (default: "default")
+//   --url=<url>       the page's current URL — used to detect navigation (a
+//                     changed URL re-baselines; an in-page popup does not)
 //   --state=<path>    where prior state is kept (default: alongside the snapshot,
 //                     `.forge-observe-<session>.json`)
 //   --diff            aggressive: print only what changed since the last observe
 //   --full            print a plain full view and reset the comparison baseline
+//
+// Filtering: keeps interactables + signal roles (alert/status). Signals fold in
+// their descendant text (so an alert shows its message, not an empty name).
+// Long option runs collapse to one `option-list "first…last" = "N"` line (a big
+// dropdown is noise the driver filters via its searchbox). Interactables with
+// neither a ref nor a name are dropped as unactionable.
 //
 // Behaviour:
 //   - Default → full filtered list with change markers (+ new / ~ changed /
@@ -34,8 +42,8 @@
 //     snapshot; and NOT id — ids are volatile, e.g. GUID-suffixed error ids).
 //   - `--diff` → only the changed lines. Cheapest, but unchanged elements aren't
 //     reshown and their refs shift per snapshot — use to confirm an action's
-//     effect, not to pick up an unchanged element to click. High churn (a
-//     navigation) auto-falls back to the full view.
+//     effect, not to pick up an unchanged element to click.
+//   - Navigation (URL change, or high churn when no --url) → full view baseline.
 //   - No prior state, or `--full` → plain full view (baseline).
 //
 // Exit codes:
@@ -59,43 +67,82 @@ const REBASELINE_CHURN = 0.6
 const approxTok = s => Math.ceil((s?.length || 0) / 4)
 
 function parseArgs(argv) {
-  const opts = { session: 'default', state: null, full: false, diff: false, file: null }
+  const opts = { session: 'default', state: null, full: false, diff: false, url: null, file: null }
   for (const a of argv) {
     if (a === '--full') opts.full = true
     else if (a === '--diff') opts.diff = true
     else if (a.startsWith('--session=')) opts.session = a.slice('--session='.length)
     else if (a.startsWith('--state=')) opts.state = a.slice('--state='.length)
+    else if (a.startsWith('--url=')) opts.url = a.slice('--url='.length)
     else if (!a.startsWith('--')) opts.file = a
   }
   return opts
 }
 
+// Runs of options longer than this collapse to a single summary line — a big
+// dropdown (e.g. ~250 countries) is noise the driver filters via its searchbox.
+const OPTION_CAP = 8
+
 // One YAML snapshot line -> a node, or null if it isn't an element line.
-const LINE = /^\s*-\s+([^\s"[:]+)(?:\s+"((?:[^"\\]|\\.)*)")?((?:\s*\[[^\]]*\])*)\s*(?::\s*(.*?))?\s*$/
+const LINE = /^(\s*)-\s+([^\s"[:]+)(?:\s+"((?:[^"\\]|\\.)*)")?((?:\s*\[[^\]]*\])*)\s*(?::\s*(.*?))?\s*$/
 function parseLine(line) {
   const m = LINE.exec(line)
   if (!m) return null
-  const [, role, name = '', brackets = '', value = ''] = m
+  const [, indent, role, name = '', brackets = '', value = ''] = m
   const ref = (/\[ref=(e\d+)\]/.exec(brackets) || [])[1] || null
   const flags = FLAGS.filter(f => brackets.includes(`[${f}]`))
-  return { role, name, ref, flags, value: value.trim() }
+  return { indent: indent.length, role, name, ref, flags, value: value.trim() }
 }
 
-// Keep only interactables + signals. `key` collapses duplicates for diffing;
-// `state` folds in the value + flags that a diff should notice.
+// Gather the text a node carries in its descendants (indented deeper), so a
+// signal like `alert:` → `listitem: "Please provide…"` surfaces its message
+// rather than an empty name.
+function descendantText(nodes, i) {
+  const parts = nodes[i].value ? [nodes[i].value] : []
+  for (let j = i + 1; j < nodes.length && nodes[j].indent > nodes[i].indent; j++) {
+    if (nodes[j].value) parts.push(nodes[j].value)
+    else if (nodes[j].name && !INTERACTABLE.has(nodes[j].role)) parts.push(nodes[j].name)
+  }
+  return parts.join(' ').trim().slice(0, 100)
+}
+
+// Parse -> items. Signals fold in their descendant text (and don't collapse —
+// two alerts with different messages are different). Interactables with neither
+// a ref nor a name are unactionable noise (e.g. a hidden native `combobox`) and
+// are dropped. Long option runs collapse to one summary line.
 function extract(yaml) {
+  const nodes = yaml.split('\n').map(parseLine).filter(Boolean)
+  const raw = []
+  for (let i = 0; i < nodes.length; i++) {
+    const n = nodes[i]
+    if (SIGNAL.has(n.role)) {
+      const text = n.name || descendantText(nodes, i)
+      raw.push({ role: n.role, name: text, ref: n.ref, key: `${n.role}|${text}`, state: '' })
+    } else if (INTERACTABLE.has(n.role)) {
+      if (!n.ref && !n.name) continue // unactionable, unlabelled — noise
+      raw.push({
+        role: n.role, name: n.name, ref: n.ref,
+        key: `${n.role}|${n.name}`,
+        state: [n.value, ...n.flags].filter(Boolean).join(','),
+      })
+    }
+  }
+  // Collapse consecutive option runs longer than OPTION_CAP.
   const items = []
-  for (const raw of yaml.split('\n')) {
-    const node = parseLine(raw)
-    if (!node) continue
-    if (!INTERACTABLE.has(node.role) && !SIGNAL.has(node.role)) continue
-    items.push({
-      role: node.role,
-      name: node.name,
-      ref: node.ref,
-      key: `${node.role}|${node.name}`,
-      state: [node.value, ...node.flags].filter(Boolean).join(','),
-    })
+  for (let i = 0; i < raw.length;) {
+    if (raw[i].role === 'option') {
+      let j = i
+      while (j < raw.length && raw[j].role === 'option') j++
+      const run = raw.slice(i, j)
+      if (run.length > OPTION_CAP) {
+        items.push({
+          role: 'option-list', ref: run[0].ref,
+          name: `${run[0].name}…${run[run.length - 1].name}`,
+          key: 'option-list', state: String(run.length),
+        })
+      } else items.push(...run)
+      i = j
+    } else { items.push(raw[i]); i++ }
   }
   return items
 }
@@ -163,7 +210,7 @@ function diff(prev, curr) {
 // --- main ---
 const opts = parseArgs(process.argv.slice(2))
 if (!opts.file) {
-  console.error('forge-observe: usage: forge-observe.mjs <snapshot.yaml> [--session=<name>] [--state=<path>] [--diff] [--full]')
+  console.error('forge-observe: usage: forge-observe.mjs <snapshot.yaml> [--session=<name>] [--url=<current-url>] [--state=<path>] [--diff] [--full]')
   process.exit(2)
 }
 
@@ -183,23 +230,28 @@ const items = extract(yaml)
 const statePath = opts.state ||
   join(opts.file === '-' ? process.cwd() : dirname(opts.file), `.forge-observe-${opts.session}.json`)
 
-let prior = null
+let priorState = null
 if (!opts.full && existsSync(statePath)) {
-  try { prior = JSON.parse(readFileSync(statePath, 'utf8')).items } catch { prior = null }
+  try { priorState = JSON.parse(readFileSync(statePath, 'utf8')) } catch { priorState = null }
 }
+const prior = priorState?.items || null
+const priorUrl = priorState?.url || null
+const navigated = !!(opts.url && priorUrl && opts.url !== priorUrl)
 
 const rawTok = approxTok(yaml)
 let out, mode
-if (!prior) {
-  // No prior (or --full forced a reset): plain full baseline.
+if (!prior || navigated) {
+  // Fresh page: plain full baseline. Navigation is detected by URL change (when
+  // --url is supplied), not by churn — an in-page popup isn't a navigation.
   out = renderFull(items)
-  mode = opts.full ? 'full (forced)' : 'full (baseline)'
+  mode = navigated ? 'full (navigation)' : (opts.full ? 'full (forced)' : 'full (baseline)')
 } else if (opts.diff) {
   // Aggressive: only what changed. Cheapest, but refs for unchanged elements
   // are not reshown (and shift per snapshot) — use to confirm effects, not to
   // pick up an unchanged element to act on.
   const d = diff(prior, items)
-  if (d.churn >= REBASELINE_CHURN) {
+  if (!opts.url && d.churn >= REBASELINE_CHURN) {
+    // No URL to judge navigation by — fall back to the churn heuristic.
     out = renderFull(items)
     mode = `full (re-baseline: churn ${(d.churn * 100).toFixed(0)}%)`
   } else {
@@ -215,7 +267,7 @@ if (!prior) {
 const tok = approxTok(out)
 
 try {
-  writeFileSync(statePath, JSON.stringify({ session: opts.session, items }))
+  writeFileSync(statePath, JSON.stringify({ session: opts.session, url: opts.url ?? priorUrl ?? null, items }))
 } catch { /* best-effort; a missing state file just forces a baseline next time */ }
 
 const sigs = items.filter(it => SIGNAL.has(it.role)).length

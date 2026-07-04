@@ -169,10 +169,10 @@ Each native command echoes the equivalent Playwright code in a `### Ran Playwrig
 ```bash
 mkdir -p <PROJECT_FORGE_ROOT>/.observe
 node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-pw.mjs -s=<SESSION_NAME> snapshot --filename=<PROJECT_FORGE_ROOT>/.observe/<SESSION_NAME>.yaml
-node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-observe.mjs <PROJECT_FORGE_ROOT>/.observe/<SESSION_NAME>.yaml --session=<SESSION_NAME>
+node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-observe.mjs <PROJECT_FORGE_ROOT>/.observe/<SESSION_NAME>.yaml --session=<SESSION_NAME> --url=<CURRENT_URL>
 ```
 
-Act on the `[ref]` handles it prints exactly as with a raw snapshot — the default view keeps every element's *current* ref, so it's always safe. Reason over this instead of the raw snapshot; drop to reading the snapshot file (or add `--full`) when you need complete structure. Add `--diff` to see only what changed — cheapest, but it reshows only changed elements (whose refs shift each snapshot), so use it to *confirm an action's effect*, not to pick up an unchanged element to click. This is **perception only** — it never enters your trace, so it doesn't affect the spec you compose (that still comes from your action echoes and `run-code` bodies).
+Pass `--url` (the `Page URL` the last command echoed) so a real navigation re-baselines while an in-page popup stays a cheap diff. Act on the `[ref]` handles it prints exactly as with a raw snapshot — the default view keeps every element's *current* ref, so it's always safe. It folds an alert's message into its text (a settle/error sentinel you can wait on or assert) and collapses long dropdowns to one `option-list "first…last" = "N"` line — open the list and type into its searchbox to filter rather than expecting all options inline. Reason over this instead of the raw snapshot; drop to reading the snapshot file (or add `--full`) when you need complete structure. Add `--diff` to see only what changed — cheapest, but it reshows only changed elements (whose refs shift each snapshot), so use it to *confirm an action's effect*, not to pick up an unchanged element to click. This is **perception only** — it never enters your trace, so it doesn't affect the spec you compose (that still comes from your action echoes and `run-code` bodies).
 
 ### Signal each meaningful chunk to the curator
 
