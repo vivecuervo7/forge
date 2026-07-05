@@ -70,13 +70,34 @@ cat <PLUGIN_ROOT>/protocols/collaborativeness.md
 
 `escalation.md` — you route the driver's check-ins per its **Lead side** (§3); loading it keeps the protocol and message shapes a single source of truth shared with the driver (it `cat`s the same file on friction). `collaborativeness.md` — you read the **deference** column to know how readily to involve the user at this run's `COLLABORATIVENESS` level, and you hold/step that level through the run.
 
-### 1.3. Generate a session name
+### 1.2b. Decide headed vs headless (default: headless + dashboard)
+
+Drives run **headless** by default — the user watches via the Playwright dashboard (opened in 1.3b), which renders headless sessions live without a window stealing focus or trapping their typing. Set **`HEADED: true`** only when:
+- `COLLABORATIVENESS` is `step-by-step` (teach — the user physically walks the flow through the browser), **or**
+- the user's framing asks to see it ("watch", "headed", "let me take the wheel", "I'll drive"), **or**
+- the headed setting is on — a project/user can export `FORGE_HEADED=1`: `[ -n "$FORGE_HEADED" ] && echo headed || echo headless`.
+
+Otherwise `HEADED: false`. Capture as `HEADED`.
+
+### 1.3. Generate a session name (descriptive — it labels the dashboard)
+
+Build `SESSION_NAME` as `ft-<slug>-<rand>`: `<slug>` = a 2–4-word kebab-case gist of `USER_TASK` (e.g. `add-hammer-to-cart`), `<rand>` = 4 hex chars —
 
 ```bash
-echo "ft-$(node -e 'console.log(require("crypto").randomBytes(4).toString("hex"))')"
+node -e 'console.log(require("crypto").randomBytes(2).toString("hex"))'
 ```
 
-Capture as `SESSION_NAME`. The driver uses it to launch/reference the browser; phase 5 uses it to close it.
+Capture as `SESSION_NAME` (e.g. `ft-add-hammer-to-cart-9f3a`). A descriptive name keeps the dashboard's session list legible instead of an opaque `ft-6ac5eecb`. The driver launches/references the browser by it; phase 5 closes it.
+
+### 1.3b. Open the dashboard (headless runs only)
+
+If `HEADED` is false, open the Playwright dashboard so the user can watch — best-effort and idempotent (it opens only if not already running, so it never steals focus mid-session):
+
+```bash
+node <PLUGIN_ROOT>/scripts/forge-dashboard.mjs
+```
+
+Skip when `HEADED` is true (the real browser window is the view). If it can't open, the drive continues headless regardless — note once that the user can run `playwright-cli show` themselves to watch.
 
 ### 1.3a. Check cleanup staleness (silent — surface at end)
 
@@ -127,6 +148,7 @@ Agent(
   name="driver",
   prompt="MODE: <MODE>
 COLLABORATIVENESS: <COLLABORATIVENESS>
+HEADED: <HEADED>
 SESSION_NAME: <SESSION_NAME>
 PROJECT_FORGE_ROOT: <FORGE_ROOT>
 CURATOR_NAME: curator

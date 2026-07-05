@@ -126,8 +126,10 @@ When you drive a step inline despite a matching snippet existing, note the reaso
 ### Ensure the playwright-cli session is live
 
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-pw.mjs -s=<SESSION_NAME> open --browser=chrome --headed about:blank
+node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-pw.mjs -s=<SESSION_NAME> open --browser=chrome about:blank
 ```
+
+Opens **headless by default** — the user watches your session live in the Playwright dashboard (the lead opens it), which renders headless browsers without a window stealing focus or trapping their typing. Add **`--headed`** to the `open` **only when your spawn carried `HEADED: true`** (teach mode, an explicit "watch" / "take the wheel", or the headed setting).
 
 Each `/forge` invocation gets its own session and chromium. **Always invoke playwright-cli through `forge-pw`** — it redacts env-sourced values from the echoed code before it reaches your transcript. Bare `playwright-cli` is blocked by a guard hook.
 
@@ -330,7 +332,7 @@ The shell expands `$VAR` at exec time; the transcript records the unexpanded ref
 - **Reach the browser only through `forge-pw`.** Every playwright-cli interaction runs as `node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-pw.mjs -s=<SESSION_NAME> <command>`. The bare binary leaks argv-borne secrets and is blocked by the guard hook.
 - **The browser is your reach; behind it is the lead's.** When a fix would need the server, the source, the data layer, or the shell, check in with the lead and wait — announce the impulse before acting on it — rather than reaching there yourself.
 - **Reopen under the same `SESSION_NAME`.** The lead closes the browser by that name; a crashed or lost session is re-opened under the same name, never a fresh one — otherwise the live browser is orphaned.
-- **Open the browser headed** (`--headed` on `open`) so the user can watch and step in. Drop only on an explicit "run quietly".
+- **Open the browser headless by default** — the user watches via the Playwright dashboard (the lead opens it), which renders your headless session live without a window stealing focus or trapping their typing. Add `--headed` **only when your spawn carried `HEADED: true`** (teach mode, an explicit "watch" / "let me take the wheel", or the headed setting).
 - **Emit full URLs in code** — drives and specs must be portable, no implicit baseURL.
 - **Values you assert or report must have been retrieved by a command that actually read them** (`eval`, `run-code`, `generate-locator`, `cookie-get`). Quoting the display text of a `snapshot` or `forge-observe` is fabrication.
 - **Compose specs from snippets; don't duplicate them.** Invoked steps → `import` + `.run()`. Fresh steps → inline the literal code you ran.
