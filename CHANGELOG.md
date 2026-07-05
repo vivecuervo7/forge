@@ -5,6 +5,21 @@ every version bump. The full granular history is in the git log. Forge is young
 and pre-1.0 (built over June 2026), so a minor version can still carry a
 meaningful architecture change.
 
+## 0.42.0 — Deterministic filtered perception (`forge-observe`) (2026-07-05)
+
+- New `forge-observe` script — a pure, model-free transform that turns a
+  playwright-cli ARIA snapshot into the interactable, labelled surface the driver
+  actually acts on: elements with their `[ref]` handles, plus error/alert signals
+  (with their message text folded in), and a change-diff (`+`/`~`/`-`) since the
+  last look. Long option lists collapse to one summary line, a URL change
+  re-baselines to the full view, and unactionable/unlabelled nodes are dropped.
+- The driver now **orients through `forge-observe` by default** rather than
+  re-reading raw snapshots each turn — cutting per-turn perception context
+  ~6–10× on real multi-step flows, which lowers cost, speeds prefill, and (with
+  less noise) steadies element grounding. Raw `snapshot`/`--depth` and an
+  aggressive `--diff` remain as documented escalations. Perception only: it never
+  enters the trace, so composed specs are unaffected.
+
 ## 0.41.0 — Hint proposals become a gentle nudge (2026-06-28)
 
 - Removed the formal end-of-run hint-proposal protocol (`protocols/proposals.md`,
