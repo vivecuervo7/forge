@@ -175,7 +175,7 @@ When the driver hits something it can't resolve through the browser — a gated 
 
 ## Session model
 
-Each `/forge` invocation is stateless. Launch a fresh chromium with an ephemeral profile, run the user's task, close the chromium at the end. Clean state every time, by design.
+Each `/forge` invocation is stateless. The lead launches a fresh **headless** chromium with an ephemeral profile — watchable live in the Playwright dashboard (`playwright-cli show`) rather than a window that steals focus — runs the user's task, and closes it at the end. (Teach mode, an explicit "watch", or `FORGE_HEADED=1` open a visible window instead.) Clean state every time, by design.
 
 For parallel runs against the same project, the constraint is whatever your backend imposes (single-session-per-user is common). Document the constraint in `forge.md`; the user respects it when launching parallel sessions.
 

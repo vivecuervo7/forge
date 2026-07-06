@@ -5,6 +5,23 @@ every version bump. The full granular history is in the git log. Forge is young
 and pre-1.0 (built over June 2026), so a minor version can still carry a
 meaningful architecture change.
 
+## 0.43.0 — Headless by default, watchable in the dashboard (2026-07-07)
+
+- Drives now run **headless by default**. Instead of a browser window popping up
+  and stealing focus (or trapping keystrokes in its address bar), you watch the
+  live session in the **Playwright dashboard** (`playwright-cli show`) — one
+  non-intrusive pane that renders every running session, its views input-locked.
+  The lead opens the dashboard for you on a headless run.
+- **The lead now owns the browser lifecycle** — it opens the session (then the
+  dashboard) before spawning the driver, and closes it at the end. Ordered
+  open → dashboard → drive → close, so the driver arrives to a ready session
+  rather than racing to open one.
+- **Headed is still one word away** for when you want to step in: teach mode, an
+  explicit "watch" / "let me take the wheel", or `FORGE_HEADED=1`.
+- **Session names are short and meaningful** (a ticket key, or a terse task gist)
+  so you can match a session to its work at a glance in the dashboard — capped to
+  stay within the OS's socket-path limit.
+
 ## 0.42.0 — Deterministic filtered perception (`forge-observe`) (2026-07-05)
 
 - New `forge-observe` script — a pure, model-free transform that turns a

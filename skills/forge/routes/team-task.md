@@ -83,9 +83,9 @@ Otherwise `HEADED: false`. Capture as `HEADED`.
 
 Choose a `SESSION_NAME` you (and the user) can match **at a glance in the Playwright dashboard** to the work it's driving — this is what matters when several sessions run at once. Use judgment:
 
-- **Favor a ticket key** if the task or context has one (`AE-1908` → `ae1908`) — usually the most recognizable, and the user often names their own session after it too.
+- **Favor a ticket key** if the task or context has one (`PROJ-123` → `proj123`) — usually the most recognizable, and the user often names their own session after it too.
 - **Otherwise** a terse gist of the task (`add-hammer`, `agenda`).
-- **Keep it unique** among concurrent runs — if a bare name could clash (two runs on the same ticket), append 2 hex: `node -e 'console.log(require("crypto").randomBytes(1).toString("hex"))'` → e.g. `ae1908-3f`.
+- **Keep it unique** among concurrent runs — if a bare name could clash (two runs on the same ticket), append 2 hex: `node -e 'console.log(require("crypto").randomBytes(1).toString("hex"))'` → e.g. `proj123-3f`.
 
 No `ft-`/`forge-` prefix — nothing keys on it; the name is purely for reading.
 
