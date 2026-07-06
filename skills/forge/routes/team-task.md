@@ -79,15 +79,17 @@ Drives run **headless** by default — the user watches via the Playwright dashb
 
 Otherwise `HEADED: false`. Capture as `HEADED`.
 
-### 1.3. Generate a session name (short — it labels the dashboard *and* feeds a socket path)
+### 1.3. Name the session (short + meaningful — it's how you spot it in the dashboard)
 
-Build `SESSION_NAME` as `ft-<slug>-<rand>`: `<slug>` = **one short word or a ≤8-char abbreviation** of `USER_TASK` (e.g. `hammer`, `agenda`, `addevt`), `<rand>` = 4 hex — shorter is always safer —
+Choose a `SESSION_NAME` you (and the user) can match **at a glance in the Playwright dashboard** to the work it's driving — this is what matters when several sessions run at once. Use judgment:
 
-```bash
-node -e 'console.log(require("crypto").randomBytes(2).toString("hex"))'
-```
+- **Favor a ticket key** if the task or context has one (`AE-1908` → `ae1908`) — usually the most recognizable, and the user often names their own session after it too.
+- **Otherwise** a terse gist of the task (`add-hammer`, `agenda`).
+- **Keep it unique** among concurrent runs — if a bare name could clash (two runs on the same ticket), append 2 hex: `node -e 'console.log(require("crypto").randomBytes(1).toString("hex"))'` → e.g. `ae1908-3f`.
 
-Keep the whole name **≤ ~16 chars** (e.g. `ft-agenda-3f9a`) — enough to make the dashboard list legible, short enough to be safe. **This is a hard constraint on macOS, not just style:** `forge-pw open` builds a unix socket at `$TMPDIR/pw-…/cli/<hash>-<SESSION_NAME>.sock`, and macOS caps that whole path at ~104 bytes — a long descriptive name (≥~30 chars) overflows it and `open` fails with `listen EINVAL: invalid argument`. If `open` ever *does* hit `listen EINVAL`, the cause is path length: shorten the name and retry. (Don't be misled by forge-pw's redaction masking the resolved `$TMPDIR` back to the literal `$TMPDIR` in the error — a real, expanded path can look unexpanded; check length, not that.) The driver launches/references the browser by this name; phase 5 closes it.
+No `ft-`/`forge-` prefix — nothing keys on it; the name is purely for reading.
+
+**Hard cap: ≤ ~16 chars.** Not just style — `forge-pw open` builds a unix socket at `$TMPDIR/pw-…/cli/<hash>-<SESSION_NAME>.sock`, and macOS caps that whole path at ~104 bytes; a long name overflows it and `open` fails with `listen EINVAL: invalid argument`. If `open` ever hits `listen EINVAL`, the cause is path length — shorten the name and retry. (Don't be misled by forge-pw redacting the resolved `$TMPDIR` back to the literal `$TMPDIR` in the error — a real, expanded path can look unexpanded; check length, not that.) The driver launches/references the browser by this name; phase 5 closes it.
 
 ### 1.3b. Open the browser session, then the dashboard (you own the browser lifecycle)
 
