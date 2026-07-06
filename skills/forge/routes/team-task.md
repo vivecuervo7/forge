@@ -79,15 +79,15 @@ Drives run **headless** by default — the user watches via the Playwright dashb
 
 Otherwise `HEADED: false`. Capture as `HEADED`.
 
-### 1.3. Generate a session name (descriptive — it labels the dashboard)
+### 1.3. Generate a session name (short — it labels the dashboard *and* feeds a socket path)
 
-Build `SESSION_NAME` as `ft-<slug>-<rand>`: `<slug>` = a 2–4-word kebab-case gist of `USER_TASK` (e.g. `add-hammer-to-cart`), `<rand>` = 4 hex chars —
+Build `SESSION_NAME` as `ft-<slug>-<rand>`: `<slug>` = **one short word or a ≤8-char abbreviation** of `USER_TASK` (e.g. `hammer`, `agenda`, `addevt`), `<rand>` = 4 hex — shorter is always safer —
 
 ```bash
 node -e 'console.log(require("crypto").randomBytes(2).toString("hex"))'
 ```
 
-Capture as `SESSION_NAME` (e.g. `ft-add-hammer-to-cart-9f3a`). A descriptive name keeps the dashboard's session list legible instead of an opaque `ft-6ac5eecb`. The driver launches/references the browser by it; phase 5 closes it.
+Keep the whole name **≤ ~16 chars** (e.g. `ft-agenda-3f9a`) — enough to make the dashboard list legible, short enough to be safe. **This is a hard constraint on macOS, not just style:** `forge-pw open` builds a unix socket at `$TMPDIR/pw-…/cli/<hash>-<SESSION_NAME>.sock`, and macOS caps that whole path at ~104 bytes — a long descriptive name (≥~30 chars) overflows it and `open` fails with `listen EINVAL: invalid argument`. If `open` ever *does* hit `listen EINVAL`, the cause is path length: shorten the name and retry. (Don't be misled by forge-pw's redaction masking the resolved `$TMPDIR` back to the literal `$TMPDIR` in the error — a real, expanded path can look unexpanded; check length, not that.) The driver launches/references the browser by this name; phase 5 closes it.
 
 ### 1.3b. Open the browser session, then the dashboard (you own the browser lifecycle)
 
