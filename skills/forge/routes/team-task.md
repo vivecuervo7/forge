@@ -89,15 +89,23 @@ node -e 'console.log(require("crypto").randomBytes(2).toString("hex"))'
 
 Capture as `SESSION_NAME` (e.g. `ft-add-hammer-to-cart-9f3a`). A descriptive name keeps the dashboard's session list legible instead of an opaque `ft-6ac5eecb`. The driver launches/references the browser by it; phase 5 closes it.
 
-### 1.3b. Open the dashboard (headless runs only)
+### 1.3b. Open the browser session, then the dashboard (you own the browser lifecycle)
 
-If `HEADED` is false, open the Playwright dashboard so the user can watch — best-effort and idempotent (it opens only if not already running, so it never steals focus mid-session):
+**Open the session yourself** — you own the browser's whole lifecycle (open here, close in Phase 5), so the driver arrives to a ready session instead of racing to open one. Headless unless `HEADED` (1.2b):
+
+```bash
+node <PLUGIN_ROOT>/scripts/forge-pw.mjs -s=<SESSION_NAME> open --browser=chrome about:blank   # add --headed when HEADED is true
+```
+
+This open (with the close in 5.1) is **lifecycle, not driving** — you bring up a blank session; the driver does every navigation and action on it.
+
+Then, when `HEADED` is false, **open the dashboard** so the user can watch — best-effort and idempotent (opens only if not already running, so it never steals focus mid-session):
 
 ```bash
 node <PLUGIN_ROOT>/scripts/forge-dashboard.mjs
 ```
 
-Skip when `HEADED` is true (the real browser window is the view). If it can't open, the drive continues headless regardless — note once that the user can run `playwright-cli show` themselves to watch.
+Skip the dashboard when `HEADED` is true (the real browser window is the view). If it can't open, the drive continues headless regardless — note once that the user can run `playwright-cli show` themselves to watch.
 
 ### 1.3a. Check cleanup staleness (silent — surface at end)
 
@@ -155,7 +163,7 @@ CURATOR_NAME: curator
 USER_TASK: <user's task verbatim>
 <if MODE == spec, include:> SPEC_INTENT: <regression | repro | scenario>  (for repro: the bug claim to assert as correct behavior)
 
-Your task ID is <DRIVER_TASK_ID>. Claim it with TaskUpdate(taskId=<DRIVER_TASK_ID>, status='in_progress'), read your hints, and begin. Signal each meaningful chunk to curator. When the run is finished, TaskUpdate(status='completed') and ping team-lead."
+Your task ID is <DRIVER_TASK_ID>. Claim it with TaskUpdate(taskId=<DRIVER_TASK_ID>, status='in_progress'), read your hints, and begin — your browser session <SESSION_NAME> is already open, so drive it directly (only reopen it yourself to recover from a crash). Signal each meaningful chunk to curator. When the run is finished, TaskUpdate(status='completed') and ping team-lead."
 )
 ```
 
@@ -283,7 +291,7 @@ Non-blocking, once-per-run. Don't repeat if the user already cleaned this sessio
 
 ## Hard rules
 
-- **You are an orchestrator and the routing tier — not an actor on the app.** All browser driving, spec writing, and spec running belong to `driver`; all snippet authoring/patching to `curator`. You set up the team, create the tasks, spawn the two teammates, manage lifecycle, AND own the user channel and the driver's **check-ins**: you decide whether a check-in is answered from the code (read-only research — `Glob`/`Grep`/`Read`/`Explore`), with a concrete steer, or by the user (`AskUserQuestion` → SendMessage back); you relay user steering to the relevant teammate. That read-only research is the one thing you reach for beyond orchestration; you still never drive the browser, write snippet or spec files, run specs, or mutate the app or its environment. The sole `forge-pw` call you make is the **browser close** (5.1) — and only ever through `forge-pw`, never the bare `playwright-cli` binary.
+- **You are an orchestrator and the routing tier — not an actor on the app.** All browser driving, spec writing, and spec running belong to `driver`; all snippet authoring/patching to `curator`. You set up the team, create the tasks, spawn the two teammates, manage lifecycle, AND own the user channel and the driver's **check-ins**: you decide whether a check-in is answered from the code (read-only research — `Glob`/`Grep`/`Read`/`Explore`), with a concrete steer, or by the user (`AskUserQuestion` → SendMessage back); you relay user steering to the relevant teammate. That read-only research is the one thing you reach for beyond orchestration; you still never drive the browser, write snippet or spec files, run specs, or mutate the app or its environment. Your only `forge-pw` calls are the browser **open** (1.3b) and **close** (5.1) — both lifecycle, not driving — and only ever through `forge-pw`, never the bare `playwright-cli` binary.
 - **The peer signals are direct — don't relay them.** chunk-complete / drive-complete / snippets-ready / patch-request flow between the driver and curator. You only handle messages addressed to `team-lead`.
 - **High collaborativeness makes you an active interlocutor.** `COLLABORATIVENESS` sets how readily you involve the user; at `guided`/`step-by-step` you carry the teaching conversation — relay the driver's per-step check-ins as plain conversation, pass guidance back, step the level and relay library steers on request (Phase 4.0a). The lifecycle is unchanged: still two teammates, two pings, the same Phase 5.
 - **The verify loop lives inside the driver.** In spec mode the driver runs its spec cold, diagnoses, fixes spec-logic inline, and routes snippet-level fixes to the curator via patch-request. You don't triage or route snippet/spec fixes — but you field the driver's check-ins (route them: a steer, read-only investigation of the code, or take it to the user), and relay user steers.

@@ -123,17 +123,17 @@ Decompose `USER_TASK` into ordered steps. For each, match against the library by
 
 When you drive a step inline despite a matching snippet existing, note the reason — `snippet-failed` / `selector-changed` / `no-match` / `other` — and **include it in that chunk's signal to the curator** so it can patch the snippet (the fix belongs in the snippet body, which the curator owns).
 
-### Ensure the playwright-cli session is live
+### Your session is already open
+
+The lead opened your browser session `<SESSION_NAME>` before spawning you (headless by default; headed if your spawn carried `HEADED: true`) and owns its lifecycle — it closes the session when the run ends. So **begin driving it directly** — observe, then act. Don't open it yourself.
+
+You run `open` **only to recover** — if the browser crashes or the session is lost mid-drive, reopen under the **same** `SESSION_NAME` (matching the `HEADED` you were given), never a fresh name (a new name orphans the live browser and leaves the lead's close pointing at a dead one):
 
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-pw.mjs -s=<SESSION_NAME> open --browser=chrome about:blank
+node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-pw.mjs -s=<SESSION_NAME> open --browser=chrome about:blank   # recovery only; add --headed if HEADED
 ```
 
-Opens **headless by default** — the user watches your session live in the Playwright dashboard (the lead opens it), which renders headless browsers without a window stealing focus or trapping their typing. Add **`--headed`** to the `open` **only when your spawn carried `HEADED: true`** (teach mode, an explicit "watch" / "take the wheel", or the headed setting).
-
-Each `/forge` invocation gets its own session and chromium. **Always invoke playwright-cli through `forge-pw`** — it redacts env-sourced values from the echoed code before it reaches your transcript. Bare `playwright-cli` is blocked by a guard hook.
-
-`SESSION_NAME` is the lead's durable handle for this run — the lead closes the browser by that name when the run ends. If the browser ever crashes or the session is lost mid-drive, reopen under the **same** `SESSION_NAME`; minting a new name would leave the lead's close pointing at a dead session and orphan the live one.
+**Always reach the browser through `forge-pw`** — it redacts env-sourced values from the echoed code before it reaches your transcript. Bare `playwright-cli` is blocked by a guard hook.
 
 **Prefer `--json` for invocations that return a value** (`{"result": ...}` / `{"isError": true, ...}` — check `isError`, not exit code). Omit it for the human-readable echo.
 
