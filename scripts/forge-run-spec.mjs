@@ -94,7 +94,17 @@ function rawArgValue(name) {
 const rawSpec = rawArgValue('--spec')
 if (!rawSpec) die('missing --spec <path-to-spec>')
 const specPathAbs = resolve(rawSpec)
+if (!existsSync(specPathAbs)) die(`spec not found: ${specPathAbs}`, 4)
+// Validate the derived forge root BEFORE ensureRunnerDeps — installing runner
+// deps into a directory derived from an unvalidated path could overwrite an
+// unrelated package.json (e.g. --spec ~/foo.spec.ts → homedir).
 const provisionalForgeRoot = dirname(dirname(specPathAbs))
+if (!existsSync(join(provisionalForgeRoot, 'hints'))) {
+  die(
+    `spec at ${specPathAbs} doesn't appear to live under a forge/ directory ` +
+    `(expected ${provisionalForgeRoot}/hints/ to exist). Check the path.`
+  )
+}
 ensureRunnerDeps(provisionalForgeRoot)
 
 const { default: mri } = await loadFromRunner(provisionalForgeRoot, 'mri')
@@ -102,9 +112,6 @@ const args = mri(process.argv.slice(2), {
   string: ['spec', 'record-as', 'slow-mo'],
   boolean: ['headed', 'record'],
 })
-
-let specPath = args.spec
-if (!specPath) die('missing --spec <path-to-spec>')
 
 const headed = !!args.headed
 const recordAs = args['record-as'] ?? null
@@ -117,18 +124,9 @@ if (slowMoRaw != null) {
   slowMo = n
 }
 
-specPath = resolve(specPath)
-if (!existsSync(specPath)) die(`spec not found: ${specPath}`, 4)
-
-// Locate the project's forge/ — assume the spec lives at <project>/forge/specs/<file>
-const specsDir = dirname(specPath)
-const projectForge = dirname(specsDir)
-if (!existsSync(join(projectForge, 'hints'))) {
-  die(
-    `spec at ${specPath} doesn't appear to live under a forge/ directory ` +
-    `(expected ${projectForge}/hints/ to exist). Check the path.`
-  )
-}
+// Spec path + forge root were validated above, before ensureRunnerDeps.
+const specPath = specPathAbs
+const projectForge = provisionalForgeRoot
 
 // findProjectRunner + ensurePluginRunner are shared with forge-init.mjs via
 // forge-ensure-runner.mjs (imported above). /forge init pre-installs the

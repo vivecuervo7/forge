@@ -89,9 +89,9 @@ if (skipped.length > 0) {
   for (const f of skipped) console.log(`    = ${f}`)
 }
 
-// Pre-install runner dependencies into <forgeDir>/.runner if the project
-// doesn't already own playwright. Non-fatal — the install retries lazily
-// on first --spec / first invocation if it fails here.
+// Pre-install runner dependencies into <forgeDir>/ if the project doesn't
+// already own playwright. Non-fatal — the install retries lazily on first
+// --spec / first invocation if it fails here.
 const runnerScript = join(__dirname, 'forge-ensure-runner.mjs')
 if (existsSync(runnerScript)) {
   const result = spawnSync('node', [runnerScript, forgeDir], { stdio: 'inherit' })

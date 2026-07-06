@@ -22,11 +22,9 @@
 // Exposed for callers:
 //   - forge-init.mjs invokes the CLI form at end of scaffold so the cost
 //     surfaces at a discoverable moment.
-//   - forge-run-spec.mjs imports `ensureRunnerReady` for the just-in-time
-//     path on first spec verification.
-//   - forge-invoke-snippet.mjs imports `ensureRunnerDeps` (via the
-//     `ensureBundlerAvailable` alias) to make sure esbuild is installed
-//     before bundling.
+//   - forge-run-spec.mjs and forge-invoke-snippet.mjs import
+//     `ensureRunnerDeps` (plus `loadFromRunner` and the path helpers) for
+//     the just-in-time path on first spec run / snippet invocation.
 //
 // Usage (CLI):
 //   forge-ensure-runner.mjs <project-forge-dir>
@@ -36,7 +34,7 @@
 //   2   usage error
 //   3   install failed
 
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { createRequire } from 'node:module'
@@ -78,6 +76,26 @@ export function ensurePluginRunner(forgeRoot) {
   mkdirSync(forgeRoot, { recursive: true })
 
   const pkgPath = join(forgeRoot, 'package.json')
+
+  // Refuse to overwrite a package.json forge doesn't own — a wrong forgeRoot
+  // (or a user-customized manifest) must never be silently clobbered.
+  if (existsSync(pkgPath)) {
+    let existingName = null
+    try {
+      existingName = JSON.parse(readFileSync(pkgPath, 'utf8')).name
+    } catch {
+      // unparseable — treat as foreign
+    }
+    if (existingName !== 'forge-spec-runner') {
+      throw new Error(
+        `refusing to overwrite ${pkgPath} — it isn't the forge-managed manifest ` +
+        `(name: ${JSON.stringify(existingName)}, expected "forge-spec-runner"). ` +
+        `If this directory shouldn't host the forge runner, check the path you passed; ` +
+        `otherwise remove the file and retry.`
+      )
+    }
+  }
+
   const pkgContent = JSON.stringify({
     name: 'forge-spec-runner',
     private: true,
@@ -130,9 +148,6 @@ export function ensureRunnerDeps(forgeRoot) {
     )
   }
 }
-
-// Backward-compat alias — kept until all callers migrate.
-export const ensureBundlerAvailable = ensureRunnerDeps
 
 // Load a runner-installed dep from the plugin script side. Used by the
 // invoke + spec-run scripts to import packages they need (execa, mri)

@@ -175,7 +175,19 @@ async function main() {
       // so a result-less trailing action is re-read (never skipped).
       const firstMissing = fresh.find((a) => !results.has(a.id))
       const ready = firstMissing ? fresh.filter((a) => a.idx < firstMissing.idx) : fresh
-      const cursor = firstMissing ? firstMissing.idx : lines.length
+      // A non-empty, unparseable final line is a torn write mid-flush — hold
+      // the cursor before it so the completed line is re-read next time
+      // (parse() skipped it, so advancing past it would drop the action).
+      let flushedEnd = lines.length
+      const lastLine = lines[lines.length - 1]
+      if (lastLine && lastLine.trim()) {
+        try {
+          JSON.parse(lastLine)
+        } catch {
+          flushedEnd = lines.length - 1
+        }
+      }
+      const cursor = firstMissing ? firstMissing.idx : flushedEnd
       if (ready.length > 0 || Date.now() >= deadline) {
         const blocks = ready.map((a) => format(a, results))
         console.log(

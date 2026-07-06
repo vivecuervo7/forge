@@ -27,8 +27,8 @@
 //
 //   Pass `--json` as the first arg to forge-pw, or set FORGE_JSON=1 in
 //   the env. The wrapper strips the flag from forge-pw's own argv and
-//   injects `--json` into playwright-cli's argv right after the session
-//   flag (so it applies globally as a playwright-cli flag, not as a
+//   prepends `--json` to playwright-cli's argv (global playwright-cli
+//   flags work in any position, so it applies as a global flag, not a
 //   subcommand arg). playwright-cli's `--json` mode suppresses the
 //   verbose "### Ran Playwright code" echo and emits structured JSON
 //   instead — shapes like `{result: "..."}` for run-code, `{snapshot:

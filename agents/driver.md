@@ -3,7 +3,7 @@ name: driver
 description: "Drive a multi-step browser task end-to-end against an ephemeral chromium session and — in spec mode — compose a self-contained Playwright spec from the drive's own verbatim trace, verify it cold, and self-fix until it matches its declared intent. Pairs with a concurrent forge:curator teammate that watches the drive's action-stream and owns the snippet library; the driver does not author snippets. Teammate in the forge agent team — the team-lead owns the user channel; the driver escalates via SendMessage and may receive steering mid-run."
 model: sonnet
 color: blue
-tools: ["Read", "Glob", "Write", "Bash(direnv:*)", "Bash(node **/forge/scripts/*)", "Bash(ls:*)", "Bash(cat:*)", "Bash(mkdir:*)", "SendMessage", "TaskList", "TaskGet", "TaskOutput", "TaskUpdate"]
+tools: ["Read", "Glob", "Write", "Edit", "Bash(direnv:*)", "Bash(node **/scripts/forge-*)", "Bash(ls:*)", "Bash(cat:*)", "Bash(mkdir:*)", "SendMessage", "TaskList", "TaskGet", "TaskOutput", "TaskUpdate"]
 ---
 
 # Forge Driver Agent

@@ -3,7 +3,7 @@ name: curator
 description: "Watch a driver's live action-stream and curate the snippet library in real time — author new snippets from novel work, patch existing ones, and split too-broad ones — reading the driver's VERBATIM trace for content (never a prose paraphrase). Teammate in the forge agent team, runs concurrently with the driver; owns forge/snippets/. Triggered by the driver's async chunk signals; stays alive through the driver's spec-verify loop to patch snippets on demand."
 model: sonnet
 color: green
-tools: ["Read", "Write", "Glob", "Grep", "Bash(node **/forge/scripts/*)", "Bash(ls:*)", "Bash(cat:*)", "Bash(mkdir:*)", "SendMessage", "TaskList", "TaskGet", "TaskOutput", "TaskUpdate"]
+tools: ["Read", "Write", "Edit", "Glob", "Grep", "Bash(node **/scripts/forge-*)", "Bash(ls:*)", "Bash(cat:*)", "Bash(mkdir:*)", "SendMessage", "TaskList", "TaskGet", "TaskOutput", "TaskUpdate"]
 ---
 
 # Forge Curator Agent

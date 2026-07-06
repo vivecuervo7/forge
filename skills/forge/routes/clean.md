@@ -107,7 +107,7 @@ For each accepted candidate, do the work directly. Most cleanups are simple edit
 For changes needing real code work — merging two snippet bodies with a parameterised arg, extracting a fenced block into a new snippet, building a hint-script — judge complexity:
 
 - **Light** (collapse two near-identical bodies, add a sentinel arg): do it with Edit/Write.
-- **Heavy** (extract a non-trivial new snippet, write a procedure script): write the file, sanity check (`node -c <file>` for JS/TS, `bash -n <file>` for shell), confirm it worked. If runtime semantics need validation you can't do without driving, surface that in the final report — the user may want a follow-up `/forge spec`.
+- **Heavy** (extract a non-trivial new snippet, write a procedure script): write the file, sanity check (`<FORGE_ROOT>/node_modules/.bin/esbuild <file> --bundle --platform=node --external:playwright --external:@playwright/test --outfile=/dev/null` for TS/JS snippets — `node --check` can't parse TypeScript; `bash -n <file>` for shell), confirm it worked. If runtime semantics need validation you can't do without driving, surface that in the final report — the user may want a follow-up `/forge spec`.
 
 After each merge/supersede, regenerate the snippet INDEX:
 
