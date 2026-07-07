@@ -1,14 +1,14 @@
 ---
 name: forge
-description: "Browser-automation agent team for Claude Code. Seven routes under one skill: `/forge init` (scaffold the forge/ directory convention in CWD), `/forge <task>` (drive mode — a driver drives the task while a concurrent curator accretes the library), `/forge spec <task>` (spec mode — the driver also composes and verifies a Playwright spec from the drive's own trace), `/forge teach <topic>` (teach mode — a collaborative drive where the user walks forge through a quirky flow step by step; the same driver + curator at high collaborativeness bake the taught gotchas into snippets), `/forge run <spec>` (re-run a verified spec, optionally recording a video for evidence), `/forge export <name>` (inline a composed spec for shipping outside forge/), `/forge clean [snippets|hints|both]` (scan the snippet library and hint files for accumulation and surface cleanup candidates). Each invocation launches a fresh chromium session, runs the user's task, and cleans up. Project-specific conventions (test accounts, env handling, setup/teardown) live in hints/forge.md; forge stays project-agnostic."
+description: "Browser-automation agent team for Claude Code. Eight routes under one skill: `/forge init` (scaffold the forge/ directory convention in CWD), `/forge <task>` (drive mode — a driver drives the task while a concurrent curator accretes the library), `/forge spec <task>` (spec mode — the driver also composes and verifies a Playwright spec from the drive's own trace), `/forge teach <topic>` (teach mode — a collaborative drive where the user walks forge through a quirky flow step by step; the same driver + curator at high collaborativeness bake the taught gotchas into snippets), `/forge run <spec>` (re-run a verified spec, optionally recording a video for evidence), `/forge export <name>` (inline a composed spec for shipping outside forge/), `/forge clean [snippets|hints|both]` (scan the snippet library and hint files for accumulation and surface cleanup candidates), `/forge help [topic]` (quick reference — commands, mid-run steering phrases, how to watch a drive). Each invocation launches a fresh chromium session, runs the user's task, and cleans up. Project-specific conventions (test accounts, env handling, setup/teardown) live in hints/forge.md; forge stays project-agnostic."
 model: sonnet
-argument-hint: "[spec|run|init|export|clean] <args>"
+argument-hint: "[spec|teach|run|init|export|clean|help] <args>"
 allowed-tools: Read, Edit, Write, Glob, Grep, AskUserQuestion, Bash(node **/scripts/forge-*), Bash(direnv:*), Bash(mkdir:*), Bash(cat:*), Bash(echo:*), Bash(ls:*), Bash(mv:*), Bash(tmux:*), Bash(**/forge/node_modules/.bin/esbuild *), Agent, SendMessage, TaskCreate, TaskList, TaskGet, TaskUpdate
 ---
 
 # /forge
 
-`/forge` is a single skill with seven routes (init, export, run, teach, spec, clean, and the default task route). This SKILL.md is a thin router — it parses the route, captures route-specific context, and dispatches to a reference file. Only the chosen route's reference is loaded.
+`/forge` is a single skill with eight routes (init, export, run, teach, spec, clean, help, and the default task route). This SKILL.md is a thin router — it parses the route, captures route-specific context, and dispatches to a reference file. Only the chosen route's reference is loaded.
 
 ## Phase 0 — Pick the route
 
@@ -21,6 +21,7 @@ First word of `$ARGUMENTS` (case-insensitive). Dispatch table:
 | `run` | re-run a verified spec, optionally recording | `routes/run.md` | spec name / `last` / `latest`, plus optional `record as <label>` |
 | `teach` | teach mode — collaborative drive: the user walks forge through a quirky flow, snippets accrete | `routes/team-task.md` (with `MODE=drive`, `COLLABORATIVENESS=step-by-step`) | optional session-framing topic |
 | `clean` | tidy snippet library + hint files | `routes/clean.md` | optional scope: `snippets` \| `hints` \| `both` |
+| `help` | quick reference — commands, steering phrases, watching | `routes/help.md` | optional topic |
 | `spec` | spec mode — drive + write spec + verify (intent: regression / red-green bug repro / assertion-less scenario) | `routes/team-task.md` + `routes/team-task-spec.md` (with `MODE=spec`) | the actual task description |
 | *(anything else)* | (see natural-language signals below; default fallback is the task route) | `routes/team-task.md` (with `MODE=drive`) | the full args = task description |
 
@@ -47,6 +48,12 @@ When the first word isn't a route keyword, check the full args for these phrasin
 - "let me show forge how to ..." / "let me walk forge through ..."
 - "I want to teach forge ..." / "I'll pilot forge to capture ..."
 - "show forge how to ..." (intent must clearly be capturing a reusable snippet, not just running the action once)
+
+**Help route** — a question about forge itself (its commands or how to use it), not a task to drive:
+
+- "what can forge do?" / "how do I use forge?"
+- "show forge's commands" / "what commands does forge have?"
+- "how do I teach forge?" / "how do I record a video?" (pass the topic through)
 
 **Clean route** — a tidy/audit-verb combined with the snippet library or hint files as the object:
 
@@ -81,6 +88,9 @@ Counter-examples that should NOT match:
 - `/forge teach login flow` → route=teach, args="login flow"
 - `/forge teach forge how to create an event` → route=teach, args="forge how to create an event"
 - `/forge let me show forge how to log in` → route=teach (via NL signal), args="let me show forge how to log in"
+- `/forge help` → route=help, args=""
+- `/forge help teach` → route=help, args="teach"
+- `/forge what can you do?` → route=help (via NL signal), args="what can you do?"
 - `/forge clean` → route=clean, args="" (scope defaults to both)
 - `/forge clean snippets` → route=clean, args="snippets"
 - `/forge tidy up the snippet library` → route=clean (via NL signal), args="tidy up the snippet library", scope=snippets
@@ -90,7 +100,7 @@ Counter-examples that should NOT match:
 
 ## Phase 0a — Mode detection (task/spec route only)
 
-For task and spec routes, set `MODE` before loading the reference. Skip for init / export / run / teach.
+For task and spec routes, set `MODE` before loading the reference. Skip for init / export / run / teach / help.
 
 **MODE selection** — spec mode is selected when:
 
@@ -153,6 +163,7 @@ Where `<reference>` is one of:
 - `export.md` (for export route)
 - `run.md` (for run route — carries `RECORD_AS` into its instructions)
 - `clean.md` (for clean route — carries the optional scope `snippets|hints|both`)
+- `help.md` (for help route — carries the optional topic)
 
 Then **follow the instructions in the loaded reference** — it's authoritative for that route.
 
@@ -164,6 +175,7 @@ When passing context into the reference's work, include the captured route-speci
 - For export: spec name + optional `--output <path>` override.
 - For run: spec reference (explicit name / `last` / `latest` / unspecified) + `RECORD_AS`.
 - For clean: the optional scope (default `both`).
+- For help: the optional topic (possibly empty).
 
 ## Hard rules
 

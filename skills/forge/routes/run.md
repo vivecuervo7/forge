@@ -105,9 +105,15 @@ Capture exit code and stderr. Exit 0 = all assertions passed (green); non-zero =
 
 > Ran `<spec-name>.spec.ts` — **FAILED** after <duration>. <script-error-summary>.
 >
-> The spec needs investigation. Suggest `/forge spec <original-task>` to re-author, or open the spec and inspect the failure.
+> The spec needs investigation. Suggest re-authoring with the exact command — the spec's header comment carries the original task (`// Reproduces: <task>`), so read it and offer: `/forge spec <that task>`. Or open the spec and inspect the failure.
 
 Surface the script's error output verbatim — the user needs to see exactly what Playwright reported.
+
+**Next-step line, matched to intent** (append one when it applies):
+
+- **repro, ran red** → "still reproduces. After the fix lands: `/forge run <name>, record as after` — pair with `record as before` now for evidence."
+- **repro, ran green** → "the bug appears fixed — want the soft claim promoted to a hard assertion so this lives on as a regression spec?"
+- **regression/scenario, passed with recording** → mention the paired-label pattern only if the label suggests it (`before` → "run `record as after` once the change lands").
 
 ## Hard rules
 

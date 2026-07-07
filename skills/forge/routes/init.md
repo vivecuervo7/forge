@@ -42,11 +42,25 @@ Where `$ARGUMENTS` is the route-stripped remainder (possibly empty).
 
 The script preserves existing files (`.gitignore`, `README.md`, hints README, playwright config, `.env`). Re-running is safe — only fills in what's missing.
 
+## After the scaffold — offer to draft `forge.md`
+
+The empty `forge.md` stub is the highest-friction step of adoption, and forge can draft it itself. After relaying the script output, when **both** hold:
+
+- `forge/hints/forge.md` is still an empty stub (the scaffolded one-line comment — check with `cat`), and
+- the target directory looks like a codebase (source files present, not a bare sandbox),
+
+offer via `AskUserQuestion`: *"Draft `forge/hints/forge.md` now by reading the codebase?"* — Yes (Recommended) / No ("I'll write it myself — `forge/hints/README.md` has guidance").
+
+On **yes**: follow the checklist in the scaffolded `<target>/forge/hints/README.md` under "Starter prompt" — it's the authoritative spec for what a drafted `forge.md` covers (app shape, routes, canonical selectors per element class, gotchas, env-contract key names, accounts, optional setup/teardown). Read the codebase (`Glob`/`Grep`/`Read`), draft in plain language, `Write` it to `forge/hints/forge.md`, then summarize what it covers and — honestly — what it couldn't determine (note gaps rather than guessing, per the checklist). Remind the user the file is theirs to correct; hints also accrete from real drives.
+
+On **no** (or when the conditions don't hold): finish with the script's "Next:" guidance as-is.
+
 ## Hard rules
 
-- **Invoke the script; don't write files yourself.** It's the source of truth for scaffold contents and ensures idempotency.
+- **Invoke the script; don't write files yourself** (the one exception: `forge.md`, when the user accepts the drafting offer above). The script is the source of truth for scaffold contents and ensures idempotency.
 - **Surface the script's output verbatim.** It reports what it created and preserved.
-- **Hint authoring is the user's job.** The script creates the scaffold; authoring `forge.md` and (rarely) `curator.md` is the user's responsibility (with optional help in subsequent invocations).
+- **Hint content is the user's call.** The drafting offer is optional and its output is a starting point — the user corrects and extends it; `curator.md` stays untouched unless they ask.
+- **Never overwrite a non-empty hint file.** The drafting offer applies only to the empty scaffold stub.
 
 ## Output expected
 

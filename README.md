@@ -52,7 +52,8 @@ Supported on macOS and Linux. Windows is currently untested — the wrapper scri
 
 | Command | What it does |
 |---|---|
-| `/forge init` | Scaffolds the `forge/` directory convention into the current project. Idempotent — the starting point for any new project. |
+| `/forge init` | Scaffolds the `forge/` directory convention into the current project. Idempotent — the starting point for any new project. Offers to draft `hints/forge.md` from your codebase so you don't start from an empty stub. |
+| `/forge help [topic]` | Quick reference — commands, the mid-run steering phrases, how to watch a drive. |
 | `/forge <task>` | **Drive mode.** A driver does the task end-to-end while a concurrent curator accretes reusable snippets from novel work. The everyday command. |
 | `/forge spec <task>` | **Spec mode.** Same two agents — the driver also composes a self-contained `.spec.ts` from the drive's own trace and verifies it from a cold start against its declared **intent** — a *regression* test (assert correct behavior, expect green), a *red-green bug repro* (assert correct behavior, expect **red** until the bug is fixed), or an assertion-less *scenario* (re-run via `/forge run`). Also fires on natural-language signals — "create a spec for PROJ-123", "write a failing spec that reproduces…", "capture as a spec". |
 
@@ -175,7 +176,7 @@ When the driver hits something it can't resolve through the browser — a gated 
 
 ## Session model
 
-Each `/forge` invocation is stateless. The lead launches a fresh **headless** chromium with an ephemeral profile — watchable live in the Playwright dashboard (`playwright-cli show`) rather than a window that steals focus — runs the user's task, and closes it at the end. (Teach mode, an explicit "watch", or `FORGE_HEADED=1` open a visible window instead.) Clean state every time, by design.
+Each `/forge` invocation is stateless. The lead launches a fresh **headless** chromium with an ephemeral profile — watchable live in the Playwright dashboard (`playwright-cli show`) rather than a window that steals focus — runs the user's task, and closes it at the end. (Teach mode, an explicit "watch", a headed-preference line in `forge/hints/forge.md`, or `FORGE_HEADED=1` open a visible window instead.) Clean state every time, by design.
 
 For parallel runs against the same project, the constraint is whatever your backend imposes (single-session-per-user is common). Document the constraint in `forge.md`; the user respects it when launching parallel sessions.
 

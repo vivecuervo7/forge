@@ -28,7 +28,11 @@ AskUserQuestion({
 })
 ```
 
-Hold the answer as `SPEC_INTENT`. For a **repro**, also confirm the bug claim — *what correct behavior should hold once the bug is fixed* — so the driver asserts the right thing. Thread `SPEC_INTENT` (and, for repro, the bug claim) into the driver spawn prompt in `team-task.md` Phase 3.
+Hold the answer as `SPEC_INTENT`. For a **repro**, also confirm the bug claim — *what correct behavior should hold once the bug is fixed* — so the driver asserts the right thing.
+
+**Ask both in one call, not two rounds.** `AskUserQuestion` takes multiple questions: when repro is among the plausible intents, include a second question in the same call confirming the bug claim — offer your best-inferred claim(s) from `USER_TASK` as options ("Other" covers corrections). One interruption instead of two. When the intent is already unambiguous (e.g. a bug ticket plus "reproduce"), skip the intent question and confirm only the claim — or neither, if the task states the claim outright.
+
+Thread `SPEC_INTENT` (and, for repro, the bug claim) into the driver spawn prompt in `team-task.md` Phase 3.
 
 ## Phase 5.5 — Spec-mode final-report shape
 
@@ -49,6 +53,13 @@ Override the base file's drive-mode report with the spec-mode version:
 > (or: "Did not match intent after <N> round(s) — **verified: no**. <landing-fixes-but-hit-cap | flailing | missing app-knowledge: escalated to user>. See <details>.")
 >
 > Worth a hint? <only if the driver's ping carried a "Hint worth adding" line — one gentle sentence offering to add it to `forge.md`; never a blocking question. Omit entirely otherwise.>
+>
+> Next: <one line matched to the verdict — hand the user their next gesture rather than making them remember the command set:>
+>   - regression verified → "`/forge run <name>` re-runs it anytime (add `record as <label>` for video evidence); `/forge export <name>` ships it into a test suite."
+>   - repro confirmed → "after the fix lands, `/forge run last spec, record as after` shows it green — pair with a `record as before` run now for before/after evidence."
+>   - repro came back green → "say the word and I'll promote the soft claim to a hard assertion so it lives on as a regression spec."
+>   - scenario → "`/forge run <name>` re-runs the flow anytime."
+>   - verified: no → omit the Next line; the failure detail is the next step.
 >
 > Browser session closed.
 

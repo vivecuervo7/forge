@@ -5,6 +5,32 @@ every version bump. The full granular history is in the git log. Forge is young
 and pre-1.0 (built over June 2026), so a minor version can still carry a
 meaningful architecture change.
 
+## 0.44.0 — Ergonomics: the run banner, `/forge help`, and next-step affordances (2026-07-07)
+
+- **The run banner.** The lead now announces every run as it goes live: what's
+  driving, the session name to spot in the dashboard, and — the part that was
+  invisible before — that you can steer by just typing, and abort with "stop".
+  Teach/guided runs extend the banner with the teaching vocabulary ("take it
+  from here", "I'll take the wheel", "save that as `login-with-sso`") so the
+  controls are discoverable up front rather than buried in docs.
+- **`/forge help [topic]`** — a new route: compact reference for the commands,
+  mid-run steering phrases, watching options, and where things live. A targeted
+  question ("how do I record a video?") gets its slice, not the full dump.
+- **Reports hand you the next gesture.** Spec-mode reports end with a `Next:`
+  line matched to the verdict (verified → `/forge run` / `export`; repro
+  confirmed → `record as after` once the fix lands; repro green → offer to
+  promote the claim). `/forge run` failures offer the exact re-author command by
+  reading the original task out of the spec's header comment.
+- **`/forge init` offers to draft `forge.md`.** The empty hint stub was the
+  highest-friction step of adoption; init now offers to read the codebase and
+  draft the operate hint (selectors, routes, gotchas, env-key names) following
+  the hints-README starter checklist. Optional; never overwrites a non-empty file.
+- **Setup friction absorbed:** when the agent-teams flag is missing, forge
+  offers to add it to `~/.claude/settings.json` itself (restart still required).
+  A headed preference can now live as a line in `forge.md` instead of requiring
+  the `FORGE_HEADED` env var at launch. Spec-intent and repro-bug-claim
+  questions ask in one round instead of two.
+
 ## 0.43.0 — Headless by default, watchable in the dashboard (2026-07-07)
 
 - Drives now run **headless by default**. Instead of a browser window popping up

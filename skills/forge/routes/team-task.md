@@ -37,7 +37,9 @@ The forge teammates run as **teammates** (not backgrounded sub-agents) so the ma
 
 > /forge requires experimental agent teams. Enable by adding `"env": {"CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"}` to `~/.claude/settings.json` (or set the env var in your shell) and restart Claude Code.
 
-Then stop.
+Then offer to apply it rather than leaving the user to edit JSON by hand: `AskUserQuestion` — *"Add the setting to `~/.claude/settings.json` for you now?"* (Yes (Recommended) / No). On yes, `Read` `~/.claude/settings.json` and merge `"CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"` into its `env` object — create the file or the `env` key if missing, preserve everything else — then confirm the edit and remind them: **restart Claude Code, then re-run the same `/forge` command.**
+
+Either way, stop here — the run can't proceed without a restart.
 
 The team auto-forms when the first teammate spawns — no `TeamCreate` call needed. The team directories at `~/.claude/teams/session-<8-char>/` and `~/.claude/tasks/session-<8-char>/` are created automatically and removed on session exit. The task list persists until `cleanupPeriodDays` elapses. The split is deliberate: spec composition stays in the driver's context (verbatim trace, no fidelity leak), while snippet curation runs concurrently in its own focused mind (so it survives interruption and patches continuously).
 
@@ -75,6 +77,7 @@ cat <PLUGIN_ROOT>/protocols/collaborativeness.md
 Drives run **headless** by default — the user watches via the Playwright dashboard (opened in 1.3b), which renders headless sessions live without a window stealing focus or trapping their typing. Set **`HEADED: true`** only when:
 - `COLLABORATIVENESS` is `step-by-step` (teach — the user physically walks the flow through the browser), **or**
 - the user's framing asks to see it ("watch", "headed", "let me take the wheel", "I'll drive"), **or**
+- `forge.md` (read in 1.2) declares a headed preference — e.g. "run headed by default", **or**
 - the headed setting is on — a project/user can export `FORGE_HEADED=1`: check with `echo "FORGE_HEADED=${FORGE_HEADED:-}"` (non-empty → headed).
 
 Otherwise `HEADED: false`. Capture as `HEADED`.
@@ -188,6 +191,20 @@ Your task ID is <CURATOR_TASK_ID>. Claim it with TaskUpdate(taskId=<CURATOR_TASK
 
 `description` is required by the Agent tool — keep it short.
 
+### 3.1. Print the run banner
+
+Immediately after both spawns, tell the user what's running, where to watch, and how to steer — three short lines, before you go quiet to wait:
+
+> Driving **<short USER_TASK>** — <MODE> mode<append ", collaborativeness: <level>" only when above autonomous>.
+> Session **`<SESSION_NAME>`**, headless — watch it live in the Playwright dashboard. *(When HEADED: "headed — a browser window will open; that's the drive.")*
+> Steer anytime by typing here — I'll relay to the team. Say "stop" to abort.
+
+At `guided` / `step-by-step`, extend the banner with the teaching controls so the vocabulary is discoverable up front rather than buried in docs:
+
+> We'll go step by step — forge surfaces each step and waits for your word. Useful phrases: correct a step ("use the other button"), hand control over ("take it from here"), drive yourself ("I'll take the wheel" — tell me where you ended up when you hand back), steer the library ("save that as `login-with-sso`", "split that snippet").
+
+The banner is orientation, not a report — keep it to these lines and stop talking until something happens.
+
 ## Phase 4 — Wait for both teammates, relay the user
 
 After spawning, the teammates self-coordinate (the chunk/drive-complete/snippets-ready/patch-request signals flow **directly** between them — you don't relay those). You wait for **two** completion pings and stay available to the user.
@@ -273,6 +290,8 @@ Compose a tight summary. Drive-mode shape:
 >
 > Worth a hint? <if the driver's ping carried a "Hint worth adding" line — one gentle sentence: "the `finish` button needed `dispatchEvent` again — want me to add a note to `forge.md` so future runs handle it from the start?">
 > (Include this line **only** if the driver flagged a recurring pattern; otherwise omit it entirely. It's a suggestion, never a blocking question — the run is already wrapped. If the user says yes, `Edit` the one line into `forge.md` then; if they don't, drop it.)
+>
+> Next: <only when the drive is a flow plausibly worth re-running — one line: "pin it as a verified spec with `/forge spec <the task>`". Omit for one-off lookups, trivial drives, or anything the user clearly won't repeat.>
 >
 > Browser session closed.
 
