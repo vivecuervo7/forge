@@ -23,6 +23,11 @@ samples/*/forge/.cookies
 samples/*/.playwright-cli/
 samples/*/forge/.playwright-cli/
 
+# Browser-session artifacts from driving a session out of the repo root
+# itself (plugin development / smoke tests). Ephemeral, machine-local, and
+# they capture pages from whatever app the session visited — never commit.
+.playwright-cli/
+
 # macOS Finder noise.
 .DS_Store
 **/.DS_Store
