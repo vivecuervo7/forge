@@ -22,7 +22,14 @@
 //   2   usage error
 
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
-import { dirname, basename, join, resolve, relative } from 'node:path'
+import { dirname, basename, join } from 'node:path'
+import {
+  findForgeRoot,
+  resolveForgeRootArg,
+  extractMetaSource,
+  evalMeta,
+  ticketKeyPrefix,
+} from './forge-common.mjs'
 
 // --- arg parsing ---
 
@@ -48,26 +55,13 @@ for (let i = 0; i < argv.length; i++) {
   }
 }
 
-// --- forge root resolution ---
-
-function findForgeRoot(start) {
-  let dir = resolve(start)
-  while (true) {
-    if (existsSync(join(dir, 'hints'))) return dir
-    if (existsSync(join(dir, 'forge', 'hints'))) return join(dir, 'forge')
-    const parent = dirname(dir)
-    if (parent === dir) return null
-    dir = parent
-  }
-}
+// --- forge root resolution (shared walk — see forge-common.mjs) ---
 
 let forgeRoot
 if (explicitRoot) {
-  const r = resolve(explicitRoot)
-  if (existsSync(join(r, 'hints'))) forgeRoot = r
-  else if (existsSync(join(r, 'forge', 'hints'))) forgeRoot = join(r, 'forge')
-  else {
-    console.error(`forge-cleanup-scan: not a forge directory or project root: ${r}`)
+  forgeRoot = resolveForgeRootArg(explicitRoot)
+  if (!forgeRoot) {
+    console.error(`forge-cleanup-scan: not a forge directory or project root: ${explicitRoot}`)
     process.exit(1)
   }
 } else {
@@ -75,51 +69,6 @@ if (explicitRoot) {
   if (!forgeRoot) {
     console.error('forge-cleanup-scan: no forge/ directory found')
     process.exit(1)
-  }
-}
-
-// --- meta extraction (same approach as forge-snippet-index.mjs) ---
-
-function extractMetaSource(src) {
-  const declMatch = src.match(/export\s+const\s+meta\s*=\s*/m)
-  if (!declMatch) return null
-  const startIdx = declMatch.index + declMatch[0].length
-  if (src[startIdx] !== '{') return null
-  let depth = 0
-  let inString = null
-  let inLineComment = false
-  let inBlockComment = false
-  let escape = false
-  for (let i = startIdx; i < src.length; i++) {
-    const ch = src[i]
-    const next = src[i + 1]
-    if (inLineComment) { if (ch === '\n') inLineComment = false; continue }
-    if (inBlockComment) { if (ch === '*' && next === '/') { inBlockComment = false; i++ } continue }
-    if (inString) {
-      if (escape) { escape = false; continue }
-      if (ch === '\\') { escape = true; continue }
-      if (ch === inString) inString = null
-      continue
-    }
-    if (ch === '/' && next === '/') { inLineComment = true; i++; continue }
-    if (ch === '/' && next === '*') { inBlockComment = true; i++; continue }
-    if (ch === "'" || ch === '"' || ch === '`') { inString = ch; continue }
-    if (ch === '{') depth++
-    else if (ch === '}') {
-      depth--
-      if (depth === 0) return src.slice(startIdx, i + 1)
-    }
-  }
-  return null
-}
-
-function evalMeta(metaSrc) {
-  try {
-    // eslint-disable-next-line no-new-func
-    const fn = new Function(`"use strict"; return (${metaSrc});`)
-    return fn()
-  } catch {
-    return null
   }
 }
 
@@ -217,7 +166,7 @@ function scanSnippets(snippetsDir) {
     let metaError = null
     if (!metaSrc) metaError = 'no meta block found'
     else {
-      meta = evalMeta(metaSrc)
+      meta = evalMeta(metaSrc).meta
       if (!meta) metaError = 'meta parse failed'
     }
     const body = extractRunBody(src)
@@ -240,8 +189,9 @@ function scanSnippets(snippetsDir) {
       if (Array.isArray(m.tags) && m.tags.length === 1 && m.tags[0] === 'auto-authored')
         flags.push({ kind: 'low-value-tags', detail: "tags is exactly ['auto-authored'] — low discovery value" })
     }
-    if (/^ae-\d+-/i.test(r.name))
-      flags.push({ kind: 'jira-key-named', detail: `filename starts with ${r.name.match(/^ae-\d+/i)[0]} — consider renaming to intent-named` })
+    const ticketKey = ticketKeyPrefix(r.name)
+    if (ticketKey)
+      flags.push({ kind: 'jira-key-named', detail: `filename starts with ${ticketKey} — consider renaming to intent-named` })
     if (flags.length) out.flagged.push({ file: r.file, name: r.name, flags })
   }
 

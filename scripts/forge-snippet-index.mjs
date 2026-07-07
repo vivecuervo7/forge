@@ -54,82 +54,14 @@
 //   2   usage / parse error
 
 import { existsSync, readdirSync, readFileSync, writeFileSync, statSync } from 'node:fs'
-import { dirname, basename, join, resolve } from 'node:path'
-
-function findForgeRoot(start) {
-  let dir = resolve(start)
-  while (true) {
-    if (existsSync(join(dir, 'forge', 'hints'))) return join(dir, 'forge')
-    const parent = dirname(dir)
-    if (parent === dir) return null
-    dir = parent
-  }
-}
-
-function extractMetaSource(src) {
-  // Match `export const meta = { ... }` at the start of file (allow leading
-  // comments + whitespace). Balanced-brace scan from the first `{` to handle
-  // nested object/array literals inside meta.
-  const declMatch = src.match(/export\s+const\s+meta\s*=\s*/m)
-  if (!declMatch) return null
-
-  const startIdx = declMatch.index + declMatch[0].length
-  if (src[startIdx] !== '{') return null
-
-  let depth = 0
-  let inString = null  // null | "'" | '"' | '`'
-  let inLineComment = false
-  let inBlockComment = false
-  let escape = false
-
-  for (let i = startIdx; i < src.length; i++) {
-    const ch = src[i]
-    const next = src[i + 1]
-
-    if (inLineComment) {
-      if (ch === '\n') inLineComment = false
-      continue
-    }
-    if (inBlockComment) {
-      if (ch === '*' && next === '/') {
-        inBlockComment = false
-        i++
-      }
-      continue
-    }
-    if (inString) {
-      if (escape) { escape = false; continue }
-      if (ch === '\\') { escape = true; continue }
-      if (ch === inString) inString = null
-      continue
-    }
-    if (ch === '/' && next === '/') { inLineComment = true; i++; continue }
-    if (ch === '/' && next === '*') { inBlockComment = true; i++; continue }
-    if (ch === "'" || ch === '"' || ch === '`') { inString = ch; continue }
-
-    if (ch === '{') depth++
-    else if (ch === '}') {
-      depth--
-      if (depth === 0) {
-        return src.slice(startIdx, i + 1)
-      }
-    }
-  }
-  return null
-}
-
-function evalMeta(metaSrc, snippetName) {
-  // Evaluate the meta literal in a sandbox. Wrap in parens so the `{...}`
-  // parses as an expression, not a block.
-  try {
-    // eslint-disable-next-line no-new-func
-    const fn = new Function(`"use strict"; return (${metaSrc});`)
-    return fn()
-  } catch (e) {
-    console.error(`forge-snippet-index: failed to parse meta in ${snippetName}: ${e.message}`)
-    return null
-  }
-}
+import { basename, join } from 'node:path'
+import {
+  findForgeRoot,
+  resolveForgeRootArg,
+  extractMetaSource,
+  evalMeta,
+  ticketKeyPrefix,
+} from './forge-common.mjs'
 
 // Compact arg shorthand: just the names, comma-separated. Returns `()` for
 // zero-arg snippets so the entry shape stays uniform. The full arg metadata
@@ -185,8 +117,9 @@ function buildIndex(snippetsDir, opts = {}) {
       continue
     }
 
-    const meta = evalMeta(metaSrc, file)
+    const { meta, error } = evalMeta(metaSrc)
     if (meta === null) {
+      console.error(`forge-snippet-index: failed to parse meta in ${file}: ${error}`)
       records.push({ name, meta: {}, error: 'meta parse failed' })
       continue
     }
@@ -256,8 +189,8 @@ function emitHygieneWarnings(records, opts = {}) {
       record('noiseTags', filename, "meta.tags contains 'auto-authored' — replace with discovery-aiding tags")
     }
 
-    if (/^ae-\d+/i.test(r.name)) {
-      record('jiraFilename', filename, 'filename looks like a Jira key — rename to <verb>-<noun>[-<modifier>]')
+    if (ticketKeyPrefix(r.name)) {
+      record('jiraFilename', filename, 'filename looks like a ticket key — rename to <verb>-<noun>[-<modifier>]')
     }
 
     const hasFlow = meta.flow && String(meta.flow).trim() !== ''
@@ -362,14 +295,10 @@ const positional = args.filter(a => !a.startsWith('--'))
 const explicitRoot = positional[0]
 let forgeRoot
 if (explicitRoot) {
-  const resolved = resolve(explicitRoot)
   // Accept either the forge dir itself or its parent.
-  if (existsSync(join(resolved, 'hints'))) {
-    forgeRoot = resolved
-  } else if (existsSync(join(resolved, 'forge', 'hints'))) {
-    forgeRoot = join(resolved, 'forge')
-  } else {
-    console.error(`forge-snippet-index: not a forge directory or project root: ${resolved}`)
+  forgeRoot = resolveForgeRootArg(explicitRoot)
+  if (!forgeRoot) {
+    console.error(`forge-snippet-index: not a forge directory or project root: ${explicitRoot}`)
     process.exit(1)
   }
 } else {

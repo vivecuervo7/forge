@@ -74,6 +74,7 @@ import {
   ensureRunnerDeps,
   loadFromRunner,
 } from './forge-ensure-runner.mjs'
+import { looksLikeForgeRoot } from './forge-common.mjs'
 
 function die(msg, code = 2) {
   console.error('forge-run-spec:', msg)
@@ -99,7 +100,7 @@ if (!existsSync(specPathAbs)) die(`spec not found: ${specPathAbs}`, 4)
 // deps into a directory derived from an unvalidated path could overwrite an
 // unrelated package.json (e.g. --spec ~/foo.spec.ts → homedir).
 const provisionalForgeRoot = dirname(dirname(specPathAbs))
-if (!existsSync(join(provisionalForgeRoot, 'hints'))) {
+if (!looksLikeForgeRoot(provisionalForgeRoot)) {
   die(
     `spec at ${specPathAbs} doesn't appear to live under a forge/ directory ` +
     `(expected ${provisionalForgeRoot}/hints/ to exist). Check the path.`

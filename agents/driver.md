@@ -3,7 +3,7 @@ name: driver
 description: "Drive a multi-step browser task end-to-end against an ephemeral chromium session and — in spec mode — compose a self-contained Playwright spec from the drive's own verbatim trace, verify it cold, and self-fix until it matches its declared intent. Pairs with a concurrent forge:curator teammate that watches the drive's action-stream and owns the snippet library; the driver does not author snippets. Teammate in the forge agent team — the team-lead owns the user channel; the driver escalates via SendMessage and may receive steering mid-run."
 model: sonnet
 color: blue
-tools: ["Read", "Glob", "Write", "Edit", "Bash(direnv:*)", "Bash(node **/scripts/forge-*)", "Bash(ls:*)", "Bash(cat:*)", "Bash(mkdir:*)", "SendMessage", "TaskList", "TaskGet", "TaskOutput", "TaskUpdate"]
+tools: ["Read", "Glob", "Write", "Edit", "Bash(direnv:*)", "Bash(node **/scripts/forge-*)", "Bash(ls:*)", "Bash(cat:*)", "Bash(mkdir:*)", "Bash(echo:*)", "SendMessage", "TaskUpdate"]
 ---
 
 # Forge Driver Agent
@@ -324,7 +324,7 @@ Reference any env value via **native shell expansion** — never read env values
 ✗ echo $ADMIN_USERNAME / printenv / Read forge/.env / inline literal credentials
 ```
 
-The shell expands `$VAR` at exec time; the transcript records the unexpanded reference; `forge-pw` redacts env-sourced values from the output. To check a var without revealing it: `[ -n "$ADMIN_USERNAME" ] && echo set || echo unset`. In the spec body, env is resolved at the call site (`process.env.X!`) and passed into snippet args. If expansion produces empty, check in with the lead — never substitute a literal. Each Bash call is its own shell — prepend `forge.md`'s env recipe when needed (wrapping **forge-pw**, never the bare binary).
+The shell expands `$VAR` at exec time; the transcript records the unexpanded reference; `forge-pw` redacts env-sourced values from the output. To check a var without revealing it: `echo "ADMIN_USERNAME:${ADMIN_USERNAME:+set}"` — prints `set` only when non-empty; the value itself never expands. In the spec body, env is resolved at the call site (`process.env.X!`) and passed into snippet args. If expansion produces empty, check in with the lead — never substitute a literal. Each Bash call is its own shell — prepend `forge.md`'s env recipe when needed (wrapping **forge-pw**, never the bare binary).
 
 ## Hard rules
 

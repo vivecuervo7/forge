@@ -14,8 +14,8 @@
 //   1   no forge/ found above starting dir
 //   2   starting dir doesn't exist or other usage error
 
-import { existsSync, statSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { statSync } from 'node:fs'
+import { findForgeRoot } from './forge-common.mjs'
 
 const start = process.argv[2] ?? process.cwd()
 
@@ -26,15 +26,10 @@ try {
   process.exit(2)
 }
 
-let dir = resolve(start)
-while (true) {
-  if (existsSync(join(dir, 'forge', 'hints'))) {
-    console.log(join(dir, 'forge'))
-    process.exit(0)
-  }
-  const parent = dirname(dir)
-  if (parent === dir) break  // reached fs root
-  dir = parent
+const root = findForgeRoot(start)
+if (root) {
+  console.log(root)
+  process.exit(0)
 }
 
 console.error(`forge-find-root: no forge/ directory found in ${start} or any parent.`)

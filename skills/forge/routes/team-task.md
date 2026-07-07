@@ -75,7 +75,7 @@ cat <PLUGIN_ROOT>/protocols/collaborativeness.md
 Drives run **headless** by default — the user watches via the Playwright dashboard (opened in 1.3b), which renders headless sessions live without a window stealing focus or trapping their typing. Set **`HEADED: true`** only when:
 - `COLLABORATIVENESS` is `step-by-step` (teach — the user physically walks the flow through the browser), **or**
 - the user's framing asks to see it ("watch", "headed", "let me take the wheel", "I'll drive"), **or**
-- the headed setting is on — a project/user can export `FORGE_HEADED=1`: `[ -n "$FORGE_HEADED" ] && echo headed || echo headless`.
+- the headed setting is on — a project/user can export `FORGE_HEADED=1`: check with `echo "FORGE_HEADED=${FORGE_HEADED:-}"` (non-empty → headed).
 
 Otherwise `HEADED: false`. Capture as `HEADED`.
 
@@ -85,7 +85,7 @@ Choose a `SESSION_NAME` you (and the user) can match **at a glance in the Playwr
 
 - **Favor a ticket key** if the task or context has one (`PROJ-123` → `proj123`) — usually the most recognizable, and the user often names their own session after it too.
 - **Otherwise** a terse gist of the task (`add-hammer`, `agenda`).
-- **Keep it unique** among concurrent runs — if a bare name could clash (two runs on the same ticket), append 2 hex: `node -e 'console.log(require("crypto").randomBytes(1).toString("hex"))'` → e.g. `proj123-3f`.
+- **Keep it unique** among concurrent runs — if a bare name could clash (two runs on the same ticket), append two hex characters of your own choosing (no command needed) → e.g. `proj123-3f`.
 
 No `ft-`/`forge-` prefix — nothing keys on it; the name is purely for reading.
 

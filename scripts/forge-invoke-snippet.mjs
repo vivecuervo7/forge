@@ -56,10 +56,11 @@
 //   any other — playwright-cli's exit code is propagated
 
 import { spawnSync } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { ensureRunnerDeps, esbuildBinFor, loadFromRunner } from './forge-ensure-runner.mjs'
+import { looksLikeForgeRoot } from './forge-common.mjs'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -90,7 +91,7 @@ if (!rawSnippet) die('missing --snippet <path>')
 // deps into a directory derived from an unvalidated path could overwrite an
 // unrelated package.json (e.g. --snippet ~/foo.ts → homedir).
 const forgeRoot = dirname(dirname(resolve(rawSnippet)))
-if (!existsSync(join(forgeRoot, 'hints'))) {
+if (!looksLikeForgeRoot(forgeRoot)) {
   die(
     `snippet at ${resolve(rawSnippet)} doesn't appear to live under a forge/ directory ` +
     `(expected ${forgeRoot}/hints/ to exist). Check the path.`

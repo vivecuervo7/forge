@@ -11,7 +11,7 @@ See [`CHANGELOG.md`](./CHANGELOG.md) for the high-level history.
 - **Node.js** — any recent version (tested on 24).
 - **playwright-cli** — `brew install playwright-cli`. Forge wraps it.
 
-Supported on macOS, Linux, and Windows.
+Supported on macOS and Linux. Windows is currently untested — the wrapper scripts spawn `playwright-cli` directly and the team lifecycle leans on tmux/pgrep, so expect rough edges there.
 
 ## Quick start
 
@@ -129,11 +129,11 @@ Every snippet in `forge/snippets/` carries a structured `meta` block at the top 
 | `composes` | optional | Names of other snippets this one shells out to. |
 | `supersedes` | optional | Names of older snippets this one replaces. |
 
-`forge/snippets/INDEX.md` is the auto-generated contract — a grouped table read by the lead at session start so it knows the library shape without reading every snippet body. It regenerates whenever a snippet is added or modified, and whenever `/forge clean snippets` runs. Treat it as derived; edit the `meta` blocks, not the file.
+`forge/snippets/INDEX.md` is the auto-generated contract — a grouped table the driver scans before planning a drive (and re-scans before composing a spec) so it knows the library shape without reading every snippet body. It regenerates whenever a snippet is added or modified, and whenever `/forge clean snippets` runs. Treat it as derived; edit the `meta` blocks, not the file.
 
 ## Structured JSON output
 
-The `forge-pw` wrapper around `playwright-cli` accepts `--json` (or `FORGE_JSON=1`) and emits a single JSON envelope: `{ ok, result, error }`. This is mostly for advanced users and the driver agent's internal calls — everyday driving works the same as before. Reach for it when scripting forge into a larger pipeline or when you want machine-parseable failure modes.
+The `forge-pw` wrapper around `playwright-cli` accepts `--json` (or `FORGE_JSON=1`) and passes through playwright-cli's structured JSON output: `{"result": ...}` on success, `{"isError": true, "error": ...}` on failure (check `isError`, not the exit code). This is mostly for advanced users and the driver agent's internal calls — everyday driving works the same as before. Reach for it when scripting forge into a larger pipeline or when you want machine-parseable failure modes.
 
 ## Architecture
 
