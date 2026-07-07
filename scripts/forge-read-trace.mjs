@@ -13,14 +13,25 @@
 // Usage:
 //   node forge-read-trace.mjs --team <TEAM> [--since <cursor>] [--await <sec>]
 //                             [--driver <agentName>] [--project-dir <path>]
+//                             [--started-after <ISO or epoch>]
+//
+// --started-after <t> — only consider transcripts still being written at (or
+// started after) time t. Two sequential drives under one parent share a
+// teamName, so identity alone can match an EARLIER drive's driver; passing
+// this run's start time (the lead threads preflight's `startedAt` through
+// the curator's spawn prompt) excludes finished predecessors. When multiple
+// transcripts still match, the newest is used and a warning names the others.
+// If the expected project dir has no match (the driver may run under a
+// different cwd), other project dirs are scanned as a fallback — bounded to
+// recently-written files.
 //
 // Prints readable blocks the curator authors from, then a trailing
 // `cursor: <N>` line to pass as the next --since. Result-less trailing
 // actions (transcript not yet flushed) are left for the next read.
 
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs'
+import { basename, join } from 'node:path'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
 
 const argv = process.argv.slice(2)
 const opt = (name, def) => {
@@ -36,20 +47,56 @@ const projectDir = opt(
   '--project-dir',
   join(homedir(), '.claude', 'projects', process.cwd().replace(/\//g, '-')),
 )
+const startedAfterRaw = opt('--started-after', null)
 
 if (!team) {
   console.error('forge-read-trace: --team <TEAM_NAME> is required')
   process.exit(2)
 }
 
-// Find the transcript whose OWN records carry agentName===driver && teamName===team.
-function locate() {
-  if (!existsSync(projectDir)) return null
-  let best = null
-  let bestMtime = 0
-  for (const f of readdirSync(projectDir)) {
+function parseTime(raw) {
+  if (raw == null) return null
+  if (/^\d+$/.test(raw)) {
+    const n = Number(raw)
+    return n < 1e12 ? n * 1000 : n // epoch seconds vs ms
+  }
+  const t = Date.parse(raw)
+  return Number.isNaN(t) ? null : t
+}
+const startedAfterMs = parseTime(startedAfterRaw)
+if (startedAfterRaw != null && startedAfterMs == null) {
+  console.error(`forge-read-trace: --started-after: cannot parse '${startedAfterRaw}' (ISO 8601 or epoch)`)
+  process.exit(2)
+}
+
+// First record timestamp — when the transcript's session began.
+function firstRecordTime(text) {
+  const m = text.slice(0, 4096).match(/"timestamp":"([^"]+)"/)
+  return m ? Date.parse(m[1]) : null
+}
+
+// Collect transcripts in `dir` whose OWN records carry agentName===driver &&
+// teamName===team, still live at/after startedAfterMs (when given).
+function collectMatches(dir, recentFloorMs) {
+  const matches = []
+  let entries
+  try {
+    entries = readdirSync(dir) // ENOENT/ENOTDIR (.DS_Store in projects/) → no matches
+  } catch {
+    return matches
+  }
+  for (const f of entries) {
     if (!f.endsWith('.jsonl')) continue
-    const path = join(projectDir, f)
+    const path = join(dir, f)
+    let mtime
+    try {
+      mtime = statSync(path).mtimeMs
+    } catch {
+      continue
+    }
+    // A transcript whose last write predates the run can't be this run's
+    // driver — skip before the (expensive) full read.
+    if (recentFloorMs && mtime < recentFloorMs) continue
     let text
     try {
       text = readFileSync(path, 'utf8')
@@ -73,13 +120,51 @@ function locate() {
       }
     }
     if (!isDriver) continue
-    const m = statSync(path).mtimeMs
-    if (m > bestMtime) {
-      bestMtime = m
-      best = path
+    if (startedAfterMs) {
+      const t0 = firstRecordTime(text)
+      if (t0 && t0 < startedAfterMs) continue // an earlier drive's driver
+    }
+    matches.push({ path, mtime })
+  }
+  return matches
+}
+
+let notedFallback = false
+let warnedAmbiguous = false
+function locate() {
+  let matches = collectMatches(projectDir, startedAfterMs)
+  let viaFallback = false
+  if (matches.length === 0) {
+    // The driver may run under a different cwd than expected (its transcript
+    // lands in that cwd's encoded project dir). Fall back to scanning the
+    // other project dirs — bounded to files written since the run started
+    // (or the last 24h when no --started-after was given).
+    const floor = startedAfterMs ?? Date.now() - 24 * 3600 * 1000
+    const projectsRoot = join(homedir(), '.claude', 'projects')
+    if (existsSync(projectsRoot)) {
+      for (const d of readdirSync(projectsRoot)) {
+        const dir = join(projectsRoot, d)
+        if (dir === projectDir) continue
+        matches = matches.concat(collectMatches(dir, floor))
+      }
+      viaFallback = matches.length > 0
     }
   }
-  return best
+  if (matches.length === 0) return null
+  matches.sort((a, b) => b.mtime - a.mtime)
+  if (viaFallback && !notedFallback) {
+    notedFallback = true
+    console.log(`# note: driver transcript found outside --project-dir (${basename(projectDir)}) — using ${matches[0].path}`)
+  }
+  if (matches.length > 1 && !warnedAmbiguous) {
+    warnedAmbiguous = true
+    console.log(
+      `# WARNING: ${matches.length} transcripts match driver identity (team ${team}) — using newest ` +
+        `${basename(matches[0].path)}; also matched: ${matches.slice(1).map((m) => basename(m.path)).join(', ')}. ` +
+        `Pass --started-after <run start> to exclude earlier drives.`,
+    )
+  }
+  return matches[0].path
 }
 
 // Build { actions, results } from transcript lines.

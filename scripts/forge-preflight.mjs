@@ -164,6 +164,10 @@ if (opts.open) {
 const cleanup = cleanupNudge(forgeRoot)
 const summary = {
   forgeRoot,
+  // The run's start time — threaded into the curator's spawn prompt as
+  // RUN_STARTED_AT so forge-read-trace can exclude earlier drives that
+  // share this parent session's teamName.
+  startedAt: new Date().toISOString(),
   session: opts.session,
   headed,
   headedSource,

@@ -23,6 +23,7 @@ MODE: drive | spec
 PROJECT_FORGE_ROOT: <absolute path to project's forge/ directory>
 DRIVER_NAME: <the driver teammate's name, e.g. driver>
 TEAM_NAME: <the team's name, e.g. session-36180256>
+RUN_STARTED_AT: <ISO timestamp — when this run's preflight ran>
 USER_TASK: <the original task, for context>
 
 Your task ID is <id>. Claim it with TaskUpdate(taskId=<id>, status='in_progress') as your first action, then read your hints and wait for the driver's first signal.
@@ -45,8 +46,10 @@ Keep your task `in_progress` for the whole run — including the driver's verify
 The driver's verbatim browser actions live in its on-disk transcript. Read them with one command — `forge-read-trace` locates the driver's transcript (by your `TEAM_NAME`, matching on its records' own identity so it can't be fooled by the lead's or your own transcript) and prints its forge-pw actions since a cursor:
 
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-cli.mjs read-trace --team <TEAM_NAME> --since <cursor> [--await <sec>]
+node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-cli.mjs read-trace --team <TEAM_NAME> --started-after <RUN_STARTED_AT> --since <cursor> [--await <sec>]
 ```
+
+`--started-after` pins the read to *this* run: sequential drives under one parent share a `TEAM_NAME`, so without it an earlier drive's transcript can shadow the live one. If the output ever carries a `# WARNING: … transcripts match` line, trust the newest-pick but mention the ambiguity in your completion ping.
 
 It prints the driver's new actions — the echoed Playwright (lift it **verbatim** into snippets), `run-code` bodies, and any returned values (for the spec's assertions) — then a trailing `cursor: <N>`. **Carry that `N` as your next `--since`** (start at `0`). Un-flushed trailing actions are held back automatically (the cursor stops before them), so the next read picks them up — you never receive a half-written action.
 

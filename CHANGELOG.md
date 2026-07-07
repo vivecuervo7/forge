@@ -5,6 +5,24 @@ every version bump. The full granular history is in the git log. Forge is young
 and pre-1.0 (built over June 2026), so a minor version can still carry a
 meaningful architecture change.
 
+## 0.49.0 — Trace reads pinned to the run (2026-07-08)
+
+- **`read-trace --started-after <time>`** — two sequential drives under one
+  parent session share a `teamName`, so driver-identity matching alone could
+  land the curator on the *earlier* drive's transcript (observed: ~9 tool
+  calls parsing the wrong driver's actions). Preflight now stamps
+  `startedAt`, the lead threads it into the curator's spawn prompt as
+  `RUN_STARTED_AT`, and the curator's trace reads exclude any transcript
+  finished before the run began.
+- When multiple transcripts still match, the newest is used and a `# WARNING`
+  names the others (the curator surfaces ambiguity in its completion ping);
+  when the expected project dir has no match (a driver running under a
+  different cwd), other project dirs are scanned as a bounded fallback —
+  recently-written files only — with a `# note` naming what was found where.
+- New disambiguation test matrix (`forge-read-trace.test.mjs`). Worst case on
+  a miss stays inefficiency, never breakage — the trace is only the curator's
+  accretion source.
+
 ## 0.48.0 — Hardening from the 2026-07-07 session review (2026-07-08)
 
 - **`run-spec` inactivity watchdog (exit 7).** The observed failure mode was a

@@ -74,7 +74,7 @@ One call does the whole deterministic setup: locates the forge root, opens the b
 
 Read its output top to bottom:
 
-- **The JSON summary** — capture `forgeRoot` as `FORGE_ROOT` and `cleanupNudge` as `CLEANUP_NUDGE` (hold silently for Phase 5.5a; `cleanupDays` gives the N for its phrasing). `setupSection`/`teardownSection` flag whether forge.md carries those sections for 1.3 and 5.4.
+- **The JSON summary** — capture `forgeRoot` as `FORGE_ROOT`, `startedAt` as `RUN_STARTED_AT` (the curator's spawn prompt threads it into trace reads so a previous drive's transcript can't shadow this one's), and `cleanupNudge` as `CLEANUP_NUDGE` (hold silently for Phase 5.5a; `cleanupDays` gives the N for its phrasing). `setupSection`/`teardownSection` flag whether forge.md carries those sections for 1.3 and 5.4.
 - **`hints/forge.md`** — the shared operate contract: persona/account resolution, the optional setup/teardown sections, plus the app's selectors and gotchas (which you'll want when routing a driver check-in). The driver reads `forge.md` too; the curator reads its own `curator.md`. All hints are optional — a bare `/forge init` scaffold drives correctly; hints encode project-specific knowledge the teammates can't derive from the app.
 - **`protocols/escalation.md`** — you route the driver's check-ins per its **Lead side** (§3); the driver `cat`s the same file on friction, so the shapes stay a single source of truth.
 - **`protocols/collaborativeness.md`** — you read the **deference** column to know how readily to involve the user at this run's `COLLABORATIVENESS` level, and you hold/step that level through the run.
@@ -142,6 +142,7 @@ Agent(
 PROJECT_FORGE_ROOT: <FORGE_ROOT>
 DRIVER_NAME: driver
 TEAM_NAME: <TEAM_NAME>
+RUN_STARTED_AT: <RUN_STARTED_AT>
 USER_TASK: <user's task verbatim>
 
 Your task ID is <CURATOR_TASK_ID>. Claim it with TaskUpdate(taskId=<CURATOR_TASK_ID>, status='in_progress'), read your hints, and wait for the driver's first chunk signal. The driver may begin before you're ready — its transcript is your backstop, so read forward from the start to catch any early chunks."
