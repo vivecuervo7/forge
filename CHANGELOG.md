@@ -5,6 +5,28 @@ every version bump. The full granular history is in the git log. Forge is young
 and pre-1.0 (built over June 2026), so a minor version can still carry a
 meaningful architecture change.
 
+## 0.47.0 — `preflight`: the lead's setup as one command (2026-07-08)
+
+- New `forge-cli.mjs preflight --session <name> [--headed]` — everything
+  deterministic the lead did across Phase 1, in one call: locate the forge
+  root, open the browser session, open the dashboard when headless
+  (idempotent), compute the cleanup-staleness nudge, validate the session
+  name against the socket-path cap, and print the forge.md hints plus the
+  escalation/collaborativeness protocols the lead needs in context. A JSON
+  summary leads the output (forgeRoot, headed + its source, browser/dashboard
+  state, setup/teardown-section flags, cleanup nudge).
+- Judgment stays with the lead: it names the session and decides
+  headed-vs-headless from the run's framing before calling; preflight adds
+  only the deterministic `FORGE_HEADED` env check. Project-specific setup
+  (`## Setup before each run`) remains hint-file prose the lead follows —
+  nothing project-shaped moved into plugin code.
+- `team-task.md` Phase 1 shrinks from seven prose-driven steps to
+  decide-then-one-command; the run reaches its spawn phase several tool
+  calls sooner.
+- The lead now inherits the session's model — SKILL.md no longer pins
+  `model: sonnet`. The lead is the escalation/routing tier; it should run on
+  whatever the user's session runs on.
+
 ## 0.46.0 — `observe --live`: one-call perception (2026-07-08)
 
 - `forge-cli.mjs observe --live -s=<session>` takes the snapshot itself

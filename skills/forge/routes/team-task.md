@@ -43,90 +43,49 @@ Either way, stop here — the run can't proceed without a restart.
 
 The team auto-forms when the first teammate spawns — no `TeamCreate` call needed. The team directories at `~/.claude/teams/session-<8-char>/` and `~/.claude/tasks/session-<8-char>/` are created automatically and removed on session exit. The task list persists until `cleanupPeriodDays` elapses. The split is deliberate: spec composition stays in the driver's context (verbatim trace, no fidelity leak), while snippet curation runs concurrently in its own focused mind (so it survives interruption and patches continuously).
 
-## Phase 1 — Discovery and setup
+## Phase 1 — Preflight
 
-### 1.1. Find the project's forge root
+### 1.1. Decide the run's shape (judgment first)
 
-```bash
-node <PLUGIN_ROOT>/scripts/forge-cli.mjs find-root
-```
+Two decisions are yours before anything runs:
 
-If it fails (exit non-zero), relay verbatim and stop. The user needs `/forge init`. Capture as `FORGE_ROOT`.
-
-### 1.2. Load the forge.md hint (lead-only)
-
-```bash
-cat <FORGE_ROOT>/hints/forge.md 2>/dev/null || echo ""
-```
-
-You read `forge.md` — it's the shared operate contract: persona/account resolution and the optional setup/teardown sections (Phases 1.4 and 5.3), plus the app's selectors and gotchas (which you'll want when routing a driver check-in). The driver reads `forge.md` too; the curator reads its own `curator.md`. Empty string is fine.
-
-All hints are optional. A bare `/forge init` scaffold drives correctly; hints encode project-specific knowledge the teammates can't derive from the app.
-
-### 1.2a. Load the escalation protocol (lead-only)
-
-```bash
-cat <PLUGIN_ROOT>/protocols/escalation.md
-cat <PLUGIN_ROOT>/protocols/collaborativeness.md
-```
-
-`escalation.md` — you route the driver's check-ins per its **Lead side** (§3); loading it keeps the protocol and message shapes a single source of truth shared with the driver (it `cat`s the same file on friction). `collaborativeness.md` — you read the **deference** column to know how readily to involve the user at this run's `COLLABORATIVENESS` level, and you hold/step that level through the run.
-
-### 1.2b. Decide headed vs headless (default: headless + dashboard)
-
-Drives run **headless** by default — the user watches via the Playwright dashboard (opened in 1.3b), which renders headless sessions live without a window stealing focus or trapping their typing. Set **`HEADED: true`** only when:
-- `COLLABORATIVENESS` is `step-by-step` (teach — the user physically walks the flow through the browser), **or**
-- the user's framing asks to see it ("watch", "headed", "let me take the wheel", "I'll drive"), **or**
-- `forge.md` (read in 1.2) declares a headed preference — e.g. "run headed by default", **or**
-- the headed setting is on — a project/user can export `FORGE_HEADED=1`: check with `echo "FORGE_HEADED=${FORGE_HEADED:-}"` (non-empty → headed).
-
-Otherwise `HEADED: false`. Capture as `HEADED`.
-
-### 1.3. Name the session (short + meaningful — it's how you spot it in the dashboard)
-
-Choose a `SESSION_NAME` you (and the user) can match **at a glance in the Playwright dashboard** to the work it's driving — this is what matters when several sessions run at once. Use judgment:
+**`SESSION_NAME`** — short + meaningful; it's how you (and the user) spot the session **at a glance in the Playwright dashboard** when several run at once. Use judgment:
 
 - **Favor a ticket key** if the task or context has one (`PROJ-123` → `proj123`) — usually the most recognizable, and the user often names their own session after it too.
 - **Otherwise** a terse gist of the task (`add-hammer`, `agenda`).
 - **Keep it unique** among concurrent runs — if a bare name could clash (two runs on the same ticket), append two hex characters of your own choosing (no command needed) → e.g. `proj123-3f`.
 
-No `ft-`/`forge-` prefix — nothing keys on it; the name is purely for reading.
+No `ft-`/`forge-` prefix — nothing keys on it. Keep it ≤ 16 chars (a longer name overflows the unix-socket path; preflight validates and tells you to shorten). The driver references the browser by this name; phase 5 closes it.
 
-**Hard cap: ≤ ~16 chars.** Not just style — `forge-pw open` builds a unix socket at `$TMPDIR/pw-…/cli/<hash>-<SESSION_NAME>.sock`, and macOS caps that whole path at ~104 bytes; a long name overflows it and `open` fails with `listen EINVAL: invalid argument`. If `open` ever hits `listen EINVAL`, the cause is path length — shorten the name and retry. (Don't be misled by forge-pw redacting the resolved `$TMPDIR` back to the literal `$TMPDIR` in the error — a real, expanded path can look unexpanded; check length, not that.) The driver launches/references the browser by this name; phase 5 closes it.
+**`HEADED`** — drives run **headless** by default; the user watches via the Playwright dashboard (preflight opens it), which renders headless sessions live without a window stealing focus or trapping their typing. Set `HEADED: true` only when:
 
-### 1.3b. Open the browser session, then the dashboard (you own the browser lifecycle)
+- `COLLABORATIVENESS` is `step-by-step` (teach — the user physically walks the flow through the browser), **or**
+- the user's framing asks to see it ("watch", "headed", "let me take the wheel", "I'll drive").
 
-**Open the session yourself** — you own the browser's whole lifecycle (open here, close in Phase 5), so the driver arrives to a ready session instead of racing to open one. Headless unless `HEADED` (1.2b):
+(The `FORGE_HEADED=1` env setting also selects headed — preflight checks it itself, so don't probe for it. A `forge.md` headed preference is handled after preflight — see 1.2.)
 
-```bash
-node <PLUGIN_ROOT>/scripts/forge-cli.mjs pw -s=<SESSION_NAME> open --browser=chrome about:blank   # add --headed when HEADED is true
-```
-
-This open (with the close in 5.1) is **lifecycle, not driving** — you bring up a blank session; the driver does every navigation and action on it.
-
-Then, when `HEADED` is false, **open the dashboard** so the user can watch — best-effort and idempotent (opens only if not already running, so it never steals focus mid-session):
+### 1.2. Run preflight (one command)
 
 ```bash
-node <PLUGIN_ROOT>/scripts/forge-cli.mjs dashboard
+node <PLUGIN_ROOT>/scripts/forge-cli.mjs preflight --session <SESSION_NAME>   # add --headed when HEADED is true
 ```
 
-Skip the dashboard when `HEADED` is true (the real browser window is the view). If it can't open, the drive continues headless regardless — note once that the user can run `playwright-cli show` themselves to watch.
+One call does the whole deterministic setup: locates the forge root, opens the browser session (headless unless headed; you own its lifecycle — preflight opens here, you close in Phase 5), opens the dashboard when headless (idempotent — never steals focus if already up), computes the cleanup-staleness nudge, and prints the files you need in context.
 
-### 1.3a. Check cleanup staleness (silent — surface at end)
+Read its output top to bottom:
 
-```bash
-cat <FORGE_ROOT>/.last-cleanup 2>/dev/null || echo ""
-```
+- **The JSON summary** — capture `forgeRoot` as `FORGE_ROOT` and `cleanupNudge` as `CLEANUP_NUDGE` (hold silently for Phase 5.5a; `cleanupDays` gives the N for its phrasing). `setupSection`/`teardownSection` flag whether forge.md carries those sections for 1.3 and 5.4.
+- **`hints/forge.md`** — the shared operate contract: persona/account resolution, the optional setup/teardown sections, plus the app's selectors and gotchas (which you'll want when routing a driver check-in). The driver reads `forge.md` too; the curator reads its own `curator.md`. All hints are optional — a bare `/forge init` scaffold drives correctly; hints encode project-specific knowledge the teammates can't derive from the app.
+- **`protocols/escalation.md`** — you route the driver's check-ins per its **Lead side** (§3); the driver `cat`s the same file on friction, so the shapes stay a single source of truth.
+- **`protocols/collaborativeness.md`** — you read the **deference** column to know how readily to involve the user at this run's `COLLABORATIVENESS` level, and you hold/step that level through the run.
 
-JSON `{ "hints": "<ISO>", "snippets": "<ISO>" }`. Compute days-since. Capture `CLEANUP_NUDGE` as:
-- **empty** if the file is missing and `forge/hints/` + `forge/snippets/` are sparse (under ~3 files combined).
-- **`hints` / `snippets` / `both`** if the file is missing on a non-sparse project, or a timestamp is older than 7 days.
+Failure modes: exit 1 → no forge root; relay verbatim and stop — the user needs `/forge init`. Exit 2 → session name too long; shorten and retry. Exit 3 → the browser open failed; surface the passed-through error.
 
-Hold for Phase 5.5. **Do not surface now.**
+**One post-read correction:** if `forge.md` declares a headed preference (e.g. "run headed by default") and this run opened headless with no stronger signal, flip it — `node <PLUGIN_ROOT>/scripts/forge-cli.mjs pw -s=<SESSION_NAME> close`, then re-run preflight with `--headed`.
 
-### 1.4. Apply setup instructions (optional)
+### 1.3. Apply setup instructions (optional)
 
-If `forge.md` has a `## Setup before each run` section, follow it literally (SQL seeding, account-reset endpoint, mint a test user, "don't reset anything"). If absent, skip. If setup captures values (minted credentials), hold them and pass to the driver via the spawn prompt or the env contract in `forge.md`. If setup fails, surface to the user and stop.
+If `forge.md` has a `## Setup before each run` section (the JSON's `setupSection: true`), follow it literally (SQL seeding, account-reset endpoint, mint a test user, "don't reset anything"). If absent, skip. If setup captures values (minted credentials), hold them and pass to the driver via the spawn prompt or the env contract in `forge.md`. If setup fails, surface to the user and stop.
 
 ## Phase 2 — Create the tasks
 
@@ -213,7 +172,7 @@ After spawning, the teammates self-coordinate (the chunk/drive-complete/snippets
 
 - **Completion pings** — `driver` pings `team-lead` when its run is done; `curator` pings when the library work (and, in spec mode, the verify-patch window) has resolved. Proceed to phase 5 only after **both**.
 - **Messages addressed to you (`team-lead`)**:
-  - **check-in** (usually from the driver) — `CHECK-IN` / `STUCK ON:` / `TEMPTED TO:` / optional `HUNCH:`. The driver has hit friction and handed *you* the routing rather than classifying it or reaching outside the browser. **Route it per `escalation.md` §3 (Lead side)**, loaded in Phase 1.2a: answer from the code (read-only — `Glob`/`Grep`/`Read`/`Explore`), hand a concrete steer, take it to the user (`AskUserQuestion` → relay), or offer a teach walk-through (→ 4.0a). The message shapes and reply vocabulary live there; the driver is idle until you reply, so route promptly.
+  - **check-in** (usually from the driver) — `CHECK-IN` / `STUCK ON:` / `TEMPTED TO:` / optional `HUNCH:`. The driver has hit friction and handed *you* the routing rather than classifying it or reaching outside the browser. **Route it per `escalation.md` §3 (Lead side)**, loaded by preflight (1.2): answer from the code (read-only — `Glob`/`Grep`/`Read`/`Explore`), hand a concrete steer, take it to the user (`AskUserQuestion` → relay), or offer a teach walk-through (→ 4.0a). The message shapes and reply vocabulary live there; the driver is idle until you reply, so route promptly.
   - **`cannot-drive`** from the driver — terminal failure. Surface in the report; proceed to cleanup.
   - **Status / questions** — answer concisely or relay context.
 - **The user steers mid-run** — relay it to the **driver**: `SendMessage(to="driver", summary="steer", message="<the user's instruction>")`. Relay promptly so it lands at the driver's next turn boundary. (Library/snippet steers go to `curator` instead.)
@@ -223,7 +182,7 @@ After spawning, the teammates self-coordinate (the chunk/drive-complete/snippets
 
 ### 4.0a. Collaborativeness (deference + teaching)
 
-`COLLABORATIVENESS` (one of `autonomous` | `light-touch` | `guided` | `step-by-step`, default `autonomous`; see `collaborativeness.md`, loaded in 1.2a) sets how readily you bring the user in — you read its **deference** column. At `autonomous` you resolve check-ins yourself wherever you can (asking the user only when *you're* stuck — the floor); each rung up routes more to the user; at `step-by-step` the driver surfaces every step and you carry a step-by-step teaching conversation. You **hold the level and step it mid-run** on the user's framing — "walk me through this next bit" → up a rung; "you can take it from here" → back to `autonomous`. A driver check-in (Phase 4) is also a natural cue to *offer* a walk-through and step up on a yes.
+`COLLABORATIVENESS` (one of `autonomous` | `light-touch` | `guided` | `step-by-step`, default `autonomous`; see `collaborativeness.md`, loaded by preflight in 1.2) sets how readily you bring the user in — you read its **deference** column. At `autonomous` you resolve check-ins yourself wherever you can (asking the user only when *you're* stuck — the floor); each rung up routes more to the user; at `step-by-step` the driver surfaces every step and you carry a step-by-step teaching conversation. You **hold the level and step it mid-run** on the user's framing — "walk me through this next bit" → up a rung; "you can take it from here" → back to `autonomous`. A driver check-in (Phase 4) is also a natural cue to *offer* a walk-through and step up on a yes.
 
 When collaborativeness is high you're an **active interlocutor**, not a passive ping-waiter:
 
@@ -246,7 +205,7 @@ If it responds with a completion summary, treat it as the missing ping. If 2 mor
 
 ## Phase 5 — Shut down and clean up
 
-A run can end several ways — normally both completion pings; also via the stall watchdog (4.1), a `cannot-drive`, or a user abort. **However it ends, you reach this phase, and your first act is to close the browser (5.1)** — you generated `SESSION_NAME` in 1.3 and own it, so you are the guaranteed backstop. The close needs nothing from the teammates, so it goes first and never waits on the shutdown handshake.
+A run can end several ways — normally both completion pings; also via the stall watchdog (4.1), a `cannot-drive`, or a user abort. **However it ends, you reach this phase, and your first act is to close the browser (5.1)** — you generated `SESSION_NAME` in 1.1 and own it, so you are the guaranteed backstop. The close needs nothing from the teammates, so it goes first and never waits on the shutdown handshake.
 
 In the normal case — once **both** completion pings have arrived:
 
@@ -301,7 +260,7 @@ In spec mode, use the extended shape in `team-task-spec.md` Phase 5.5 — it add
 
 If anything didn't go to plan (`cannot-drive`, a spec parked unverified, snippet invocation failed mid-drive, etc.), surface prominently — the user wants the truth.
 
-### 5.5a. Append cleanup nudge (if captured in 1.3a)
+### 5.5a. Append cleanup nudge (if preflight reported one)
 
 If `CLEANUP_NUDGE` is non-empty, append a one-line tail:
 - `hints` — *"Last hint cleanup was N days ago — consider `/forge clean hints`."* ("never" if no staleness file.)
@@ -312,7 +271,7 @@ Non-blocking, once-per-run. Don't repeat if the user already cleaned this sessio
 
 ## Hard rules
 
-- **You are an orchestrator and the routing tier — not an actor on the app.** All browser driving, spec writing, and spec running belong to `driver`; all snippet authoring/patching to `curator`. You set up the team, create the tasks, spawn the two teammates, manage lifecycle, AND own the user channel and the driver's **check-ins**: you decide whether a check-in is answered from the code (read-only research — `Glob`/`Grep`/`Read`/`Explore`), with a concrete steer, or by the user (`AskUserQuestion` → SendMessage back); you relay user steering to the relevant teammate. That read-only research is the one thing you reach for beyond orchestration; you still never drive the browser, write snippet or spec files, run specs, or mutate the app or its environment. Your only `forge-pw` calls are the browser **open** (1.3b) and **close** (5.1) — both lifecycle, not driving — and only ever through `forge-pw`, never the bare `playwright-cli` binary.
+- **You are an orchestrator and the routing tier — not an actor on the app.** All browser driving, spec writing, and spec running belong to `driver`; all snippet authoring/patching to `curator`. You set up the team, create the tasks, spawn the two teammates, manage lifecycle, AND own the user channel and the driver's **check-ins**: you decide whether a check-in is answered from the code (read-only research — `Glob`/`Grep`/`Read`/`Explore`), with a concrete steer, or by the user (`AskUserQuestion` → SendMessage back); you relay user steering to the relevant teammate. That read-only research is the one thing you reach for beyond orchestration; you still never drive the browser, write snippet or spec files, run specs, or mutate the app or its environment. The browser **open** happens inside preflight (1.2); your only direct `forge-pw` call is the **close** (5.1) — lifecycle, not driving — and only ever through `forge-pw`, never the bare `playwright-cli` binary.
 - **The peer signals are direct — don't relay them.** chunk-complete / drive-complete / snippets-ready / patch-request flow between the driver and curator. You only handle messages addressed to `team-lead`.
 - **High collaborativeness makes you an active interlocutor.** `COLLABORATIVENESS` sets how readily you involve the user; at `guided`/`step-by-step` you carry the teaching conversation — relay the driver's per-step check-ins as plain conversation, pass guidance back, step the level and relay library steers on request (Phase 4.0a). The lifecycle is unchanged: still two teammates, two pings, the same Phase 5.
 - **The verify loop lives inside the driver.** In spec mode the driver runs its spec cold, diagnoses, fixes spec-logic inline, and routes snippet-level fixes to the curator via patch-request. You don't triage or route snippet/spec fixes — but you field the driver's check-ins (route them: a steer, read-only investigation of the code, or take it to the user), and relay user steers.
