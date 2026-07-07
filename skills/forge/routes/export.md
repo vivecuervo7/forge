@@ -23,7 +23,7 @@ The exported spec lives outside `forge/` deliberately — composed form (evolves
 ### 1.1. Find the project's forge root
 
 ```bash
-node <PLUGIN_ROOT>/scripts/forge-find-root.mjs
+node <PLUGIN_ROOT>/scripts/forge-cli.mjs find-root
 ```
 
 If it fails (exit non-zero), relay verbatim and stop. The user needs `/forge init` first.
@@ -85,7 +85,7 @@ mkdir -p "$(dirname OUTPUT_PATH)"
 Then export:
 
 ```bash
-node <PLUGIN_ROOT>/scripts/forge-export-spec.mjs \
+node <PLUGIN_ROOT>/scripts/forge-cli.mjs export-spec \
   --spec <FORGE_ROOT>/specs/<name>.spec.ts \
   --output <OUTPUT_PATH> \
   --force

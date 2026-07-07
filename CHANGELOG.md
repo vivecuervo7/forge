@@ -5,6 +5,23 @@ every version bump. The full granular history is in the git log. Forge is young
 and pre-1.0 (built over June 2026), so a minor version can still carry a
 meaningful architecture change.
 
+## 0.45.0 — One front door: the `forge-cli` entry point (2026-07-08)
+
+- All forge scripts are now reached through a single dispatcher:
+  `node <plugin>/scripts/forge-cli.mjs <verb> [args...]` — e.g. `forge-cli.mjs
+  pw -s=demo open`, `forge-cli.mjs observe <snapshot>`, `forge-cli.mjs
+  snippet-index <root>`. Bare `forge-cli.mjs` lists every verb with its
+  one-line description (read from each script's own header).
+- The dispatch is an in-process argv rewrite + dynamic import — no extra
+  process, and every `forge-<verb>.mjs` script keeps working standalone.
+  Agent prompts, route references, the guard hook's deny message, and the
+  generated INDEX header all point at the front door now.
+- Why: callers reference one path and a verb, so verbs can migrate from
+  standalone scripts to shared modules without any caller changing — this is
+  the seam for the eventual extracted `forge-cli`, landed as a pure refactor
+  with zero behavior change. First brick of the verb-unification /
+  preflight / observe-chaining roadmap.
+
 ## 0.44.0 — Ergonomics: the run banner, `/forge help`, and next-step affordances (2026-07-07)
 
 - **The run banner.** The lead now announces every run as it goes live: what's

@@ -230,7 +230,7 @@ function emitHygieneWarnings(records, opts = {}) {
 function renderMarkdown(records) {
   const lines = []
   lines.push('# Snippet INDEX (auto-generated)')
-  lines.push('# Refresh: node <plugin-root>/scripts/forge-snippet-index.mjs')
+  lines.push('# Refresh: node <plugin-root>/scripts/forge-cli.mjs snippet-index')
   lines.push('')
   lines.push(`# ${records.length} snippet(s) — grouped by flow:; ungrouped land in misc`)
   lines.push('')

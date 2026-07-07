@@ -11,7 +11,7 @@ You are the **lead**. No agent team — the scan script does deterministic analy
 ### 1.1. Resolve forge root
 
 ```bash
-node <PLUGIN_ROOT>/scripts/forge-find-root.mjs
+node <PLUGIN_ROOT>/scripts/forge-cli.mjs find-root
 ```
 
 Capture as `FORGE_ROOT`. If it fails (non-zero exit), relay verbatim and stop — the user needs `/forge init`.
@@ -19,7 +19,7 @@ Capture as `FORGE_ROOT`. If it fails (non-zero exit), relay verbatim and stop �
 ### 1.2. Run the cleanup scan
 
 ```bash
-node <PLUGIN_ROOT>/scripts/forge-cleanup-scan.mjs --forge-root <FORGE_ROOT> --scope <SCOPE>
+node <PLUGIN_ROOT>/scripts/forge-cli.mjs cleanup-scan --forge-root <FORGE_ROOT> --scope <SCOPE>
 ```
 
 Where `<SCOPE>` is `snippets`, `hints`, or `both`. The script:
@@ -112,7 +112,7 @@ For changes needing real code work — merging two snippet bodies with a paramet
 After each merge/supersede, regenerate the snippet INDEX:
 
 ```bash
-node <PLUGIN_ROOT>/scripts/forge-snippet-index.mjs <FORGE_ROOT>
+node <PLUGIN_ROOT>/scripts/forge-cli.mjs snippet-index <FORGE_ROOT>
 ```
 
 ## Phase 4 — Update the staleness file

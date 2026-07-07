@@ -48,7 +48,7 @@ The team auto-forms when the first teammate spawns — no `TeamCreate` call need
 ### 1.1. Find the project's forge root
 
 ```bash
-node <PLUGIN_ROOT>/scripts/forge-find-root.mjs
+node <PLUGIN_ROOT>/scripts/forge-cli.mjs find-root
 ```
 
 If it fails (exit non-zero), relay verbatim and stop. The user needs `/forge init`. Capture as `FORGE_ROOT`.
@@ -99,7 +99,7 @@ No `ft-`/`forge-` prefix — nothing keys on it; the name is purely for reading.
 **Open the session yourself** — you own the browser's whole lifecycle (open here, close in Phase 5), so the driver arrives to a ready session instead of racing to open one. Headless unless `HEADED` (1.2b):
 
 ```bash
-node <PLUGIN_ROOT>/scripts/forge-pw.mjs -s=<SESSION_NAME> open --browser=chrome about:blank   # add --headed when HEADED is true
+node <PLUGIN_ROOT>/scripts/forge-cli.mjs pw -s=<SESSION_NAME> open --browser=chrome about:blank   # add --headed when HEADED is true
 ```
 
 This open (with the close in 5.1) is **lifecycle, not driving** — you bring up a blank session; the driver does every navigation and action on it.
@@ -107,7 +107,7 @@ This open (with the close in 5.1) is **lifecycle, not driving** — you bring up
 Then, when `HEADED` is false, **open the dashboard** so the user can watch — best-effort and idempotent (opens only if not already running, so it never steals focus mid-session):
 
 ```bash
-node <PLUGIN_ROOT>/scripts/forge-dashboard.mjs
+node <PLUGIN_ROOT>/scripts/forge-cli.mjs dashboard
 ```
 
 Skip the dashboard when `HEADED` is true (the real browser window is the view). If it can't open, the drive continues headless regardless — note once that the user can run `playwright-cli show` themselves to watch.
@@ -253,7 +253,7 @@ In the normal case — once **both** completion pings have arrived:
 ### 5.1. Close the chromium session (first — gated on nothing)
 
 ```bash
-node <PLUGIN_ROOT>/scripts/forge-pw.mjs -s=<SESSION_NAME> close
+node <PLUGIN_ROOT>/scripts/forge-cli.mjs pw -s=<SESSION_NAME> close
 ```
 
 Do this **immediately, in this turn, before requesting teammate shutdown.** The close doesn't need the teammates' approvals, so it must never wait behind that async round-trip — waiting is exactly what leaves the browser lingering open after the work is visibly done. Route through `forge-pw`, not the bare `playwright-cli` binary (the guard hook blocks the bare binary). Closing by `SESSION_NAME` reliably catches the live browser however the run ended. Best-effort; fall back to killing the process tree if it survives. The driver may have already closed it — a no-op then.

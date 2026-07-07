@@ -45,7 +45,7 @@ Keep your task `in_progress` for the whole run — including the driver's verify
 The driver's verbatim browser actions live in its on-disk transcript. Read them with one command — `forge-read-trace` locates the driver's transcript (by your `TEAM_NAME`, matching on its records' own identity so it can't be fooled by the lead's or your own transcript) and prints its forge-pw actions since a cursor:
 
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-read-trace.mjs --team <TEAM_NAME> --since <cursor> [--await <sec>]
+node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-cli.mjs read-trace --team <TEAM_NAME> --since <cursor> [--await <sec>]
 ```
 
 It prints the driver's new actions — the echoed Playwright (lift it **verbatim** into snippets), `run-code` bodies, and any returned values (for the spec's assertions) — then a trailing `cursor: <N>`. **Carry that `N` as your next `--since`** (start at `0`). Un-flushed trailing actions are held back automatically (the cursor stops before them), so the next read picks them up — you never receive a half-written action.
@@ -115,7 +115,7 @@ export async function run(page, args) {
 ### Refresh the INDEX after any write
 
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-snippet-index.mjs <PROJECT_FORGE_ROOT>
+node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-cli.mjs snippet-index <PROJECT_FORGE_ROOT>
 ```
 
 ## Phase 2 — Drive complete: drain, then signal ready

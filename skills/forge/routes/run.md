@@ -17,7 +17,7 @@ The script uses Playwright's ephemeral browser context. Env values come from `pr
 ### 1.1. Find the project's forge root
 
 ```bash
-node <PLUGIN_ROOT>/scripts/forge-find-root.mjs
+node <PLUGIN_ROOT>/scripts/forge-cli.mjs find-root
 ```
 
 If it fails (exit non-zero), relay verbatim and stop. The user needs `/forge init` first.
@@ -76,7 +76,7 @@ For more than 4, include the most-recent 3 plus "Other (specify by name)". Norma
 Compose the invocation. Add `--record-as <RECORD_AS>` only when `RECORD_AS != none`:
 
 ```bash
-node <PLUGIN_ROOT>/scripts/forge-run-spec.mjs \
+node <PLUGIN_ROOT>/scripts/forge-cli.mjs run-spec \
   --spec <FORGE_ROOT>/specs/<resolved-name>.spec.ts --headed
 # If RECORD_AS is set, append: --record-as <RECORD_AS>
 ```

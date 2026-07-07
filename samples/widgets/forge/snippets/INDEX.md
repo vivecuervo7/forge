@@ -1,5 +1,5 @@
 # Snippet INDEX (auto-generated)
-# Refresh: node <plugin-root>/scripts/forge-snippet-index.mjs
+# Refresh: node <plugin-root>/scripts/forge-cli.mjs snippet-index
 
 # 2 snippet(s) — grouped by flow:; ungrouped land in misc
 

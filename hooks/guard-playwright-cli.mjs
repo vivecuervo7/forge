@@ -190,11 +190,11 @@ async function main() {
 
   const reason =
     'Route browser interactions through forge-pw, not the playwright-cli binary directly. ' +
-    'Use `node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-pw.mjs -s=<SESSION_NAME> <command>` ' +
+    'Use `node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-cli.mjs pw -s=<SESSION_NAME> <command>` ' +
     '(add `--headed` on `open`). forge-pw forwards the command to playwright-cli unchanged ' +
     'while redacting env-sourced values from the echo — calling the binary directly leaks ' +
     'argv-borne secrets into the transcript and runs headless. If a project env recipe is ' +
-    'needed, wrap forge-pw with it (`<recipe> node …/forge-pw.mjs …`). ' +
+    'needed, wrap forge-pw with it (`<recipe> node …/forge-cli.mjs pw …`). ' +
     '(Operator override: launch Claude Code with FORGE_ALLOW_RAW_PW=1 to permit raw playwright-cli.)'
 
   process.stdout.write(

@@ -33,7 +33,7 @@ Env handling is delegated to the user. The scaffolded playwright config has a co
 Run the scaffold script with the target directory. Empty args defaults to PWD:
 
 ```bash
-node <PLUGIN_ROOT>/scripts/forge-init.mjs "$ARGUMENTS"
+node <PLUGIN_ROOT>/scripts/forge-cli.mjs init "$ARGUMENTS"
 ```
 
 Where `$ARGUMENTS` is the route-stripped remainder (possibly empty).
