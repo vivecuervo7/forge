@@ -63,6 +63,13 @@
 //   5   spawn error (command missing, etc.)
 //   6   plugin fallback selected but forge/playwright.config.ts missing
 //       (project hasn't been /forge init'd, or the config was deleted)
+//   7   stalled — the runner produced no output for FORGE_SPEC_STALL_SECS
+//       (default 480; 0 disables) and was killed. This is an INACTIVITY
+//       watchdog, not a wall-clock cap: the timer resets on every output
+//       byte, so a long healthy run (chatty per test) never trips it. It
+//       catches the wedged modes: npx hanging before a browser ever
+//       spawns, or a runner surviving its own test timeout in silence.
+//       A stalled exit means re-run, not "the spec failed".
 
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -229,20 +236,65 @@ const runStartedAt = Date.now()
 
 const { execa } = await loadFromRunner(projectForge, 'execa')
 
+// Inactivity watchdog (see exit code 7 in the header). Output is piped (not
+// inherited) so every byte both forwards to the caller and re-arms the timer.
+const stallSecs = (() => {
+  const raw = process.env.FORGE_SPEC_STALL_SECS
+  if (raw == null || raw === '') return 480
+  const n = parseInt(raw, 10)
+  return Number.isFinite(n) && n >= 0 ? n : 480
+})()
+
 let exitCode = 1
+let stalled = false
 try {
-  const result = await execa(cmd, cmdArgs, {
+  const subprocess = execa(cmd, cmdArgs, {
     cwd,
-    stdio: 'inherit',
+    stdio: ['inherit', 'pipe', 'pipe'],
     env: finalEnv,
     reject: false,  // capture non-zero exits without throwing
   })
+  let stallTimer = null
+  const armStall = () => {
+    if (!stallSecs) return
+    clearTimeout(stallTimer)
+    stallTimer = setTimeout(() => {
+      stalled = true
+      subprocess.kill('SIGTERM')
+      setTimeout(() => subprocess.kill('SIGKILL'), 5000).unref()
+    }, stallSecs * 1000)
+  }
+  subprocess.stdout.on('data', (chunk) => { process.stdout.write(chunk); armStall() })
+  subprocess.stderr.on('data', (chunk) => { process.stderr.write(chunk); armStall() })
+  armStall()
+  const result = await subprocess
+  clearTimeout(stallTimer)
   exitCode = result.exitCode ?? 1
 } catch (err) {
   if (err.code === 'ENOENT') {
     die(`command not found: ${cmd}. Install it and retry.`, 5)
   }
   die(`spawn error: ${err.message}`, 5)
+}
+
+if (stalled) {
+  // Advisory only — no reaping. Long sessions can legitimately own browser
+  // processes; the diagnostic just says whether one exists to look at.
+  let browserSeen = false
+  try {
+    const { execSync } = await import('node:child_process')
+    execSync('pgrep -f "chrome-for-testing|ms-playwright"', { stdio: 'ignore' })
+    browserSeen = true
+  } catch { /* none found */ }
+  console.error(
+    `forge-run-spec: stalled — no output for ${stallSecs}s; killed the runner. ` +
+    (browserSeen
+      ? 'A Playwright-managed browser process is still present — it may be orphaned; check before re-running.'
+      : 'No Playwright-managed browser process was found — the runner likely wedged before launching one.') +
+    ' This is a wedged run, not a spec verdict: re-run once; if it stalls again, escalate.' +
+    ' (Tune via FORGE_SPEC_STALL_SECS; 0 disables.)'
+  )
+  process.exit(7)
 }
 
 // Print a compact, structured outcome from the json reporter so the verifier

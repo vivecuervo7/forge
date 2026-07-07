@@ -253,6 +253,8 @@ node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-cli.mjs run-spec --spec <PROJECT_FORGE_
 
 Run it in the **foreground** — one blocking command you wait on, then read the exit code + outcome summary. **Do not launch it as a background task and poll** — that strands you babysitting a process you can't cleanly tell has finished, and you never reach the fix step. Prepend `forge.md`'s env recipe if it has one. `forge-run-spec.mjs` runs a fresh browser context (`--workers=1`) and prints an `outcome summary` block with each failing assertion's `file:line`. Exit code alone isn't the verdict — interpret against intent.
 
+**Exit 7 is a stall, not a verdict.** The runner has an inactivity watchdog: total silence for ~8 minutes means a wedged harness (it killed the run and printed a diagnostic), and says nothing about the spec. Re-run once; a second stall in a row is environment territory — check in with the lead.
+
 ### Interpret against intent
 
 - **regression**: green → verified. Red → a defect to fix.

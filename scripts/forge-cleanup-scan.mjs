@@ -186,7 +186,9 @@ function scanSnippets(snippetsDir) {
       const m = r.meta
       if (!m.description || String(m.description).trim() === '')
         flags.push({ kind: 'description-missing', detail: 'meta.description empty or missing' })
-      if (Array.isArray(m.tags) && m.tags.length === 1 && m.tags[0] === 'auto-authored')
+      if (!Array.isArray(m.tags) || m.tags.length === 0)
+        flags.push({ kind: 'low-value-tags', detail: 'meta.tags missing or empty — no discovery value' })
+      else if (m.tags.length === 1 && m.tags[0] === 'auto-authored')
         flags.push({ kind: 'low-value-tags', detail: "tags is exactly ['auto-authored'] — low discovery value" })
     }
     const ticketKey = ticketKeyPrefix(r.name)
@@ -275,21 +277,26 @@ function scanSnippets(snippetsDir) {
     }
   }
 
-  // Overlap: shared contiguous body lines >= 4 (signature-line + 3 actions
-  // is rare to share by coincidence; 5 missed real near-duplicates).
+  // Overlap: shared contiguous body lines. Every snippet shares the schema's
+  // skeleton (the run() signature, the arg destructure, the arg guard), so a
+  // raw line count clusters most of the library on boilerplate; only shared
+  // lines that DO something count toward the threshold — 3 shared actions is
+  // rare by coincidence.
+  const SKELETON_LINE = /^(export async function run\b|const \{[^}]*\} = args|if \(!\w+\) throw new Error\()/
   for (let i = 0; i < records.length; i++) {
     for (let j = i + 1; j < records.length; j++) {
       const a = records[i], b = records[j]
       if (!a.bodyLines.length || !b.bodyLines.length) continue
       const { len, start } = longestSharedRun(a.bodyLines, b.bodyLines)
-      if (len >= 4) {
-        const snippet = a.bodyLines.slice(start, start + len).slice(0, 3).join(' / ')
-        out.overlapClusters.byBody.push({
-          snippets: [a.name, b.name],
-          sharedLines: len,
-          preview: snippet.slice(0, 160),
-        })
-      }
+      if (len < 4) continue
+      const run = a.bodyLines.slice(start, start + len)
+      const meaningful = run.filter(l => !SKELETON_LINE.test(l))
+      if (meaningful.length < 3) continue
+      out.overlapClusters.byBody.push({
+        snippets: [a.name, b.name],
+        sharedLines: len,
+        preview: meaningful.slice(0, 3).join(' / ').slice(0, 160),
+      })
     }
   }
 
@@ -400,21 +407,32 @@ function detectCrossFileDupes(section, otherFiles) {
   return matches
 }
 
+// Verbs the curator's naming schema starts snippets with. A kebab token whose
+// first word isn't one of these (`k-selection-multiple`, `intl-tel-input`,
+// `data-rbd-droppable-id`) is a CSS class or library attribute, not a snippet.
+const SNIPPET_VERBS = new Set([
+  'navigate', 'goto', 'click', 'fill', 'submit', 'count', 'read', 'create',
+  'delete', 'register', 'advance', 'back', 'open', 'scroll', 'switch',
+  'extract', 'find', 'add', 'set', 'enable', 'disable', 'select', 'search',
+])
+
 function detectOrphanRefs(body, snippetNames) {
-  // Look for backtick-wrapped names that look like snippet names but don't exist.
-  const refs = [...body.matchAll(/`([a-z][a-z0-9-]{4,})`/g)].map(m => m[1])
+  // Backtick-wrapped names that look like snippet names but don't exist.
+  // Kebab shape alone over-matches (CSS classes, library attributes), so
+  // require corroboration: the token starts with a snippet verb, or the
+  // surrounding text is talking about snippets.
   const orphans = []
   const seen = new Set()
-  for (const r of refs) {
+  for (const m of body.matchAll(/`([a-z][a-z0-9-]{4,})`/g)) {
+    const r = m[1]
     if (seen.has(r)) continue
-    // Heuristic: looks like a snippet name (kebab, >= 2 hyphens OR known-shape verb-noun)
-    const looksLikeSnippet = (r.match(/-/g) || []).length >= 2
-    if (!looksLikeSnippet) continue
-    if (snippetNames.has(r)) continue
-    // Skip common false-positives: file names, urls, etc.
-    if (/\.(ts|js|md|sh|sql)$/.test(r)) continue
-    orphans.push(r)
     seen.add(r)
+    if ((r.match(/-/g) || []).length < 2) continue
+    if (snippetNames.has(r)) continue
+    if (/\.(ts|js|md|sh|sql)$/.test(r)) continue
+    const context = body.slice(Math.max(0, m.index - 80), m.index + r.length + 80)
+    if (!SNIPPET_VERBS.has(r.split('-')[0]) && !/snippet|invoke|compose|\.ts\b/i.test(context)) continue
+    orphans.push(r)
     if (orphans.length >= 5) break
   }
   return orphans
@@ -494,10 +512,18 @@ const report = {
 if (scope === 'snippets' || scope === 'both') {
   // Regenerate INDEX.md first so the lead acts on fresh data.
   try {
-    const { execSync } = await import('node:child_process')
+    const { spawnSync } = await import('node:child_process')
     const indexScript = join(dirname(new URL(import.meta.url).pathname), 'forge-snippet-index.mjs')
-    execSync(`node ${JSON.stringify(indexScript)} ${JSON.stringify(forgeRoot)}`, { stdio: 'pipe' })
+    const r = spawnSync(process.execPath, [indexScript, forgeRoot], { encoding: 'utf8' })
+    if (r.status !== 0) throw new Error((r.stderr || 'index refresh failed').trim())
     report.indexRefreshed = true
+    // The index script reports library hygiene on stderr (empty tags, missing
+    // meta, multi-step descriptions without flow/phase) — surface it in the
+    // report rather than swallowing it; the clean route folds it into the
+    // shortlist and the final summary.
+    const warnings = (r.stderr || '').split('\n').map(l => l.trim()).filter(Boolean)
+      .filter(l => !/re-run with --verbose/.test(l))
+    if (warnings.length) report.indexWarnings = warnings.slice(0, 10)
   } catch (e) {
     report.indexRefreshed = false
     report.indexRefreshError = e.message

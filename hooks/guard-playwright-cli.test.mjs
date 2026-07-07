@@ -56,6 +56,14 @@ const shouldAllow = [
   `cat <<EOF > notes.md\nuse forge-pw instead of ${PW}\nEOF`,
   `node scripts/forge-pw.mjs -s=ft-1 open --headed about:blank`, // no token at all
   `ls -la`, // no token at all
+  // Paths CONTAINING the token (the .${PW}/ artifact dir) are mentions, not
+  // invocations — a driver reading its own console logs must not be blocked.
+  `tail -50 .${PW}/console-2026-07-05T21-52-21.log`,
+  `grep -c error .${PW}/console-2026-07-05.log`,
+  `wc -l .${PW}/console-2026-07-05.log`,
+  `find . -name 'console-*.log' -path '*.${PW}*'`,
+  `python3 parse_log.py .${PW}/console-2026-07-05.log`,
+  `sed -n 1,30p hooks/guard-${PW}.test.mjs`,
 ]
 
 function runHook(command) {

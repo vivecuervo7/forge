@@ -37,6 +37,7 @@ Read-only. Produces the raw candidate list; decisions are yours.
   "forgeRoot": "...",
   "scope": "both",
   "indexRefreshed": true,
+  "indexWarnings": [ "forge-snippet-index: 38 snippets with empty tags", ... ],   // library hygiene from the index refresh — fold into the Phase 2 shortlist and the Phase 5 report
   "snippets": {
     "files": [{ "file": "x.ts", "name": "x" }, ...],
     "flagged": [
@@ -97,7 +98,7 @@ When a candidate has multiple flags, surface it once with the strongest action a
 
 ## Phase 3 — Apply accepted changes
 
-For each accepted candidate, do the work directly. Most cleanups are simple edits:
+For each accepted candidate, do the work directly. **`Read` a file before your first `Edit` to it** — the Edit tool requires a real `Read` in this session (a `cat` during scanning doesn't count). Most cleanups are simple edits:
 
 - **Rename a snippet.** `mv` the file, then update any spec/snippet that imports its name. Glob/Grep first.
 - **Fix `meta` fields.** Edit the `meta` block to add `description`, replace low-value `tags`, or fix the schema.
@@ -143,6 +144,8 @@ Compose a tight summary. Drop sections that don't apply:
 >   - Deleted N section(s): `<file>` § `<heading>` ...
 >   - Moved 1 section: `<file>` § `<heading>` → `<otherFile>`
 >   - Extracted 1 procedure to `forge/hints/scripts/<name>.sh`
+>
+> Library hygiene: <one line from `indexWarnings` — e.g. "38 snippets still have empty tags; 27 multi-step descriptions lack flow/phase" — or omit when clean. These are bulk-fixable candidates for a follow-up pass even when no individual snippet made the shortlist.>
 >
 > Staleness file updated: `<FORGE_ROOT>/.last-cleanup`.
 >

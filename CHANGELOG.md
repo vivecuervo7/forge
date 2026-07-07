@@ -5,6 +5,30 @@ every version bump. The full granular history is in the git log. Forge is young
 and pre-1.0 (built over June 2026), so a minor version can still carry a
 meaningful architecture change.
 
+## 0.48.0 — Hardening from the 2026-07-07 session review (2026-07-08)
+
+- **`run-spec` inactivity watchdog (exit 7).** The observed failure mode was a
+  runner hanging silently for 10+ minutes — sometimes without ever launching a
+  browser — leaving the driver blocked and Chrome processes orphaned.
+  `forge-run-spec` now kills the runner after `FORGE_SPEC_STALL_SECS` (default
+  480; `0` disables) of **total silence** and exits 7 with a diagnostic. This
+  is deliberately an inactivity detector, not a wall-clock cap: the timer
+  resets on every output byte, so long overnight sessions and slow healthy
+  runs are untouched. The driver treats exit 7 as "wedged run, not a verdict":
+  re-run once, then check in.
+- **`/forge clean` detectors recalibrated.** `low-value-tags` now catches
+  empty/missing tags (previously only the literal `['auto-authored']` — a
+  111-snippet library scanned clean while 38 snippets had no tags);
+  `byBody` overlap requires 3 shared lines that *do* something (the shared
+  run()-skeleton no longer clusters the whole library); `orphan-reference`
+  requires corroboration (a snippet-verb first word, or surrounding text
+  about snippets) so CSS classes and library attributes stop flagging. The
+  index refresh's hygiene warnings now surface as `indexWarnings` in the scan
+  JSON and in the clean report instead of being swallowed.
+- **Guard-hook regression cases** for the mention-vs-invocation fix
+  (`0bd77b3`): reading `.playwright-cli/*.log` files with `tail`/`grep`/
+  `wc`/`find`/`python3` is a mention and stays allowed (43-case matrix).
+
 ## 0.47.0 — `preflight`: the lead's setup as one command (2026-07-08)
 
 - New `forge-cli.mjs preflight --session <name> [--headed]` — everything
