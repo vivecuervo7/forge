@@ -5,6 +5,19 @@ every version bump. The full granular history is in the git log. Forge is young
 and pre-1.0 (built over June 2026), so a minor version can still carry a
 meaningful architecture change.
 
+## 0.46.0 — `observe --live`: one-call perception (2026-07-08)
+
+- `forge-cli.mjs observe --live -s=<session>` takes the snapshot itself
+  (through forge-pw, so redaction still applies) and prints the filtered view
+  in one call — replacing the driver's snapshot-to-file → observe two-step in
+  its hottest loop (recent runs average 20–33 observes per drive).
+- The page URL is read from the snapshot echo, so navigation detection is
+  self-contained — the driver no longer tracks or passes `--url` at all.
+  Snapshots land in the project's `forge/.observe/<session>.yaml` as before
+  (OS tmpdir when no forge root is findable).
+- The file/stdin forms and `--diff`/`--full` escalations are unchanged;
+  driver.md's fresh-drive recipe is now two lines (observe, act).
+
 ## 0.45.0 — One front door: the `forge-cli` entry point (2026-07-08)
 
 - All forge scripts are now reached through a single dispatcher:

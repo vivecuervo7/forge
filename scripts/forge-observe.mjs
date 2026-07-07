@@ -17,12 +17,22 @@
 // perception half — the driver still reasons over the result.
 //
 // Usage:
+//   forge-observe.mjs --live -s=<name> [--diff] [--full] [--state=<path>]
 //   forge-observe.mjs <snapshot.yaml> [--session=<name>] [--url=<url>] [--state=<path>] [--diff] [--full]
 //   forge-observe.mjs -            (read snapshot YAML from stdin)
 //
-//   --session=<name>  namespaces the diff state (default: "default")
+//   --live            take the snapshot itself (via forge-pw against the named
+//                     session) and observe it in one call. The page URL is read
+//                     from the snapshot echo, so navigation detection needs no
+//                     --url from the caller. Snapshot lands in the project's
+//                     forge/.observe/<session>.yaml (or the OS tmpdir when no
+//                     forge root is findable).
+//   -s=<name> / --session=<name>
+//                     the playwright-cli session; also namespaces the diff
+//                     state (default: "default"; required with --live)
 //   --url=<url>       the page's current URL — used to detect navigation (a
-//                     changed URL re-baselines; an in-page popup does not)
+//                     changed URL re-baselines; an in-page popup does not).
+//                     Unnecessary with --live (self-detected).
 //   --state=<path>    where prior state is kept (default: alongside the snapshot,
 //                     `.forge-observe-<session>.json`)
 //   --diff            aggressive: print only what changed since the last observe
@@ -50,9 +60,14 @@
 //   0  observed (full or diff printed)
 //   1  snapshot file unreadable / empty
 //   2  usage error
+//   3  --live snapshot failed (forge-pw error passed through)
 
-import { readFileSync, writeFileSync, existsSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { findForgeRoot } from './forge-common.mjs'
 
 const INTERACTABLE = new Set([
   'button', 'link', 'textbox', 'combobox', 'checkbox', 'radio', 'option',
@@ -67,11 +82,13 @@ const REBASELINE_CHURN = 0.6
 const approxTok = s => Math.ceil((s?.length || 0) / 4)
 
 function parseArgs(argv) {
-  const opts = { session: 'default', state: null, full: false, diff: false, url: null, file: null }
+  const opts = { session: 'default', sessionSet: false, state: null, full: false, diff: false, live: false, url: null, file: null }
   for (const a of argv) {
     if (a === '--full') opts.full = true
     else if (a === '--diff') opts.diff = true
-    else if (a.startsWith('--session=')) opts.session = a.slice('--session='.length)
+    else if (a === '--live') opts.live = true
+    else if (a.startsWith('--session=')) { opts.session = a.slice('--session='.length); opts.sessionSet = true }
+    else if (a.startsWith('-s=')) { opts.session = a.slice('-s='.length); opts.sessionSet = true }
     else if (a.startsWith('--state=')) opts.state = a.slice('--state='.length)
     else if (a.startsWith('--url=')) opts.url = a.slice('--url='.length)
     else if (!a.startsWith('--')) opts.file = a
@@ -209,8 +226,38 @@ function diff(prev, curr) {
 
 // --- main ---
 const opts = parseArgs(process.argv.slice(2))
+
+if (opts.live) {
+  // Take the snapshot ourselves (through forge-pw, so redaction applies), then
+  // observe it — one call instead of the snapshot-then-observe two-step. The
+  // echo carries the page URL, so navigation detection is self-contained.
+  if (!opts.sessionSet) {
+    console.error('forge-observe: --live requires the session: -s=<name>')
+    process.exit(2)
+  }
+  const forgeRoot = findForgeRoot(process.cwd())
+  const dir = forgeRoot ? join(forgeRoot, '.observe') : join(tmpdir(), 'forge-observe')
+  try { mkdirSync(dir, { recursive: true }) } catch { /* readFileSync below reports it */ }
+  opts.file = join(dir, `${opts.session}.yaml`)
+  const pwScript = join(dirname(fileURLToPath(import.meta.url)), 'forge-pw.mjs')
+  const pw = spawnSync(
+    process.execPath,
+    [pwScript, `-s=${opts.session}`, 'snapshot', `--filename=${opts.file}`],
+    { encoding: 'utf8' }
+  )
+  if (pw.status !== 0) {
+    process.stderr.write(pw.stderr || pw.stdout || '')
+    console.error(`forge-observe: live snapshot failed (session ${opts.session})`)
+    process.exit(3)
+  }
+  if (!opts.url) {
+    const m = /^- Page URL:\s*(\S+)/m.exec(pw.stdout || '')
+    if (m) opts.url = m[1]
+  }
+}
+
 if (!opts.file) {
-  console.error('forge-observe: usage: forge-observe.mjs <snapshot.yaml> [--session=<name>] [--url=<current-url>] [--state=<path>] [--diff] [--full]')
+  console.error('forge-observe: usage: forge-observe.mjs --live -s=<name> [--diff|--full]  |  forge-observe.mjs <snapshot.yaml> [--session=<name>] [--url=<current-url>] [--state=<path>] [--diff] [--full]')
   process.exit(2)
 }
 
