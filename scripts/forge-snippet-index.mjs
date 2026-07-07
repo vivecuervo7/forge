@@ -96,7 +96,9 @@ function bracketSuffix(label, value, maxLen = 80) {
 
 function buildIndex(snippetsDir, opts = {}) {
   const entries = readdirSync(snippetsDir)
-    .filter(f => f.endsWith('.ts'))
+    // Underscore-prefixed files are shared primitives (imported by snippets,
+    // no meta block, not invocable) — they don't belong in the INDEX.
+    .filter(f => f.endsWith('.ts') && !f.startsWith('_'))
     .sort()
 
   const records = []

@@ -148,7 +148,9 @@ function scanSnippets(snippetsDir) {
     return { ...out, error: `no snippets/ directory at ${snippetsDir}` }
   }
   const entries = readdirSync(snippetsDir)
-    .filter(f => f.endsWith('.ts'))
+    // Underscore-prefixed files are shared primitives (no meta block, imported
+    // not invoked) — scanning them as snippets would flag them as broken.
+    .filter(f => f.endsWith('.ts') && !f.startsWith('_'))
     .sort()
 
   const records = []

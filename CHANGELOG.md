@@ -5,6 +5,28 @@ every version bump. The full granular history is in the git log. Forge is young
 and pre-1.0 (built over June 2026), so a minor version can still carry a
 meaningful architecture change.
 
+## 0.50.0 — Settle patterns + the `_wait-until-stable` primitive (2026-07-08)
+
+- **`/forge init` scaffolds `snippets/_wait-until-stable.ts`** — a shared
+  settle primitive: poll a read until N consecutive identical results within
+  a deadline (one stable read is a false plateau; the streak is the fix).
+  Snippets and specs `import` and compose it.
+- **The underscore convention is now formal**: `_`-prefixed files in
+  `snippets/` are shared primitives — no `meta`, excluded from the INDEX and
+  from `/forge clean`'s snippet scan (previously an existing helper was
+  flagged as a broken snippet), imported rather than invoked.
+- **driver.md names the settle-pattern categories** with their standard first
+  moves: deferred mutation → fence + poll-until-stable + resubmit guard; rich
+  custom widgets (Kendo/DevExpress/Telerik) → `.fill()` + blur; overlay
+  intercepts (ripples/tooltips/toasts) → ARIA-state check, `exact: true`,
+  `dispatchEvent`; toolbox-to-canvas drag → manual mouse sequence. Which
+  framework and which selector stays project knowledge in `forge.md`; the
+  moves are universal — this is what recent runs re-derived from scratch
+  three times in a single session.
+- **curator.md sanctions the one refactor**: a hand-rolled settle loop in the
+  trace gets baked as a `waitUntilStable(...)` composition (same reads, same
+  thresholds); new primitives only when a mechanism recurs across snippets.
+
 ## 0.49.0 — Trace reads pinned to the run (2026-07-08)
 
 - **`read-trace --started-after <time>`** — two sequential drives under one

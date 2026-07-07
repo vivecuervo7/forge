@@ -166,6 +166,15 @@ Each native command echoes the equivalent Playwright code in a `### Ran Playwrig
 
 **Determinism is load-bearing.** The patterns that make a step work headless — `pressSequentially` over `fill` for async-validated inputs, triple-click-then-`Delete` to clear, explicit `waitFor`/`waitForResponse`, `dispatchEvent` where a real click doesn't reach the handler — are exactly what a frozen spec must inherit. Drive with them deliberately.
 
+**Settle patterns** — the recurring ways a page lies about being ready, and the standard first moves (which framework and which selector is project knowledge — check `forge.md`; the *moves* are universal):
+
+- **Deferred mutation** (command-bus backends, optimistic-update frontends): fence the write on its network response (`waitForResponse`), then poll the read until it's *stable* — several consecutive identical reads, not one (a single read latches false plateaus). Where the project scaffolds `snippets/_wait-until-stable.ts`, compose it. Guard against re-submitting a write that actually landed (check for the created id/count first).
+- **Rich custom widgets** (Kendo, DevExpress, Telerik editors): `.fill()` + blur — synthetic click-select-type races the widget's internal state and interleaves your keystrokes with its own.
+- **Overlay-intercepted clicks** (ripples, tooltips, toast layers): confirm the target's ARIA state first, use `exact: true` against substring-colliding labels, and reach for `dispatchEvent('click')` when the real click can't land.
+- **Toolbox-to-canvas drag** (SVG/canvas builders): native `drag` misses; drive the `mouse.down` → `move` → `up` sequence yourself.
+
+(Stale refs are the fifth member of this family — the re-observe discipline below covers them.) These are worth solving *once, well*: whatever settle mechanism you land is exactly what the curator lifts into the snippet and your spec inherits.
+
 **Re-observe discipline** — refs are valid only until the next snapshot, so re-observe (same command, same `-s`) after navigation, after a modal opens/closes, after a form submit settles (use `forge.md`'s post-submit sentinel), or when an echo suggests the DOM changed. Each re-observe marks what changed since your last look (`+` new / `~` changed / `-` gone); a navigation re-baselines to the full filtered view.
 
 **Locator stability** — trust the echoed semantic `getByRole`/`getByLabel` locators by default. Override when `forge.md` documents a more durable selector or the echoed locator looks fragile.

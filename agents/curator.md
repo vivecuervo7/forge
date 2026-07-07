@@ -92,6 +92,8 @@ When collaborativeness is high (teaching) the user may steer your library decisi
 
 **Preserve what the driver actually ran.** Lift the echoed Playwright code and `run-code` bodies from the trace **verbatim** — same selectors, same waits, same `dispatchEvent`. Parameterize only the literal values that vary (`'sauce-labs-backpack'` → `args.item`). Refine a locator only when it's fragile by inspection (or `curator.md` points you to documented selector vocabulary worth preferring). Don't fabricate a cleaner version; the working code is the durable code.
 
+**Primitives (`_`-prefixed files) are the one sanctioned refactor.** Files like `snippets/_wait-until-stable.ts` are shared helpers — no `meta`, excluded from the INDEX, *imported* by snippets rather than invoked. When the driver's trace shows a hand-rolled settle loop (poll-until-unchanged, retry-until-count), bake it into the snippet as a composition of the existing primitive — same reads, same thresholds, expressed through `waitUntilStable(...)` — instead of preserving the loop's scaffolding literally. Author a *new* primitive only when the same mechanism has recurred across snippets; the mechanism itself must still come verbatim from traces.
+
 ### Write the snippet files
 
 Path: `<PROJECT_FORGE_ROOT>/snippets/<name>.ts` (`mkdir -p` if needed). **`Glob` + `Read` before writing** — extend/patch in place if a current one matches; pick a more specific name if a similar name covers a different intent. Silent overwrite breaks composing specs.

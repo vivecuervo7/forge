@@ -44,9 +44,11 @@ if (!existsSync(targetDir) || !statSync(targetDir).isDirectory()) {
 
 const forgeDir = join(targetDir, 'forge')
 const hintsDir = join(forgeDir, 'hints')
+const snippetsDir = join(forgeDir, 'snippets')
 
 mkdirSync(forgeDir, { recursive: true })
 mkdirSync(hintsDir, { recursive: true })
+mkdirSync(snippetsDir, { recursive: true })
 
 const created = []
 const skipped = []
@@ -77,6 +79,7 @@ scaffold('hints-README.md',      'hints/README.md')
 scaffold('hints-forge.md',       'hints/forge.md')
 scaffold('hints-curator.md',     'hints/curator.md')
 scaffold('playwright.config.ts', 'playwright.config.ts')
+scaffold('snippets-wait-until-stable.ts', 'snippets/_wait-until-stable.ts')
 
 // Report
 console.log(`forge-init: scaffolded ${forgeDir}`)
