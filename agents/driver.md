@@ -175,6 +175,7 @@ Each native command echoes the equivalent Playwright code in a `### Ran Playwrig
 - **Rich custom widgets** (Kendo, DevExpress, Telerik editors): `.fill()` + blur — synthetic click-select-type races the widget's internal state and interleaves your keystrokes with its own.
 - **Overlay-intercepted clicks** (ripples, tooltips, toast layers): confirm the target's ARIA state first, use `exact: true` against substring-colliding labels, and reach for `dispatchEvent('click')` when the real click can't land.
 - **Toolbox-to-canvas drag** (SVG/canvas builders): native `drag` misses; drive the `mouse.down` → `move` → `up` sequence yourself.
+- **Transient confirmations** (toasts, flash messages, auto-dismissing banners): these often live shorter than your own decision latency — appearing and dismissing entirely between your turns, so a post-action observe finds nothing. When the transient itself is the evidence you need, bundle its wait into the acting command (`click` + `waitFor` the toast in one `run-code`) — the code polls at millisecond grain even though you can't. Otherwise skip the transient and confirm the **durable** effect (badge count, row present, URL) — which is also the sturdier sentinel for the composed spec.
 
 (Stale refs are the fifth member of this family — the re-observe discipline below covers them.) These are worth solving *once, well*: whatever settle mechanism you land is exactly what the curator lifts into the snippet and your spec inherits.
 
