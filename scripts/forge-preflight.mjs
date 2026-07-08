@@ -162,6 +162,48 @@ if (opts.open) {
   }
 }
 
+// Detect OTHER forge installs (marketplace copy alongside a --plugin-dir dev
+// copy, or vice versa). When two installs are loaded, teammate agent
+// definitions can resolve to the other copy — a run silently mixes versions.
+// Bounded walk of ~/.claude/plugins for .claude-plugin/plugin.json with
+// name "forge" rooted somewhere other than this PLUGIN_ROOT.
+function findOtherForgeInstalls() {
+  const found = []
+  const walk = (dir, depth) => {
+    if (depth > 5 || found.length >= 16) return
+    let entries
+    try {
+      entries = readdirSync(dir, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const e of entries) {
+      if (!e.isDirectory() || e.name === 'node_modules' || e.name.startsWith('.git')) continue
+      const child = join(dir, e.name)
+      if (e.name === '.claude-plugin') {
+        try {
+          const manifest = JSON.parse(readFileSync(join(child, 'plugin.json'), 'utf8'))
+          if (manifest.name === 'forge' && dir !== PLUGIN_ROOT) found.push(dir)
+        } catch { /* not a manifest */ }
+        continue
+      }
+      walk(child, depth + 1)
+    }
+  }
+  walk(join(homedir(), '.claude', 'plugins'), 0)
+  // The version cache accretes one dir per past version — collapse each
+  // cache family to its newest entry so the signal is "another install
+  // exists", not a version-history dump.
+  const byFamily = new Map()
+  for (const root of found) {
+    const m = root.match(/^(.*\/cache\/[^/]+\/forge)\/[^/]+$/)
+    const key = m ? m[1] : root
+    const prev = byFamily.get(key)
+    if (!prev || root > prev) byFamily.set(key, root)
+  }
+  return [...byFamily.values()]
+}
+
 // Teammate rendering is the harness's call (`teammateMode` in user settings):
 // under `auto`, per-agent tmux panes appear only when this session itself runs
 // inside tmux — otherwise teammates render inline. Report both inputs so the
@@ -185,6 +227,8 @@ const summary = {
   dashboard,
   insideTmux: Boolean(process.env.TMUX),
   teammateMode,
+  pluginRoot: PLUGIN_ROOT,
+  otherForgeInstalls: findOtherForgeInstalls(),
   hints: { forge: forgeMd !== null },
   setupSection: Boolean(forgeMd && /^##\s+Setup before each run\b/m.test(forgeMd)),
   teardownSection: Boolean(forgeMd && /^##\s+Teardown after each run\b/m.test(forgeMd)),

@@ -74,7 +74,7 @@ One call does the whole deterministic setup: locates the forge root, opens the b
 
 Read its output top to bottom:
 
-- **The JSON summary** — capture `forgeRoot` as `FORGE_ROOT`, `startedAt` as `RUN_STARTED_AT` (the curator's spawn prompt threads it into trace reads so a previous drive's transcript can't shadow this one's), and `cleanupNudge` as `CLEANUP_NUDGE` (hold silently for Phase 5.5a; `cleanupDays` gives the N for its phrasing). `setupSection`/`teardownSection` flag whether forge.md carries those sections for 1.3 and 5.4. `insideTmux` + `teammateMode` feed the banner's teammate-visibility line (3.1) — under `teammateMode: auto`, per-agent panes appear only when the session runs inside tmux; otherwise teammates render inline and the dashboard stays the watch surface.
+- **The JSON summary** — capture `forgeRoot` as `FORGE_ROOT`, `startedAt` as `RUN_STARTED_AT` (the curator's spawn prompt threads it into trace reads so a previous drive's transcript can't shadow this one's), and `cleanupNudge` as `CLEANUP_NUDGE` (hold silently for Phase 5.5a; `cleanupDays` gives the N for its phrasing). `setupSection`/`teardownSection` flag whether forge.md carries those sections for 1.3 and 5.4. `insideTmux` + `teammateMode` feed the banner's teammate-visibility line (3.1) — under `teammateMode: auto`, per-agent panes appear only when the session runs inside tmux; otherwise teammates render inline and the dashboard stays the watch surface. **`otherForgeInstalls` non-empty means two forge copies are loadable** — teammate agent definitions may resolve to the *other* copy and silently mix versions; append a warning line to the banner naming the other root(s) and suggesting the user disable one copy (`/plugin`) for clean runs.
 - **`hints/forge.md`** — the shared operate contract: persona/account resolution, the optional setup/teardown sections, plus the app's selectors and gotchas (which you'll want when routing a driver check-in). The driver reads `forge.md` too; the curator reads its own `curator.md`. All hints are optional — a bare `/forge init` scaffold drives correctly; hints encode project-specific knowledge the teammates can't derive from the app.
 - **`protocols/escalation.md`** — you route the driver's check-ins per its **Lead side** (§3); the driver `cat`s the same file on friction, so the shapes stay a single source of truth.
 - **`protocols/collaborativeness.md`** — you read the **deference** column to know how readily to involve the user at this run's `COLLABORATIVENESS` level, and you hold/step that level through the run.
@@ -112,6 +112,8 @@ Don't set ownership — each teammate self-claims via `TaskUpdate(taskId=<id>, s
 ## Phase 3 — Spawn the two teammates
 
 Spawn as **teammates** — no `run_in_background` (a teammate already keeps you non-blocked and reachable, and gets a watchable pane under `teammateMode: auto`). Spawn the **driver first** so the team forms and you can read its team name, then the curator.
+
+**Names must be unique within your session.** A second run in the same session can't reuse `driver`/`curator` — suffix both (`driver-2`, `curator-2`) and thread the actual names everywhere the spawn prompts reference them (`CURATOR_NAME`, `DRIVER_NAME`, your steering relays). The teammates key on the names you pass, not on the literals below.
 
 ```
 Agent(

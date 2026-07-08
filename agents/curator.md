@@ -46,8 +46,10 @@ Keep your task `in_progress` for the whole run — including the driver's verify
 The driver's verbatim browser actions live in its on-disk transcript. Read them with one command — `forge-read-trace` locates the driver's transcript (by your `TEAM_NAME`, matching on its records' own identity so it can't be fooled by the lead's or your own transcript) and prints its forge-pw actions since a cursor:
 
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-cli.mjs read-trace --team <TEAM_NAME> --started-after <RUN_STARTED_AT> --since <cursor> [--await <sec>]
+node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-cli.mjs read-trace --team <TEAM_NAME> --driver <DRIVER_NAME> --started-after <RUN_STARTED_AT> --since <cursor> [--await <sec>]
 ```
+
+`--driver` is the *actual* teammate name from your spawn prompt — sequential runs in one session get suffixed names (`driver-2`), and the reader matches on the name's own records, so passing it verbatim is what keeps the locate exact.
 
 `--started-after` pins the read to *this* run: sequential drives under one parent share a `TEAM_NAME`, so without it an earlier drive's transcript can shadow the live one. If the output ever carries a `# WARNING: … transcripts match` line, trust the newest-pick but mention the ambiguity in your completion ping.
 
