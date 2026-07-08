@@ -62,6 +62,7 @@ declare const process: { env: Record<string, string | undefined> }
 // from pacing (e.g. `?? 75`); leave unset for fast specs.
 const record = process.env.FORGE_RECORD === '1'
 const slowMo = process.env.FORGE_SLOW_MO ? parseInt(process.env.FORGE_SLOW_MO, 10) : 0
+const cdpPort = process.env.FORGE_SPEC_CDP ? parseInt(process.env.FORGE_SPEC_CDP, 10) : 0
 
 export default defineConfig({
   testDir: './specs',
@@ -76,6 +77,9 @@ export default defineConfig({
   use: {
     video: record ? 'on' : 'off',
     trace: record ? 'retain-on-failure' : 'off',
-    launchOptions: slowMo ? { slowMo } : {},
+    launchOptions: {
+      ...(slowMo ? { slowMo } : {}),
+      ...(cdpPort ? { args: [`--remote-debugging-port=${cdpPort}`] } : {}),
+    },
   },
 })

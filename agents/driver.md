@@ -261,8 +261,10 @@ You run the spec yourself, from a cold start, and fix it until it matches intent
 
 ```bash
 <env-loading-recipe-from-forge.md> && \
-node <PLUGIN_ROOT>/scripts/forge-cli.mjs run-spec --spec <PROJECT_FORGE_ROOT>/specs/<name>.spec.ts --headed
+node <PLUGIN_ROOT>/scripts/forge-cli.mjs run-spec --spec <PROJECT_FORGE_ROOT>/specs/<name>.spec.ts --dashboard
 ```
+
+`--dashboard` keeps the verify headless while rendering it live in the Playwright dashboard — the same window the user already watches your drive in; no browser window pops during verify rounds. (Use `--headed` only when your spawn carried `HEADED: true`.)
 
 Run it in the **foreground** — one blocking command you wait on, then read the exit code + outcome summary. **Do not launch it as a background task and poll** — that strands you babysitting a process you can't cleanly tell has finished, and you never reach the fix step. Prepend `forge.md`'s env recipe if it has one. `forge-run-spec.mjs` runs a fresh browser context (`--workers=1`) and prints an `outcome summary` block with each failing assertion's `file:line`. Exit code alone isn't the verdict — interpret against intent.
 

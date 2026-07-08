@@ -28,7 +28,16 @@
 // by uncommenting.
 //
 // Usage:
-//   forge-run-spec.mjs --spec <path> [--headed] [--record] [--record-as <label>] [--slow-mo <ms>]
+//   forge-cli.mjs run-spec --spec <path> [--headed] [--dashboard] [--record] [--record-as <label>] [--slow-mo <ms>]
+//
+// --dashboard makes the (headless) run watchable in the Playwright dashboard:
+// a free CDP port is exposed via FORGE_SPEC_CDP (honored by the forge-
+// scaffolded config; projects with their own config opt in the same way),
+// and a playwright-cli session is attached to the run's browser for its
+// duration — it appears in the dashboard as `spec-<name>` and detaches when
+// the run ends. Best-effort at every step: the run itself never fails
+// because the viewing rig didn't come up. Pair with --slow-mo to make a
+// fast replay watchable.
 //
 // --record sets FORGE_RECORD=1 in the spawn env. The forge-scaffolded
 // playwright.config.ts honors this by enabling `use.video = 'on'` and
@@ -70,9 +79,57 @@
 //       spawns, or a runner surviving its own test timeout in silence.
 //       A stalled exit means re-run, not "the spec failed".
 
+import { spawnSync } from 'node:child_process'
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs'
+import { createServer } from 'node:net'
 import { homedir } from 'node:os'
 import { basename, dirname, join, relative, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const FORGE_CLI = join(dirname(fileURLToPath(import.meta.url)), '..', 'forge-cli.mjs')
+
+function freePort() {
+  return new Promise((resolvePort, reject) => {
+    const srv = createServer()
+    srv.listen(0, '127.0.0.1', () => {
+      const { port } = srv.address()
+      srv.close(() => resolvePort(port))
+    })
+    srv.on('error', reject)
+  })
+}
+
+// Attach a playwright-cli session to the spec run's browser (exposed on the
+// CDP port by the config) so the dashboard renders the run live. Runs
+// concurrently with the test process; every step is best-effort.
+async function attachForDashboard(port, session) {
+  // Open the dashboard first — idempotent, no-ops when already up.
+  spawnSync(process.execPath, [FORGE_CLI, 'dashboard'], { stdio: 'ignore' })
+  const deadline = Date.now() + 20_000
+  let up = false
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch(`http://localhost:${port}/json/version`, { signal: AbortSignal.timeout(1000) })
+      if (res.ok) { up = true; break }
+    } catch { /* not listening yet */ }
+    await new Promise((r) => setTimeout(r, 250))
+  }
+  if (!up) {
+    console.error('forge-run-spec: --dashboard: the CDP port never came up — run continues unwatched')
+    return false
+  }
+  const attach = spawnSync(
+    process.execPath,
+    [FORGE_CLI, 'pw', `-s=${session}`, 'attach', `--cdp=http://localhost:${port}`],
+    { encoding: 'utf8' },
+  )
+  if (attach.status === 0) {
+    console.error(`forge-run-spec: --dashboard: watching as session '${session}' in the Playwright dashboard`)
+    return true
+  }
+  console.error('forge-run-spec: --dashboard: attach failed — run continues unwatched')
+  return false
+}
 import {
   pwMarkerFor,
   findProjectRunner,
@@ -117,8 +174,9 @@ ensureRunnerDeps(provisionalForgeRoot)
 const { default: mri } = await loadFromRunner(provisionalForgeRoot, 'mri')
 const args = mri(cliArgs, {
   string: ['spec', 'record-as', 'slow-mo'],
-  boolean: ['headed', 'record'],
+  boolean: ['headed', 'record', 'dashboard'],
 })
+const dashboard = !!args.dashboard
 
 const headed = !!args.headed
 const recordAs = args['record-as'] ?? null
@@ -214,6 +272,25 @@ const finalEnv = { ...process.env }
 if (record) finalEnv.FORGE_RECORD = '1'
 if (slowMo != null) finalEnv.FORGE_SLOW_MO = String(slowMo)
 
+// --dashboard: expose the run's browser over CDP (config honors
+// FORGE_SPEC_CDP) so a playwright-cli session can attach and the dashboard
+// can render the run live.
+let cdpPort = 0
+let dashboardSession = null
+if (dashboard) {
+  try {
+    cdpPort = await freePort()
+  } catch {
+    console.error('forge-run-spec: --dashboard: no free port — run continues unwatched')
+  }
+  if (cdpPort) {
+    finalEnv.FORGE_SPEC_CDP = String(cdpPort)
+    dashboardSession = ('spec-' + basename(specPath).replace(/\.spec\.[tj]s$/, ''))
+      .slice(0, 16)
+      .replace(/-+$/, '')
+  }
+}
+
 // Structured outcome: Playwright's json reporter writes to the file named by
 // PLAYWRIGHT_JSON_OUTPUT_NAME (kept out of the inherited stdout, which carries
 // the list reporter). It lives in a forge-owned dir OUTSIDE test-results/ so
@@ -246,6 +323,7 @@ const stallSecs = (() => {
 
 let exitCode = 1
 let stalled = false
+let attachDone = Promise.resolve(false)
 try {
   const subprocess = execa(cmd, cmdArgs, {
     cwd,
@@ -266,6 +344,8 @@ try {
   subprocess.stdout.on('data', (chunk) => { process.stdout.write(chunk); armStall() })
   subprocess.stderr.on('data', (chunk) => { process.stderr.write(chunk); armStall() })
   armStall()
+  // Concurrent with the run: wait for the CDP port, attach the dashboard view.
+  if (dashboardSession) attachDone = attachForDashboard(cdpPort, dashboardSession)
   const result = await subprocess
   clearTimeout(stallTimer)
   exitCode = result.exitCode ?? 1
@@ -274,6 +354,13 @@ try {
     die(`command not found: ${cmd}. Install it and retry.`, 5)
   }
   die(`spawn error: ${err.message}`, 5)
+}
+
+// The run's browser dies with the run; detach clears the session from the
+// dashboard's registry (best-effort — a failed attach makes this a no-op).
+if (dashboardSession) {
+  await attachDone.catch(() => false)
+  spawnSync(process.execPath, [FORGE_CLI, 'pw', `-s=${dashboardSession}`, 'detach'], { stdio: 'ignore' })
 }
 
 if (stalled) {

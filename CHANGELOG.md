@@ -5,6 +5,21 @@ every version bump. The full granular history is in the git log. Forge is young
 and pre-1.0 (built over June 2026), so a minor version can still carry a
 meaningful architecture change.
 
+## 0.54.0 — Spec runs in the dashboard (2026-07-08)
+
+- **`run-spec --dashboard`** — the headless spec run renders live in the
+  Playwright dashboard, alongside forge's drives. Mechanism: the run's
+  browser exposes a CDP port (`FORGE_SPEC_CDP`, honored by the scaffolded
+  config; projects with their own config opt in the same way as
+  `FORGE_RECORD`/`FORGE_SLOW_MO`), and run-spec attaches a playwright-cli
+  session (`spec-<name>`) to it for the run's duration, detaching at the
+  end. Best-effort at every step — the run never fails because the viewing
+  rig didn't come up.
+- **The last window-popping surface is gone**: cold-verify (driver) and
+  `/forge run` now use `--dashboard` instead of `--headed` — every browser
+  forge opens lives in the one dashboard window. `--headed` remains the
+  explicit escape hatch; `--slow-mo` paces a fast replay for watching.
+
 ## 0.53.0 — Concurrency tune-up: timely signals, patient reads (2026-07-08)
 
 - Live curation had drifted back toward author-everything-at-the-end, from
