@@ -1,6 +1,5 @@
-#!/usr/bin/env node
-// forge-pw.mjs — wrapper around playwright-cli with env-value redaction
-// and optional structured JSON pass-through.
+// pw — wrapper around playwright-cli with env-value redaction and optional
+// structured JSON pass-through. Runs via `forge-cli.mjs pw <args...>`.
 //
 // Why this exists: playwright-cli's subcommands (fill, click, run-code,
 // etc.) echo the JavaScript code they ran in their output — a "### Ran
@@ -59,7 +58,7 @@
 //   - This is best-effort transcript hygiene, not a security boundary.
 //
 // Usage:
-//   forge-pw.mjs [--json] <playwright-cli args...>
+//   forge-cli.mjs pw [--json] <playwright-cli args...>
 //
 // Exit codes:
 //   propagated from playwright-cli, except:
@@ -92,62 +91,63 @@ function redact(text, map) {
   return result
 }
 
-// Parse forge-pw's own --json flag out of argv before forwarding to
-// playwright-cli. Also honor FORGE_JSON=1 in env.
-const rawArgs = process.argv.slice(2)
-let jsonMode = process.env.FORGE_JSON === '1'
-const filteredArgs = []
-for (const a of rawArgs) {
-  if (a === '--json') {
-    jsonMode = true
-    continue
+export function main(args) {
+  // Parse the verb's own --json flag out of args before forwarding to
+  // playwright-cli. Also honor FORGE_JSON=1 in env.
+  let jsonMode = process.env.FORGE_JSON === '1'
+  const filteredArgs = []
+  for (const a of args) {
+    if (a === '--json') {
+      jsonMode = true
+      continue
+    }
+    filteredArgs.push(a)
   }
-  filteredArgs.push(a)
+
+  // In JSON mode, inject --json into playwright-cli's argv. Global
+  // playwright-cli flags work in any position, so prepending is safe.
+  const childArgs = jsonMode ? ['--json', ...filteredArgs] : filteredArgs
+
+  const redactMap = buildRedactMap()
+
+  const child = spawn('playwright-cli', childArgs, {
+    stdio: ['inherit', 'pipe', 'pipe'],
+    env: process.env,
+  })
+
+  let stdoutBuf = ''
+  let stderrBuf = ''
+
+  child.stdout.on('data', chunk => {
+    stdoutBuf += chunk.toString()
+    const lines = stdoutBuf.split('\n')
+    stdoutBuf = lines.pop() ?? ''
+    for (const line of lines) {
+      process.stdout.write(redact(line, redactMap) + '\n')
+    }
+  })
+
+  child.stderr.on('data', chunk => {
+    stderrBuf += chunk.toString()
+    const lines = stderrBuf.split('\n')
+    stderrBuf = lines.pop() ?? ''
+    for (const line of lines) {
+      process.stderr.write(redact(line, redactMap) + '\n')
+    }
+  })
+
+  child.on('close', code => {
+    if (stdoutBuf) process.stdout.write(redact(stdoutBuf, redactMap))
+    if (stderrBuf) process.stderr.write(redact(stderrBuf, redactMap))
+    process.exit(code ?? 0)
+  })
+
+  child.on('error', err => {
+    if (err.code === 'ENOENT') {
+      console.error('forge-pw: playwright-cli not installed or not on PATH')
+      process.exit(4)
+    }
+    console.error(`forge-pw: spawn error: ${err.message}`)
+    process.exit(5)
+  })
 }
-
-// In JSON mode, inject --json into playwright-cli's argv. Global
-// playwright-cli flags work in any position, so prepending is safe.
-const childArgs = jsonMode ? ['--json', ...filteredArgs] : filteredArgs
-
-const redactMap = buildRedactMap()
-
-const child = spawn('playwright-cli', childArgs, {
-  stdio: ['inherit', 'pipe', 'pipe'],
-  env: process.env,
-})
-
-let stdoutBuf = ''
-let stderrBuf = ''
-
-child.stdout.on('data', chunk => {
-  stdoutBuf += chunk.toString()
-  const lines = stdoutBuf.split('\n')
-  stdoutBuf = lines.pop() ?? ''
-  for (const line of lines) {
-    process.stdout.write(redact(line, redactMap) + '\n')
-  }
-})
-
-child.stderr.on('data', chunk => {
-  stderrBuf += chunk.toString()
-  const lines = stderrBuf.split('\n')
-  stderrBuf = lines.pop() ?? ''
-  for (const line of lines) {
-    process.stderr.write(redact(line, redactMap) + '\n')
-  }
-})
-
-child.on('close', code => {
-  if (stdoutBuf) process.stdout.write(redact(stdoutBuf, redactMap))
-  if (stderrBuf) process.stderr.write(redact(stderrBuf, redactMap))
-  process.exit(code ?? 0)
-})
-
-child.on('error', err => {
-  if (err.code === 'ENOENT') {
-    console.error('forge-pw: playwright-cli not installed or not on PATH')
-    process.exit(4)
-  }
-  console.error(`forge-pw: spawn error: ${err.message}`)
-  process.exit(5)
-})

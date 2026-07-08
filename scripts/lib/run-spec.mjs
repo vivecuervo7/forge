@@ -1,5 +1,4 @@
-#!/usr/bin/env node
-// forge-run-spec.mjs — run a project's forge spec, preferring the project's
+// run-spec — run a project's forge spec, preferring the project's
 // own Playwright runner over the plugin-shipped fallback.
 //
 // Two paths, picked at runtime:
@@ -80,8 +79,8 @@ import {
   ensurePluginRunner,
   ensureRunnerDeps,
   loadFromRunner,
-} from './forge-ensure-runner.mjs'
-import { looksLikeForgeRoot } from './forge-common.mjs'
+} from './ensure-runner.mjs'
+import { looksLikeForgeRoot } from './common.mjs'
 
 function die(msg, code = 2) {
   console.error('forge-run-spec:', msg)
@@ -89,9 +88,8 @@ function die(msg, code = 2) {
 }
 
 // Bootstrap mri — needs forgeRoot, which we derive from the spec path. Read
-// it from raw argv first.
-function rawArgValue(name) {
-  const av = process.argv.slice(2)
+// it from the raw args first.
+function rawArgValue(av, name) {
   for (let i = 0; i < av.length; i++) {
     if (av[i] === name && i + 1 < av.length) return av[i + 1]
     if (av[i].startsWith(`${name}=`)) return av[i].slice(name.length + 1)
@@ -99,7 +97,8 @@ function rawArgValue(name) {
   return null
 }
 
-const rawSpec = rawArgValue('--spec')
+export async function main(cliArgs) {
+const rawSpec = rawArgValue(cliArgs, '--spec')
 if (!rawSpec) die('missing --spec <path-to-spec>')
 const specPathAbs = resolve(rawSpec)
 if (!existsSync(specPathAbs)) die(`spec not found: ${specPathAbs}`, 4)
@@ -116,7 +115,7 @@ if (!looksLikeForgeRoot(provisionalForgeRoot)) {
 ensureRunnerDeps(provisionalForgeRoot)
 
 const { default: mri } = await loadFromRunner(provisionalForgeRoot, 'mri')
-const args = mri(process.argv.slice(2), {
+const args = mri(cliArgs, {
   string: ['spec', 'record-as', 'slow-mo'],
   boolean: ['headed', 'record'],
 })
@@ -465,4 +464,5 @@ function timestamp() {
     pad(d.getMinutes()) +
     pad(d.getSeconds())
   )
+}
 }

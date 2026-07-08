@@ -1,5 +1,4 @@
-#!/usr/bin/env node
-// forge-cleanup-scan.mjs — emit a structured JSON report of cleanup
+// cleanup-scan — emit a structured JSON report of cleanup
 // candidates in a project's forge/ directory. Read-only — never mutates.
 //
 // The /forge clean route's lead reads this output and surfaces findings
@@ -29,47 +28,50 @@ import {
   extractMetaSource,
   evalMeta,
   ticketKeyPrefix,
-} from './forge-common.mjs'
+} from './common.mjs'
 
-// --- arg parsing ---
+// --- parsed CLI state (assigned by main; the scan flow lives in run()) ---
 
 let scope = 'both'
 let explicitRoot = null
-const argv = process.argv.slice(2)
-for (let i = 0; i < argv.length; i++) {
-  const a = argv[i]
-  if (a === '--scope') {
-    scope = argv[++i]
-    if (!['snippets', 'hints', 'both'].includes(scope)) {
-      console.error(`forge-cleanup-scan: --scope must be one of snippets|hints|both`)
+let forgeRoot
+
+export async function main(args) {
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]
+    if (a === '--scope') {
+      scope = args[++i]
+      if (!['snippets', 'hints', 'both'].includes(scope)) {
+        console.error(`forge-cleanup-scan: --scope must be one of snippets|hints|both`)
+        process.exit(2)
+      }
+    } else if (a === '--forge-root') {
+      explicitRoot = args[++i]
+    } else if (a === '--help' || a === '-h') {
+      console.error('usage: forge-cli.mjs cleanup-scan [--scope snippets|hints|both] [--forge-root <path>]')
+      process.exit(2)
+    } else {
+      console.error(`forge-cleanup-scan: unknown arg: ${a}`)
       process.exit(2)
     }
-  } else if (a === '--forge-root') {
-    explicitRoot = argv[++i]
-  } else if (a === '--help' || a === '-h') {
-    console.error('usage: forge-cleanup-scan.mjs [--scope snippets|hints|both] [--forge-root <path>]')
-    process.exit(2)
+  }
+
+  // --- forge root resolution (shared walk — see common.mjs) ---
+  if (explicitRoot) {
+    forgeRoot = resolveForgeRootArg(explicitRoot)
+    if (!forgeRoot) {
+      console.error(`forge-cleanup-scan: not a forge directory or project root: ${explicitRoot}`)
+      process.exit(1)
+    }
   } else {
-    console.error(`forge-cleanup-scan: unknown arg: ${a}`)
-    process.exit(2)
+    forgeRoot = findForgeRoot(process.cwd())
+    if (!forgeRoot) {
+      console.error('forge-cleanup-scan: no forge/ directory found')
+      process.exit(1)
+    }
   }
-}
 
-// --- forge root resolution (shared walk — see forge-common.mjs) ---
-
-let forgeRoot
-if (explicitRoot) {
-  forgeRoot = resolveForgeRootArg(explicitRoot)
-  if (!forgeRoot) {
-    console.error(`forge-cleanup-scan: not a forge directory or project root: ${explicitRoot}`)
-    process.exit(1)
-  }
-} else {
-  forgeRoot = findForgeRoot(process.cwd())
-  if (!forgeRoot) {
-    console.error('forge-cleanup-scan: no forge/ directory found')
-    process.exit(1)
-  }
+  await run()
 }
 
 // --- tokenisation / similarity helpers ---
@@ -503,8 +505,9 @@ function scanHints(hintsDir, snippetNames) {
   return out
 }
 
-// --- main ---
+// --- the scan flow ---
 
+async function run() {
 const report = {
   forgeRoot,
   scope,
@@ -515,8 +518,8 @@ if (scope === 'snippets' || scope === 'both') {
   // Regenerate INDEX.md first so the lead acts on fresh data.
   try {
     const { spawnSync } = await import('node:child_process')
-    const indexScript = join(dirname(new URL(import.meta.url).pathname), 'forge-snippet-index.mjs')
-    const r = spawnSync(process.execPath, [indexScript, forgeRoot], { encoding: 'utf8' })
+    const forgeCli = join(dirname(new URL(import.meta.url).pathname), '..', 'forge-cli.mjs')
+    const r = spawnSync(process.execPath, [forgeCli, 'snippet-index', forgeRoot], { encoding: 'utf8' })
     if (r.status !== 0) throw new Error((r.stderr || 'index refresh failed').trim())
     report.indexRefreshed = true
     // The index script reports library hygiene on stderr (empty tags, missing
@@ -568,3 +571,4 @@ if (report.stalenessFile.exists) {
 }
 
 process.stdout.write(JSON.stringify(report, null, 2) + '\n')
+}

@@ -5,6 +5,29 @@ every version bump. The full granular history is in the git log. Forge is young
 and pre-1.0 (built over June 2026), so a minor version can still carry a
 meaningful architecture change.
 
+## 0.52.0 — One way in: the verbs become modules (2026-07-08)
+
+- The consolidation 0.45.0 deferred: per-verb scripts are now **pure modules**
+  under `scripts/lib/` — each exports `main(args)`, none executes on import,
+  and running one directly is a no-op. `forge-cli.mjs` is the **only**
+  runnable surface; it imports the verb's module and calls `main()` (no more
+  argv-rewrite trick).
+- **Internal cross-calls go through the front door too**: `observe --live` →
+  `pw`, preflight → `pw`/`dashboard`, init → `snippet-index`/`ensure-runner`,
+  cleanup-scan → `snippet-index`. One invocation grammar everywhere — what a
+  human types, what an agent runs, and what a transcript records are the same
+  shape.
+- **The legacy grammar is gone**: `read-trace` parses only front-door
+  commands. A mixed-version team (stale agent definition driving old-form
+  commands) now reads as zero actions — by choice: that state is already
+  detected and warned about by preflight's dual-install check, and the
+  curator's transcript fallback keeps it soft. Clean world over
+  compatibility tail.
+- The dispatch test matrix now pins the locked side doors (direct lib
+  invocation: exit 0, zero output); every internal chain smoke-verified
+  (init/scaffold, cleanup-scan, preflight browser open, `observe --live`,
+  `invoke-snippet` round trip, run-spec watchdog exit 7).
+
 ## 0.51.0 — Version-coherent teams (shakedown hardening) (2026-07-08)
 
 - **The lead's resolved plugin root now threads through the whole team.**

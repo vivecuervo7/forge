@@ -1,5 +1,5 @@
-#!/usr/bin/env node
-// forge-observe.mjs — deterministic perception primitive.
+// observe — deterministic perception primitive. Runs via
+// `forge-cli.mjs observe`.
 //
 // Turns a playwright-cli ARIA snapshot (YAML) into the compact view a driver
 // actually needs to pick the next action: the interactable, labelled surface
@@ -17,9 +17,9 @@
 // perception half — the driver still reasons over the result.
 //
 // Usage:
-//   forge-observe.mjs --live -s=<name> [--diff] [--full] [--state=<path>]
-//   forge-observe.mjs <snapshot.yaml> [--session=<name>] [--url=<url>] [--state=<path>] [--diff] [--full]
-//   forge-observe.mjs -            (read snapshot YAML from stdin)
+//   forge-cli.mjs observe --live -s=<name> [--diff] [--full] [--state=<path>]
+//   forge-cli.mjs observe <snapshot.yaml> [--session=<name>] [--url=<url>] [--state=<path>] [--diff] [--full]
+//   forge-cli.mjs observe -            (read snapshot YAML from stdin)
 //
 //   --live            take the snapshot itself (via forge-pw against the named
 //                     session) and observe it in one call. The page URL is read
@@ -67,7 +67,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { findForgeRoot } from './forge-common.mjs'
+import { findForgeRoot } from './common.mjs'
 
 const INTERACTABLE = new Set([
   'button', 'link', 'textbox', 'combobox', 'checkbox', 'radio', 'option',
@@ -225,7 +225,8 @@ function diff(prev, curr) {
 }
 
 // --- main ---
-const opts = parseArgs(process.argv.slice(2))
+export function main(args) {
+const opts = parseArgs(args)
 
 if (opts.live) {
   // Take the snapshot ourselves (through forge-pw, so redaction applies), then
@@ -239,10 +240,10 @@ if (opts.live) {
   const dir = forgeRoot ? join(forgeRoot, '.observe') : join(tmpdir(), 'forge-observe')
   try { mkdirSync(dir, { recursive: true }) } catch { /* readFileSync below reports it */ }
   opts.file = join(dir, `${opts.session}.yaml`)
-  const pwScript = join(dirname(fileURLToPath(import.meta.url)), 'forge-pw.mjs')
+  const forgeCli = join(dirname(fileURLToPath(import.meta.url)), '..', 'forge-cli.mjs')
   const pw = spawnSync(
     process.execPath,
-    [pwScript, `-s=${opts.session}`, 'snapshot', `--filename=${opts.file}`],
+    [forgeCli, 'pw', `-s=${opts.session}`, 'snapshot', `--filename=${opts.file}`],
     { encoding: 'utf8' }
   )
   if (pw.status !== 0) {
@@ -257,7 +258,7 @@ if (opts.live) {
 }
 
 if (!opts.file) {
-  console.error('forge-observe: usage: forge-observe.mjs --live -s=<name> [--diff|--full]  |  forge-observe.mjs <snapshot.yaml> [--session=<name>] [--url=<current-url>] [--state=<path>] [--diff] [--full]')
+  console.error('forge-observe: usage: forge-cli.mjs observe --live -s=<name> [--diff|--full]  |  forge-cli.mjs observe <snapshot.yaml> [--session=<name>] [--url=<current-url>] [--state=<path>] [--diff] [--full]')
   process.exit(2)
 }
 
@@ -320,3 +321,4 @@ try {
 const sigs = items.filter(it => SIGNAL.has(it.role)).length
 console.log(`# observe: session=${opts.session} | ${items.length} interactable, ${sigs} signal | ${mode} | ~${tok} tok (raw snapshot ~${rawTok} tok)`)
 console.log(out)
+}

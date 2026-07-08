@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const SCRIPT = join(dirname(fileURLToPath(import.meta.url)), 'forge-read-trace.mjs')
+const CLI = join(dirname(fileURLToPath(import.meta.url)), 'forge-cli.mjs')
 const TEAM = 'session-fixture'
 
 let failures = 0
@@ -87,7 +87,7 @@ function transcript(startedIso, ref, form = 'old') {
 function run(dir, extraArgs = []) {
   return spawnSync(
     process.execPath,
-    [SCRIPT, '--team', TEAM, '--project-dir', dir, ...extraArgs],
+    [CLI, 'read-trace', '--team', TEAM, '--project-dir', dir, ...extraArgs],
     { encoding: 'utf8' },
   )
 }

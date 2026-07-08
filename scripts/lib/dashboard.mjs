@@ -1,5 +1,4 @@
-#!/usr/bin/env node
-// forge-dashboard.mjs — open the Playwright dashboard, but ONLY if it isn't
+// dashboard — open the Playwright dashboard, but ONLY if it isn't
 // already running.
 //
 // Why the guard: the dashboard is idempotent (a second launch doesn't spawn a
@@ -31,16 +30,18 @@ function alreadyRunning() {
   }
 }
 
-if (alreadyRunning()) {
-  console.log('forge-dashboard: dashboard already open — leaving it (no re-raise).')
-  process.exit(0)
-}
+export function main() {
+  if (alreadyRunning()) {
+    console.log('forge-dashboard: dashboard already open — leaving it (no re-raise).')
+    process.exit(0)
+  }
 
-try {
-  const child = spawn('playwright-cli', ['show'], { detached: true, stdio: 'ignore' })
-  child.on('error', () => {}) // e.g. not installed — best-effort, ignore
-  child.unref()
-  console.log('forge-dashboard: opening the Playwright dashboard (headless sessions render live here).')
-} catch {
-  console.error('forge-dashboard: could not open the dashboard; the drive continues headless regardless.')
+  try {
+    const child = spawn('playwright-cli', ['show'], { detached: true, stdio: 'ignore' })
+    child.on('error', () => {}) // e.g. not installed — best-effort, ignore
+    child.unref()
+    console.log('forge-dashboard: opening the Playwright dashboard (headless sessions render live here).')
+  } catch {
+    console.error('forge-dashboard: could not open the dashboard; the drive continues headless regardless.')
+  }
 }

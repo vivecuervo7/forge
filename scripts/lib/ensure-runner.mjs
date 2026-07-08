@@ -1,5 +1,4 @@
-#!/usr/bin/env node
-// forge-ensure-runner.mjs — make sure the project has a Playwright runner ready.
+// ensure-runner — make sure the project has a Playwright runner ready.
 //
 // Runner installs directly into the project's forge/ directory — produces a
 // standard Playwright project layout (package.json + node_modules alongside
@@ -99,7 +98,7 @@ export function ensurePluginRunner(forgeRoot) {
   const pkgContent = JSON.stringify({
     name: 'forge-spec-runner',
     private: true,
-    description: 'Forge-managed Playwright workspace. Maintained by forge-ensure-runner.mjs. Safe to delete forge/node_modules/ + package.json to reset; /forge init will restore.',
+    description: 'Forge-managed Playwright workspace. Maintained by forge (forge-cli.mjs ensure-runner). Safe to delete forge/node_modules/ + package.json to reset; /forge init will restore.',
     dependencies: {
       '@playwright/test': '^1.49.0',
       dotenv: '^16.4.0',
@@ -184,11 +183,11 @@ export function ensureRunnerReady(forgeRoot) {
   return `plugin runner installed at ${forgeRoot}`
 }
 
-// CLI entry point.
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const forgeRoot = process.argv[2]
+// CLI entry point (via `forge-cli.mjs ensure-runner <project-forge-dir>`).
+export function main(args) {
+  const forgeRoot = args[0]
   if (!forgeRoot) {
-    console.error('Usage: forge-ensure-runner.mjs <project-forge-dir>')
+    console.error('Usage: forge-cli.mjs ensure-runner <project-forge-dir>')
     process.exit(2)
   }
   try {

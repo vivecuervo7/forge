@@ -32,7 +32,7 @@ for (const expected of ['pw', 'observe', 'find-root', 'run-spec', 'read-trace', 
 check("excludes 'common' (library, not a verb)", !verbs.includes('common'))
 check("excludes 'cli' (itself)", !verbs.includes('cli'))
 
-check("resolves 'pw' to its script", resolveVerb('pw')?.endsWith('forge-pw.mjs') === true)
+check("resolves 'pw' to its module", resolveVerb('pw')?.endsWith(join('lib', 'pw.mjs')) === true)
 check("rejects unknown verb", resolveVerb('does-not-exist') === null)
 check("rejects 'common'", resolveVerb('common') === null)
 check("rejects path-shaped input", resolveVerb('../hooks/guard') === null)
@@ -64,8 +64,8 @@ function run(args, opts = {}) {
   check('unknown verb is named', r.stderr.includes("unknown verb 'frobnicate'"))
 }
 
-// Real verb, argv rewrite: find-root inside a scaffolded forge dir finds it;
-// outside one it exits non-zero — both behaviors identical to direct invocation.
+// Real verb: find-root inside a scaffolded forge dir finds it; outside one it
+// exits non-zero.
 {
   const root = mkdtempSync(join(tmpdir(), 'forge-cli-test-'))
   try {
@@ -74,15 +74,18 @@ function run(args, opts = {}) {
     check('find-root succeeds inside a project', inside.status === 0, inside.stderr)
     check('find-root prints the forge dir', inside.stdout.trim().endsWith(join('proj', 'forge')))
 
-    const direct = spawnSync(
-      process.execPath,
-      [join(dirname(CLI), 'forge-find-root.mjs')],
-      { encoding: 'utf8', cwd: join(root, 'proj') }
-    )
-    check('dispatched output matches direct invocation', inside.stdout === direct.stdout)
-
     const outside = run(['find-root'], { cwd: root })
     check('find-root fails outside a project', outside.status !== 0)
+
+    // The side doors are locked: a lib module run directly is a pure import —
+    // no execution, no output, exit 0. The front door is the ONLY entry point.
+    const direct = spawnSync(
+      process.execPath,
+      [join(dirname(CLI), 'lib', 'find-root.mjs')],
+      { encoding: 'utf8', cwd: join(root, 'proj') }
+    )
+    check('direct lib invocation is a no-op (exit 0)', direct.status === 0, `status ${direct.status}`)
+    check('direct lib invocation produces no output', direct.stdout === '' && direct.stderr === '', direct.stdout + direct.stderr)
   } finally {
     rmSync(root, { recursive: true, force: true })
   }

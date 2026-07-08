@@ -1,5 +1,4 @@
-#!/usr/bin/env node
-// forge-export-spec.mjs — export a composed forge spec to a self-contained,
+// export-spec — export a composed forge spec to a self-contained,
 // inlined form suitable for shipping into another test suite (or sharing as
 // a single-file artifact).
 //
@@ -46,7 +45,7 @@ function die(msg, code = 2) {
 
 // ---- args ----------------------------------------------------------------
 
-const argv = process.argv.slice(2)
+export function main(argv) {
 let specPath = null
 let outputPath = null
 let force = false
@@ -332,3 +331,4 @@ writeFileSync(outputPath, output)
 console.log(`forge-export-spec: exported ${specPath} → ${outputPath}`)
 console.log(`  Inlined ${imports.length} import(s), ${allSites.length} call site(s).`)
 console.log(`  Snippets: ${snippetList}`)
+}

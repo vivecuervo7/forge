@@ -1,5 +1,4 @@
-#!/usr/bin/env node
-// forge-invoke-snippet.mjs — invoke a forge snippet against a playwright-cli session.
+// invoke-snippet — invoke a forge snippet against a playwright-cli session.
 //
 // The snippet is a .ts file exporting a `run(page, args)` function and an
 // optional `meta` block (description, args, tags). Snippets are pure
@@ -59,12 +58,12 @@ import { spawnSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { ensureRunnerDeps, esbuildBinFor, loadFromRunner } from './forge-ensure-runner.mjs'
-import { looksLikeForgeRoot } from './forge-common.mjs'
+import { ensureRunnerDeps, esbuildBinFor, loadFromRunner } from './ensure-runner.mjs'
+import { looksLikeForgeRoot } from './common.mjs'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
-const FORGE_PW = join(__dirname, 'forge-pw.mjs')
+const FORGE_CLI = join(dirname(__dirname), 'forge-cli.mjs')
 
 function die(msg, code = 2) {
   console.error('forge-invoke-snippet:', msg)
@@ -72,9 +71,8 @@ function die(msg, code = 2) {
 }
 
 // Bootstrap mri load — we need the snippet path to derive forgeRoot before
-// runner deps are available. Read it from raw argv first.
-function rawArgValue(name, short = null) {
-  const av = process.argv.slice(2)
+// runner deps are available. Read it from the raw args first.
+function rawArgValue(av, name, short = null) {
   for (let i = 0; i < av.length; i++) {
     if (av[i] === name && i + 1 < av.length) return av[i + 1]
     if (short && av[i] === short && i + 1 < av.length) return av[i + 1]
@@ -84,7 +82,8 @@ function rawArgValue(name, short = null) {
   return null
 }
 
-const rawSnippet = rawArgValue('--snippet')
+export async function main(cliArgs) {
+const rawSnippet = rawArgValue(cliArgs, '--snippet')
 if (!rawSnippet) die('missing --snippet <path>')
 
 // Validate the derived forge root BEFORE ensureRunnerDeps — installing runner
@@ -100,7 +99,7 @@ if (!looksLikeForgeRoot(forgeRoot)) {
 ensureRunnerDeps(forgeRoot)
 
 const { default: mri } = await loadFromRunner(forgeRoot, 'mri')
-const args = mri(process.argv.slice(2), {
+const args = mri(cliArgs, {
   string: ['session', 'snippet', 'args'],
   boolean: ['json'],
   alias: { s: 'session' },
@@ -214,18 +213,16 @@ const pwArgs = jsonMode
   ? ['--json', `-s=${session}`, 'run-code', wrappedCode]
   : [`-s=${session}`, 'run-code', wrappedCode]
 const result = spawnSync(
-  'node',
-  [FORGE_PW, ...pwArgs],
+  process.execPath,
+  [FORGE_CLI, 'pw', ...pwArgs],
   { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 }
 )
 
 if (result.error) {
-  if (result.error.code === 'ENOENT') {
-    die('node not on PATH (required to invoke forge-pw)', 4)
-  }
   die(`spawn error: ${result.error.message}`, 5)
 }
 
 if (result.stdout) process.stdout.write(result.stdout)
 if (result.stderr) process.stderr.write(result.stderr)
 process.exit(result.status ?? 1)
+}

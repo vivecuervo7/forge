@@ -1,5 +1,5 @@
-#!/usr/bin/env node
-// forge-preflight.mjs — the team-lead's run setup, as one command.
+// preflight — the team-lead's run setup, as one command. Runs via
+// `forge-cli.mjs preflight`.
 //
 // Everything deterministic the lead does before spawning the teammates,
 // bundled: locate the forge root, load the project's forge.md hints and the
@@ -42,10 +42,11 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { findForgeRoot } from './forge-common.mjs'
+import { findForgeRoot } from './common.mjs'
 
-const SCRIPTS_DIR = dirname(fileURLToPath(import.meta.url))
-const PLUGIN_ROOT = dirname(SCRIPTS_DIR)
+const LIB_DIR = dirname(fileURLToPath(import.meta.url))
+const FORGE_CLI = join(dirname(LIB_DIR), 'forge-cli.mjs')
+const PLUGIN_ROOT = dirname(dirname(LIB_DIR))
 
 // macOS caps unix-socket paths at ~104 bytes; forge-pw's socket embeds the
 // session name. Past this, `open` fails with `listen EINVAL`.
@@ -108,9 +109,10 @@ function cleanupNudge(forgeRoot) {
 }
 
 // --- main ---
-const opts = parseArgs(process.argv.slice(2))
+export function main(args) {
+const opts = parseArgs(args)
 if (!opts.session) {
-  console.error('forge-preflight: usage: forge-preflight.mjs --session <name> [--headed] [--no-open]')
+  console.error('forge-preflight: usage: forge-cli.mjs preflight --session <name> [--headed] [--no-open]')
   process.exit(2)
 }
 if (opts.session.length > SESSION_NAME_MAX) {
@@ -143,7 +145,7 @@ let browser = 'skipped'
 let dashboard = 'skipped'
 if (opts.open) {
   const pwArgs = [
-    join(SCRIPTS_DIR, 'forge-pw.mjs'),
+    FORGE_CLI, 'pw',
     `-s=${opts.session}`, 'open', '--browser=chrome',
     ...(headed ? ['--headed'] : []),
     'about:blank',
@@ -156,8 +158,8 @@ if (opts.open) {
   }
   browser = 'opened'
   if (!headed) {
-    // Best-effort and idempotent — forge-dashboard no-ops when already up.
-    spawnSync(process.execPath, [join(SCRIPTS_DIR, 'forge-dashboard.mjs')], { stdio: 'ignore' })
+    // Best-effort and idempotent — the dashboard verb no-ops when already up.
+    spawnSync(process.execPath, [FORGE_CLI, 'dashboard'], { stdio: 'ignore' })
     dashboard = 'opened-or-already-running'
   }
 }
@@ -245,4 +247,5 @@ for (const p of protocols) {
   console.log('')
   console.log(`## protocols/${p.name}`)
   console.log(p.content ?? `(missing from plugin install — read ${join(PLUGIN_ROOT, 'protocols', p.name)} manually)`)
+}
 }

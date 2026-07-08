@@ -1,5 +1,5 @@
-// forge-read-trace.mjs — the curator's reliable window into the
-// driver's verbatim browser actions.
+// read-trace — the curator's reliable window into the driver's verbatim
+// browser actions. Runs via `forge-cli.mjs read-trace`.
 //
 // Locates the driver's transcript by IDENTITY (its own agentName + teamName,
 // not a substring mention — so it can't be fooled by the lead/curator
@@ -33,25 +33,34 @@ import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { homedir } from 'node:os'
 
-const argv = process.argv.slice(2)
-const opt = (name, def) => {
-  const i = argv.indexOf(name)
-  return i >= 0 && i + 1 < argv.length ? argv[i + 1] : def
-}
+// Parsed CLI state — assigned by main(), read by the locate/collect helpers.
+let team, since, awaitSec, driver, projectDir, startedAfterMs
 
-const team = opt('--team')
-const since = parseInt(opt('--since', '0'), 10) || 0
-const awaitSec = parseInt(opt('--await', '0'), 10) || 0
-const driver = opt('--driver', 'driver')
-const projectDir = opt(
-  '--project-dir',
-  join(homedir(), '.claude', 'projects', process.cwd().replace(/\//g, '-')),
-)
-const startedAfterRaw = opt('--started-after', null)
+export async function main(args) {
+  const opt = (name, def) => {
+    const i = args.indexOf(name)
+    return i >= 0 && i + 1 < args.length ? args[i + 1] : def
+  }
+  team = opt('--team')
+  since = parseInt(opt('--since', '0'), 10) || 0
+  awaitSec = parseInt(opt('--await', '0'), 10) || 0
+  driver = opt('--driver', 'driver')
+  projectDir = opt(
+    '--project-dir',
+    join(homedir(), '.claude', 'projects', process.cwd().replace(/\//g, '-')),
+  )
+  const startedAfterRaw = opt('--started-after', null)
 
-if (!team) {
-  console.error('forge-read-trace: --team <TEAM_NAME> is required')
-  process.exit(2)
+  if (!team) {
+    console.error('forge-read-trace: --team <TEAM_NAME> is required')
+    process.exit(2)
+  }
+  startedAfterMs = parseTime(startedAfterRaw)
+  if (startedAfterRaw != null && startedAfterMs == null) {
+    console.error(`forge-read-trace: --started-after: cannot parse '${startedAfterRaw}' (ISO 8601 or epoch)`)
+    process.exit(2)
+  }
+  await run()
 }
 
 function parseTime(raw) {
@@ -63,12 +72,6 @@ function parseTime(raw) {
   const t = Date.parse(raw)
   return Number.isNaN(t) ? null : t
 }
-const startedAfterMs = parseTime(startedAfterRaw)
-if (startedAfterRaw != null && startedAfterMs == null) {
-  console.error(`forge-read-trace: --started-after: cannot parse '${startedAfterRaw}' (ISO 8601 or epoch)`)
-  process.exit(2)
-}
-
 // First record timestamp — when the transcript's session began.
 function firstRecordTime(text) {
   const m = text.slice(0, 4096).match(/"timestamp":"([^"]+)"/)
@@ -184,10 +187,9 @@ function parse(lines) {
     for (const c of content) {
       if (c?.type === 'tool_use' && c?.name === 'Bash') {
         const cmd = c.input?.command || ''
-        // Match both invocation forms: the forge-cli front door (0.45+,
-        // `forge-cli.mjs pw` / `forge-cli.mjs invoke-snippet`) and the
-        // standalone scripts (`forge-pw.mjs` / `forge-invoke-snippet.mjs`).
-        if (/forge-pw\.mjs|forge-invoke-snippet\.mjs|forge-cli\.mjs\s+(?:--?\S+\s+)*(?:pw|invoke-snippet)\b/.test(cmd)) {
+        // The front door is the only invocation grammar: forge-cli.mjs pw /
+        // invoke-snippet (flags tolerated between entry point and verb).
+        if (/forge-cli\.mjs\s+(?:--?\S+\s+)*(?:pw|invoke-snippet)\b/.test(cmd)) {
           actions.push({ idx, command: cmd, id: c.id })
         }
       } else if (c?.type === 'tool_result' && c?.tool_use_id) {
@@ -232,13 +234,13 @@ function format(a, results) {
   // renders as `—`). Collapse each continuation to a single space so matching
   // sees one flat command regardless of how the driver formatted it.
   const normCmd = cmd.replace(/\s*\\\n\s*/g, ' ')
-  if (/forge-invoke-snippet\.mjs|forge-cli\.mjs\s+(?:--?\S+\s+)*invoke-snippet\b/.test(normCmd)) {
+  if (/forge-cli\.mjs\s+(?:--?\S+\s+)*invoke-snippet\b/.test(normCmd)) {
     const m = normCmd.match(/--snippet\s+\S*\/([\w-]+)\.ts/)
     return `── invoked snippet ──\n  ${m ? m[1] : '(unknown)'}  (reuse — not new authoring)`
   }
-  // Verb = the first bare word after -s=<session>, in either invocation form
-  // (flags like --json may sit between the entry point and -s).
-  const vm = normCmd.match(/(?:forge-pw\.mjs|forge-cli\.mjs\s+(?:--?\S+\s+)*pw)\s+(?:--?\S+\s+)*-s=\S+\s+([\w-]+)/)
+  // Verb = the first bare word after -s=<session> (flags like --json may sit
+  // between the entry point and -s).
+  const vm = normCmd.match(/forge-cli\.mjs\s+(?:--?\S+\s+)*pw\s+(?:--?\S+\s+)*-s=\S+\s+([\w-]+)/)
   const verb = vm ? vm[1] : '(?)'
   if (verb === 'snapshot' || verb === 'open') {
     return `── ${verb} ──  (orientation — no snippet code)`
@@ -253,7 +255,7 @@ function format(a, results) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
-async function main() {
+async function run() {
   const deadline = Date.now() + awaitSec * 1000
   for (;;) {
     const path = locate()
@@ -297,4 +299,4 @@ async function main() {
   }
 }
 
-main()
+

@@ -1,4 +1,4 @@
-// forge-common.mjs — helpers shared across the forge scripts.
+// common — helpers shared across the forge scripts.
 //
 // Single source of truth for:
 //   - locating a project's forge/ root (walk-up + explicit-arg resolution)

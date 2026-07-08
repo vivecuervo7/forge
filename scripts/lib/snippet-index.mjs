@@ -1,5 +1,4 @@
-#!/usr/bin/env node
-// forge-snippet-index.mjs — generate forge/snippets/INDEX.md from the meta
+// snippet-index — generate forge/snippets/INDEX.md from the meta
 // blocks of every snippet in a project's forge/snippets/ directory.
 //
 // Why this exists: the driver agent (and the lead's session-start scan)
@@ -61,7 +60,7 @@ import {
   extractMetaSource,
   evalMeta,
   ticketKeyPrefix,
-} from './forge-common.mjs'
+} from './common.mjs'
 
 // Compact arg shorthand: just the names, comma-separated. Returns `()` for
 // zero-arg snippets so the entry shape stays uniform. The full arg metadata
@@ -320,7 +319,7 @@ function renderMarkdown(records, primitives = []) {
 
 // --- main ---
 
-const args = process.argv.slice(2)
+export function main(args) {
 const verbose = args.includes('--verbose')
 const positional = args.filter(a => !a.startsWith('--'))
 const explicitRoot = positional[0]
@@ -350,3 +349,4 @@ const md = buildIndex(snippetsDir, { verbose })
 const outPath = join(snippetsDir, 'INDEX.md')
 writeFileSync(outPath, md + '\n', 'utf8')
 console.log(`forge-snippet-index: wrote ${outPath}`)
+}

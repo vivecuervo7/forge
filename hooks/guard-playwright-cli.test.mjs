@@ -54,7 +54,7 @@ const shouldAllow = [
   `sed -i '' 's/${PW}/forge-pw/g' notes.md`,
   `git commit -m "$(cat <<'EOF'\nfix: steer agents away from ${PW}\n\nThe ${PW} binary leaks argv secrets.\nEOF\n)"`,
   `cat <<EOF > notes.md\nuse forge-pw instead of ${PW}\nEOF`,
-  `node scripts/forge-pw.mjs -s=ft-1 open --headed about:blank`, // no token at all
+  `node scripts/forge-cli.mjs pw -s=ft-1 open --headed about:blank`, // no token at all
   `ls -la`, // no token at all
   // Paths CONTAINING the token (the .${PW}/ artifact dir) are mentions, not
   // invocations — a driver reading its own console logs must not be blocked.
