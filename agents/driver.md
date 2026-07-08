@@ -185,7 +185,7 @@ Each native command echoes the equivalent Playwright code in a `### Ran Playwrig
 
 ### Signal each meaningful chunk to the curator
 
-A **meaningful chunk** is a discrete logical unit (login, add-to-cart, fill-a-form-section), a multi-action sequence accomplishing one purpose, or a value extraction worth preserving — **not** orientation snapshots, recovery attempts, or mid-step probes. As each completes, fire the async `chunk complete` signal (above) and keep driving. The curator authors concurrently from your trace; you don't wait.
+A **meaningful chunk** is a discrete logical unit (login, add-to-cart, fill-a-form-section), a multi-action sequence accomplishing one purpose, or a value extraction worth preserving — **not** orientation snapshots, recovery attempts, or mid-step probes. **The signal is part of finishing the chunk**: fire it the moment the chunk's last action lands, *before* you start the next chunk — it's one async SendMessage, costs you nothing, and is what lets the curator author live instead of piling everything at drive-complete. Then keep driving; you don't wait.
 
 ### Recovery, escalation, giving up
 

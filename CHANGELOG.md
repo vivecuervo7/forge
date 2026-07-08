@@ -5,6 +5,22 @@ every version bump. The full granular history is in the git log. Forge is young
 and pre-1.0 (built over June 2026), so a minor version can still carry a
 meaningful architecture change.
 
+## 0.53.0 — Concurrency tune-up: timely signals, patient reads (2026-07-08)
+
+- Live curation had drifted back toward author-everything-at-the-end, from
+  both directions: drivers deferred chunk signals under focus pressure, and
+  the curator's per-chunk reads took only what was *already flushed* — a
+  signal announcing a not-yet-flushed chunk yielded nothing, the curator
+  idled, and the next wake was often `drive complete`.
+- **Driver:** the chunk signal is now part of finishing the chunk — fired the
+  moment its last action lands, before the next chunk begins.
+- **Curator:** each signal now triggers one **bounded** read (`--await 10`,
+  one follow-up at most) — the signal is proof a chunk just landed, so a
+  short wait for its flush is justified and returns as soon as the actions
+  appear. Still strictly signal-driven and idle-first (the 0.35 rule that
+  fixed the starved-signals pathology): one signal, one bounded read, never
+  an open polling loop.
+
 ## 0.52.0 — One way in: the verbs become modules (2026-07-08)
 
 - The consolidation 0.45.0 deferred: per-verb scripts are now **pure modules**

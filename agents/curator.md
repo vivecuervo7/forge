@@ -60,8 +60,8 @@ It prints the driver's new actions — the echoed Playwright (lift it **verbatim
 
 **When and how you call it differs by phase, and that difference *is* the concurrency mechanism:**
 
-- **During the drive (Phase 1):** opportunistic reads on each `chunk complete` signal — **no `--await`**, take what's flushed right now, then idle.
-- **At the end (Phase 2):** one draining read on `drive complete` — **with `--await`**, the only place you wait, because no more signals are coming.
+- **During the drive (Phase 1):** one **bounded** read per `chunk complete` signal — `--await 10`. The signal is proof a chunk just landed, so a short wait for its flush is justified and returns as soon as the actions appear; then author and idle. One read per signal — never an open polling loop (an unbroken loop starves your inbound signals; they deliver only at turn boundaries).
+- **At the end (Phase 2):** draining reads on `drive complete` — repeat `--await 8` until no new actions, because no more signals are coming.
 
 The trace is the source of truth and your backstop — the drain guarantees nothing is missed even if you fell behind during the drive.
 
@@ -71,11 +71,11 @@ You are **signal-driven, not a poller.** After Phase 0, **go idle** — do *not*
 
 On each `chunk complete` signal:
 
-1. **Read what's flushed right now:** `forge-read-trace … --since <cursor>` — **no `--await`**. Take whatever's there.
-2. **Author whatever is now complete**, to disk, this turn — then regenerate the INDEX. This is *opportunistic*: the chunk that just signalled may not be flushed yet, but an *earlier* one usually is, so you author that. (The login chunk gets written when the *search* signal arrives and login has flushed — still mid-drive, still concurrent, just one chunk behind.)
-3. **Go idle.** The next signal wakes you. Don't loop, don't poll, don't `--await` — let the signal do it.
+1. **Read the announced chunk:** `forge-read-trace … --since <cursor> --await 10`. The signal means a chunk *just* landed — the bounded await absorbs the transcript's flush lag so you get it **now**, not at drive-complete. If the read comes back with nothing (rare — an unusually slow flush), take **one** follow-up read (`--await 15`) in the same turn before idling; past that, the drain has it covered.
+2. **Author whatever the read returned**, to disk, this turn — then regenerate the INDEX. Usually that's the chunk just announced; occasionally it's the *previous* one with the newest still unflushed — author what you have. Authoring live, chunk by chunk, is the whole point of running concurrently: an interrupted drive should still leave the library ahead.
+3. **Go idle.** The next signal wakes you. One signal, one bounded read (plus at most the single follow-up) — never an open polling loop.
 
-Don't chase a chunk you couldn't author yet: the cursor holds un-flushed actions back, the next signal re-reads them, and `drive complete` drains anything still outstanding — nothing is lost. The **only** thing you revise later is a snippet **boundary** a *later* chunk proves wrong (two chunks are really one unit, or one should split) — a retroactive touch-up, never a reason to defer the first author.
+The cursor holds un-flushed actions back, the next signal re-reads them, and `drive complete` drains anything still outstanding — nothing is lost. The **only** thing you revise later is a snippet **boundary** a *later* chunk proves wrong (two chunks are really one unit, or one should split) — a retroactive touch-up, never a reason to defer the first author.
 
 When a signal lands, decide which kind of work it is:
 
