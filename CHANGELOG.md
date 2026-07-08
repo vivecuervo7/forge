@@ -23,6 +23,12 @@ meaningful architecture change.
   names must be unique per session (`driver-2`), and the curator's
   `read-trace` now threads `--driver <DRIVER_NAME>` so the locate matches the
   actual teammate, not the literal `driver`.
+- **Primitives are discoverable**: the INDEX now carries one line per
+  `_`-prefixed primitive (description read from its header) alongside the
+  snippet listing, and `/forge init` generates the initial INDEX — a fresh
+  scaffold starts with "0 snippets + the `_wait-until-stable` primitive"
+  instead of no INDEX at all (which previously left the primitive findable
+  only via a clause in the driver's own prompt).
 
 ## 0.50.0 — Settle patterns + the `_wait-until-stable` primitive (2026-07-08)
 

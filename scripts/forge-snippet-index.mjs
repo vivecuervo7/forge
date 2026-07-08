@@ -94,12 +94,38 @@ function bracketSuffix(label, value, maxLen = 80) {
   return ` [${label}: ${s}]`
 }
 
+// A primitive's one-liner is its header comment, wrapped lines joined up to
+// the first sentence end: `// _<name>.ts — <description...>`
+function primitiveDescription(src) {
+  const head = src.split('\n', 8)
+  for (let i = 0; i < head.length; i++) {
+    const m = head[i].match(/^\/\/ _[\w-]+\.ts — (.+)$/)
+    if (!m) continue
+    let desc = m[1].trim()
+    while (!/\.(\s|$)/.test(desc) && i + 1 < head.length) {
+      const cont = head[++i].match(/^\/\/ (\S.*)$/)
+      if (!cont) break
+      desc += ` ${cont[1].trim()}`
+    }
+    return desc.split(/(?<=\.)\s/)[0].replace(/\.$/, '')
+  }
+  return ''
+}
+
 function buildIndex(snippetsDir, opts = {}) {
-  const entries = readdirSync(snippetsDir)
-    // Underscore-prefixed files are shared primitives (imported by snippets,
-    // no meta block, not invocable) — they don't belong in the INDEX.
-    .filter(f => f.endsWith('.ts') && !f.startsWith('_'))
-    .sort()
+  const allFiles = readdirSync(snippetsDir).filter(f => f.endsWith('.ts')).sort()
+  // Underscore-prefixed files are shared primitives (imported by snippets,
+  // no meta block, not invocable) — indexed on their own line, not as snippets.
+  const entries = allFiles.filter(f => !f.startsWith('_'))
+  const primitives = allFiles
+    .filter(f => f.startsWith('_'))
+    .map(f => {
+      let desc = ''
+      try {
+        desc = primitiveDescription(readFileSync(join(snippetsDir, f), 'utf8'))
+      } catch { /* unreadable — list by name alone */ }
+      return { name: basename(f, '.ts'), desc }
+    })
 
   const records = []
   for (const file of entries) {
@@ -130,7 +156,7 @@ function buildIndex(snippetsDir, opts = {}) {
 
   emitHygieneWarnings(records, opts)
 
-  return renderMarkdown(records)
+  return renderMarkdown(records, primitives)
 }
 
 // Heuristic: does the description suggest a multi-step flow?
@@ -229,12 +255,15 @@ function emitHygieneWarnings(records, opts = {}) {
   }
 }
 
-function renderMarkdown(records) {
+function renderMarkdown(records, primitives = []) {
   const lines = []
   lines.push('# Snippet INDEX (auto-generated)')
   lines.push('# Refresh: node <plugin-root>/scripts/forge-cli.mjs snippet-index')
   lines.push('')
   lines.push(`# ${records.length} snippet(s) — grouped by flow:; ungrouped land in misc`)
+  for (const p of primitives) {
+    lines.push(`# primitive (import into snippets/specs; not invocable): ${p.name}${p.desc ? ` — ${p.desc}` : ''}`)
+  }
   lines.push('')
 
   // Group by flow

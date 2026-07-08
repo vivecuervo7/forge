@@ -1,7 +1,8 @@
-// _wait-until-stable.ts — shared settle primitive (scaffolded by /forge init).
+// _wait-until-stable.ts — poll a read until it stops changing (N consecutive
+// identical reads within a deadline); use before trusting any value an
+// async-mutation UI just changed.
 //
-// Poll a read until it stops changing: N consecutive identical reads within a
-// deadline. One stable read is NOT stability — async-mutation UIs (deferred
+// Shared settle primitive, scaffolded by /forge init. One stable read is NOT stability — async-mutation UIs (deferred
 // command buses, re-rendering grids, optimistic updates) routinely show a
 // false plateau that a single read latches onto; requiring a streak is what
 // makes this reliable.

@@ -81,6 +81,15 @@ scaffold('hints-curator.md',     'hints/curator.md')
 scaffold('playwright.config.ts', 'playwright.config.ts')
 scaffold('snippets-wait-until-stable.ts', 'snippets/_wait-until-stable.ts')
 
+// Generate the initial INDEX so the library is discoverable from minute one —
+// it lists 0 snippets plus the scaffolded primitive(s), sparing the driver
+// the missing-INDEX fallback (ls + read-each-for-meta) on a fresh project.
+{
+  const r = spawnSync(process.execPath, [join(__dirname, 'forge-snippet-index.mjs'), forgeDir], { encoding: 'utf8' })
+  if (r.status === 0) created.push('forge/snippets/INDEX.md')
+  else console.error(`forge-init: INDEX generation skipped: ${(r.stderr || '').trim()}`)
+}
+
 // Report
 console.log(`forge-init: scaffolded ${forgeDir}`)
 if (created.length > 0) {
