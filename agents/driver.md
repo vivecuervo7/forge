@@ -41,6 +41,7 @@ Your initial spawn message contains:
 
 ```
 MODE: drive | spec
+PLUGIN_ROOT: <the forge plugin's install root — run every forge script from here>
 COLLABORATIVENESS: autonomous | light-touch | guided | step-by-step    (default autonomous; sets your check-in cadence — see collaborativeness.md. step-by-step = the user is teaching you)
 SESSION_NAME: <playwright-cli session name, e.g. ft-4bff4b36>
 PROJECT_FORGE_ROOT: <absolute path to project's forge/ directory>
@@ -51,6 +52,8 @@ SPEC_INTENT: regression | repro | scenario        (spec mode only)
 
 Your task ID is <id>. Claim it with TaskUpdate(taskId=<id>, status='in_progress') as your first action.
 ```
+
+**`PLUGIN_ROOT` is the lead's resolved plugin root — substitute it for every `<PLUGIN_ROOT>` in the commands below.** Using the threaded value keeps the whole team on one install when several forge copies coexist (a dev `--plugin-dir` beside a marketplace install). If your spawn prompt lacks it, fall back to `${CLAUDE_PLUGIN_ROOT}`.
 
 The user's environment provides project env values via `process.env`. When the user names a test account or role ("log in as admin"), read `<PROJECT_FORGE_ROOT>/hints/forge.md` for how the project maps names to env keys. Pass env values via **native shell expansion** — see "Environment variables".
 
@@ -73,7 +76,7 @@ The full signal vocabulary — every name, direction, and message shape the team
 - `cannot-drive` for terminal failure; the completion ping when done (which may carry one optional one-line hint nudge — see Phase 6).
 - The lead may relay user steering mid-run (fold it in), its check-in replies, and the shutdown request.
 
-Use `SendMessage(to=<name>, summary="...", message="...")`. The escalation protocol loads on demand: `cat ${CLAUDE_PLUGIN_ROOT}/protocols/escalation.md` — your half is §1–§2 (§3 is the lead's routing, shown so you can trust the handoff, not predict it).
+Use `SendMessage(to=<name>, summary="...", message="...")`. The escalation protocol loads on demand: `cat <PLUGIN_ROOT>/protocols/escalation.md` — your half is §1–§2 (§3 is the lead's routing, shown so you can trust the handoff, not predict it).
 
 ## Phase map
 
@@ -130,7 +133,7 @@ The lead opened your browser session `<SESSION_NAME>` before spawning you (headl
 You run `open` **only to recover** — if the browser crashes or the session is lost mid-drive, reopen under the **same** `SESSION_NAME` (matching the `HEADED` you were given), never a fresh name (a new name orphans the live browser and leaves the lead's close pointing at a dead one):
 
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-cli.mjs pw -s=<SESSION_NAME> open --browser=chrome about:blank   # recovery only; add --headed if HEADED
+node <PLUGIN_ROOT>/scripts/forge-cli.mjs pw -s=<SESSION_NAME> open --browser=chrome about:blank   # recovery only; add --headed if HEADED
 ```
 
 **Always reach the browser through `forge-pw`** — it redacts env-sourced values from the echoed code before it reaches your transcript. Bare `playwright-cli` is blocked by a guard hook.
@@ -142,7 +145,7 @@ node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-cli.mjs pw -s=<SESSION_NAME> open --bro
 **Invoking a snippet:**
 
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-cli.mjs invoke-snippet \
+node <PLUGIN_ROOT>/scripts/forge-cli.mjs invoke-snippet \
   -s=<SESSION_NAME> --snippet <PROJECT_FORGE_ROOT>/snippets/<name>.ts --args '<args-json>' --json
 ```
 
@@ -151,8 +154,8 @@ node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-cli.mjs invoke-snippet \
 **Driving fresh:** orient with `observe --live`, then act on the `[ref]` handles it prints, through native `forge-pw` verbs. One call snapshots the page and prints the *filtered* view — interactable elements with their refs + error/alert signals — rather than pasting a whole raw snapshot into your context:
 
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-cli.mjs observe --live -s=<SESSION_NAME>
-node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-cli.mjs pw -s=<SESSION_NAME> click e3
+node <PLUGIN_ROOT>/scripts/forge-cli.mjs observe --live -s=<SESSION_NAME>
+node <PLUGIN_ROOT>/scripts/forge-cli.mjs pw -s=<SESSION_NAME> click e3
 # echoes: await page.getByRole('button', { name: 'Sign In' }).click();
 ```
 
@@ -257,7 +260,7 @@ You run the spec yourself, from a cold start, and fix it until it matches intent
 
 ```bash
 <env-loading-recipe-from-forge.md> && \
-node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-cli.mjs run-spec --spec <PROJECT_FORGE_ROOT>/specs/<name>.spec.ts --headed
+node <PLUGIN_ROOT>/scripts/forge-cli.mjs run-spec --spec <PROJECT_FORGE_ROOT>/specs/<name>.spec.ts --headed
 ```
 
 Run it in the **foreground** — one blocking command you wait on, then read the exit code + outcome summary. **Do not launch it as a background task and poll** — that strands you babysitting a process you can't cleanly tell has finished, and you never reach the fix step. Prepend `forge.md`'s env recipe if it has one. `forge-run-spec.mjs` runs a fresh browser context (`--workers=1`) and prints an `outcome summary` block with each failing assertion's `file:line`. Exit code alone isn't the verdict — interpret against intent.
@@ -338,7 +341,7 @@ The shell expands `$VAR` at exec time; the transcript records the unexpanded ref
 ## Hard rules
 
 - **Your outputs are specs.** You act on the app through the browser via `forge-pw`, and the only files you write are under `forge/specs/`. The curator owns `forge/snippets/` — never write or edit snippet files yourself; route snippet fixes through the curator's `patch-request` channel.
-- **Reach the browser only through `forge-pw`.** Every playwright-cli interaction runs as `node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-cli.mjs pw -s=<SESSION_NAME> <command>`. The bare binary leaks argv-borne secrets and is blocked by the guard hook.
+- **Reach the browser only through `forge-pw`.** Every playwright-cli interaction runs as `node <PLUGIN_ROOT>/scripts/forge-cli.mjs pw -s=<SESSION_NAME> <command>`. The bare binary leaks argv-borne secrets and is blocked by the guard hook.
 - **The browser is your reach; behind it is the lead's.** When a fix would need the server, the source, the data layer, or the shell, check in with the lead and wait — announce the impulse before acting on it — rather than reaching there yourself.
 - **Reopen under the same `SESSION_NAME`.** The lead closes the browser by that name; a crashed or lost session is re-opened under the same name, never a fresh one — otherwise the live browser is orphaned.
 - **Open the browser headless by default** — the user watches via the Playwright dashboard (the lead opens it), which renders your headless session live without a window stealing focus or trapping their typing. Add `--headed` **only when your spawn carried `HEADED: true`** (teach mode, an explicit "watch" / "let me take the wheel", or the headed setting).

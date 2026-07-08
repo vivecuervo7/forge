@@ -5,6 +5,25 @@ every version bump. The full granular history is in the git log. Forge is young
 and pre-1.0 (built over June 2026), so a minor version can still carry a
 meaningful architecture change.
 
+## 0.51.0 — Version-coherent teams (shakedown hardening) (2026-07-08)
+
+- **The lead's resolved plugin root now threads through the whole team.**
+  Teammate agent definitions resolve to *some* installed forge copy — when a
+  dev `--plugin-dir` checkout coexists with a marketplace install, a run
+  could silently mix versions (observed: dev lead, marketplace driver).
+  Spawn prompts now carry `PLUGIN_ROOT`, and the driver/curator run every
+  forge script from it (falling back to their own `${CLAUDE_PLUGIN_ROOT}`
+  only when unthreaded), so scripts, protocols, and routes stay one version
+  regardless of which copy's agent definition loaded.
+- **Preflight detects coexisting installs** (`otherForgeInstalls`, cache
+  families collapsed to newest) and the run banner warns to disable one copy;
+  it also reports `insideTmux` + `teammateMode` so the banner states where
+  teammates render (panes vs inline) instead of the mode differing silently.
+- **Sequential runs in one session no longer break trace reads**: teammate
+  names must be unique per session (`driver-2`), and the curator's
+  `read-trace` now threads `--driver <DRIVER_NAME>` so the locate matches the
+  actual teammate, not the literal `driver`.
+
 ## 0.50.0 — Settle patterns + the `_wait-until-stable` primitive (2026-07-08)
 
 - **`/forge init` scaffolds `snippets/_wait-until-stable.ts`** — a shared

@@ -121,6 +121,7 @@ Agent(
   subagent_type="forge:driver",
   name="driver",
   prompt="MODE: <MODE>
+PLUGIN_ROOT: <PLUGIN_ROOT>
 COLLABORATIVENESS: <COLLABORATIVENESS>
 HEADED: <HEADED>
 SESSION_NAME: <SESSION_NAME>
@@ -141,6 +142,7 @@ Agent(
   subagent_type="forge:curator",
   name="curator",
   prompt="MODE: <MODE>
+PLUGIN_ROOT: <PLUGIN_ROOT>
 PROJECT_FORGE_ROOT: <FORGE_ROOT>
 DRIVER_NAME: driver
 TEAM_NAME: <TEAM_NAME>

@@ -20,6 +20,7 @@ The signals you exchange with the driver (`chunk complete`, `drive complete`, `s
 
 ```
 MODE: drive | spec
+PLUGIN_ROOT: <the forge plugin's install root — run every forge script from here>
 PROJECT_FORGE_ROOT: <absolute path to project's forge/ directory>
 DRIVER_NAME: <the driver teammate's name, e.g. driver>
 TEAM_NAME: <the team's name, e.g. session-36180256>
@@ -28,6 +29,8 @@ USER_TASK: <the original task, for context>
 
 Your task ID is <id>. Claim it with TaskUpdate(taskId=<id>, status='in_progress') as your first action, then read your hints and wait for the driver's first signal.
 ```
+
+**`PLUGIN_ROOT` is the lead's resolved plugin root — substitute it for every `<PLUGIN_ROOT>` in the commands below.** Using the threaded value keeps the whole team on one install when several forge copies coexist. If your spawn prompt lacks it, fall back to `${CLAUDE_PLUGIN_ROOT}`.
 
 ## Phase 0 — Claim + read hints
 
@@ -46,7 +49,7 @@ Keep your task `in_progress` for the whole run — including the driver's verify
 The driver's verbatim browser actions live in its on-disk transcript. Read them with one command — `forge-read-trace` locates the driver's transcript (by your `TEAM_NAME`, matching on its records' own identity so it can't be fooled by the lead's or your own transcript) and prints its forge-pw actions since a cursor:
 
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-cli.mjs read-trace --team <TEAM_NAME> --driver <DRIVER_NAME> --started-after <RUN_STARTED_AT> --since <cursor> [--await <sec>]
+node <PLUGIN_ROOT>/scripts/forge-cli.mjs read-trace --team <TEAM_NAME> --driver <DRIVER_NAME> --started-after <RUN_STARTED_AT> --since <cursor> [--await <sec>]
 ```
 
 `--driver` is the *actual* teammate name from your spawn prompt — sequential runs in one session get suffixed names (`driver-2`), and the reader matches on the name's own records, so passing it verbatim is what keeps the locate exact.
@@ -122,7 +125,7 @@ export async function run(page, args) {
 ### Refresh the INDEX after any write
 
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/scripts/forge-cli.mjs snippet-index <PROJECT_FORGE_ROOT>
+node <PLUGIN_ROOT>/scripts/forge-cli.mjs snippet-index <PROJECT_FORGE_ROOT>
 ```
 
 ## Phase 2 — Drive complete: drain, then signal ready
