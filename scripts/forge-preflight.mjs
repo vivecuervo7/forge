@@ -39,6 +39,7 @@
 
 import { spawnSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { findForgeRoot } from './forge-common.mjs'
@@ -161,6 +162,15 @@ if (opts.open) {
   }
 }
 
+// Teammate rendering is the harness's call (`teammateMode` in user settings):
+// under `auto`, per-agent tmux panes appear only when this session itself runs
+// inside tmux — otherwise teammates render inline. Report both inputs so the
+// lead's banner can say where to watch instead of the mode differing silently.
+let teammateMode = null
+try {
+  teammateMode = JSON.parse(readFileSync(join(homedir(), '.claude', 'settings.json'), 'utf8')).teammateMode ?? null
+} catch { /* unreadable settings — report null */ }
+
 const cleanup = cleanupNudge(forgeRoot)
 const summary = {
   forgeRoot,
@@ -173,6 +183,8 @@ const summary = {
   headedSource,
   browser,
   dashboard,
+  insideTmux: Boolean(process.env.TMUX),
+  teammateMode,
   hints: { forge: forgeMd !== null },
   setupSection: Boolean(forgeMd && /^##\s+Setup before each run\b/m.test(forgeMd)),
   teardownSection: Boolean(forgeMd && /^##\s+Teardown after each run\b/m.test(forgeMd)),

@@ -74,7 +74,7 @@ One call does the whole deterministic setup: locates the forge root, opens the b
 
 Read its output top to bottom:
 
-- **The JSON summary** — capture `forgeRoot` as `FORGE_ROOT`, `startedAt` as `RUN_STARTED_AT` (the curator's spawn prompt threads it into trace reads so a previous drive's transcript can't shadow this one's), and `cleanupNudge` as `CLEANUP_NUDGE` (hold silently for Phase 5.5a; `cleanupDays` gives the N for its phrasing). `setupSection`/`teardownSection` flag whether forge.md carries those sections for 1.3 and 5.4.
+- **The JSON summary** — capture `forgeRoot` as `FORGE_ROOT`, `startedAt` as `RUN_STARTED_AT` (the curator's spawn prompt threads it into trace reads so a previous drive's transcript can't shadow this one's), and `cleanupNudge` as `CLEANUP_NUDGE` (hold silently for Phase 5.5a; `cleanupDays` gives the N for its phrasing). `setupSection`/`teardownSection` flag whether forge.md carries those sections for 1.3 and 5.4. `insideTmux` + `teammateMode` feed the banner's teammate-visibility line (3.1) — under `teammateMode: auto`, per-agent panes appear only when the session runs inside tmux; otherwise teammates render inline and the dashboard stays the watch surface.
 - **`hints/forge.md`** — the shared operate contract: persona/account resolution, the optional setup/teardown sections, plus the app's selectors and gotchas (which you'll want when routing a driver check-in). The driver reads `forge.md` too; the curator reads its own `curator.md`. All hints are optional — a bare `/forge init` scaffold drives correctly; hints encode project-specific knowledge the teammates can't derive from the app.
 - **`protocols/escalation.md`** — you route the driver's check-ins per its **Lead side** (§3); the driver `cat`s the same file on friction, so the shapes stay a single source of truth.
 - **`protocols/collaborativeness.md`** — you read the **deference** column to know how readily to involve the user at this run's `COLLABORATIVENESS` level, and you hold/step that level through the run.
@@ -157,6 +157,7 @@ Immediately after both spawns, tell the user what's running, where to watch, and
 
 > Driving **<short USER_TASK>** — <MODE> mode<append ", collaborativeness: <level>" only when above autonomous>.
 > Session **`<SESSION_NAME>`**, headless — watch it live in the Playwright dashboard. *(When HEADED: "headed — a browser window will open; that's the drive.")*
+> <Teammate visibility, from preflight's `insideTmux` + `teammateMode`: when panes will appear (inside tmux, mode `auto`/`tmux`), "Driver and curator each get a tmux pane."; otherwise "Driver and curator run inline (no separate panes — launch Claude inside tmux to get per-agent panes)."> 
 > Steer anytime by typing here — I'll relay to the team. Say "stop" to abort.
 
 At `guided` / `step-by-step`, extend the banner with the teaching controls so the vocabulary is discoverable up front rather than buried in docs:
