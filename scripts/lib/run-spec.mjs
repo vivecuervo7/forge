@@ -273,21 +273,41 @@ if (record) finalEnv.FORGE_RECORD = '1'
 if (slowMo != null) finalEnv.FORGE_SLOW_MO = String(slowMo)
 
 // --dashboard: expose the run's browser over CDP (config honors
-// FORGE_SPEC_CDP) so a playwright-cli session can attach and the dashboard
-// can render the run live.
+// FORGE_SPEC_CDP) so a pw-cli session can attach and the dashboard can
+// render the run live.
 let cdpPort = 0
 let dashboardSession = null
 if (dashboard) {
+  // The active config must pass FORGE_SPEC_CDP through to the browser's
+  // launch args — a config scaffolded before this feature won't, and the
+  // port would silently never open. Check up front and name the remedy,
+  // rather than timing out into an unexplained "unwatched".
+  const activeConfigPath = projectRunner
+    ? projectRunner.configPath
+    : join(projectForge, 'playwright.config.ts')
+  let honorsCdp = false
   try {
-    cdpPort = await freePort()
-  } catch {
-    console.error('forge-run-spec: --dashboard: no free port — run continues unwatched')
-  }
-  if (cdpPort) {
-    finalEnv.FORGE_SPEC_CDP = String(cdpPort)
-    dashboardSession = ('spec-' + basename(specPath).replace(/\.spec\.[tj]s$/, ''))
-      .slice(0, 16)
-      .replace(/-+$/, '')
+    honorsCdp = readFileSync(activeConfigPath, 'utf8').includes('FORGE_SPEC_CDP')
+  } catch { /* unreadable — treat as not honoring */ }
+  if (!honorsCdp) {
+    console.error(
+      `forge-run-spec: --dashboard: ${activeConfigPath} doesn't honor FORGE_SPEC_CDP, ` +
+      `so the run's browser can't expose a CDP port. Add the opt-in — in use.launchOptions: ` +
+      '`...(process.env.FORGE_SPEC_CDP ? { args: [`--remote-debugging-port=${process.env.FORGE_SPEC_CDP}`] } : {})` ' +
+      `(the scaffolded template in the forge plugin shows the full shape). Running unwatched.`
+    )
+  } else {
+    try {
+      cdpPort = await freePort()
+    } catch {
+      console.error('forge-run-spec: --dashboard: no free port — run continues unwatched')
+    }
+    if (cdpPort) {
+      finalEnv.FORGE_SPEC_CDP = String(cdpPort)
+      dashboardSession = ('spec-' + basename(specPath).replace(/\.spec\.[tj]s$/, ''))
+        .slice(0, 16)
+        .replace(/-+$/, '')
+    }
   }
 }
 

@@ -19,6 +19,13 @@ meaningful architecture change.
   `/forge run` now use `--dashboard` instead of `--headed` — every browser
   forge opens lives in the one dashboard window. `--headed` remains the
   explicit escape hatch; `--slow-mo` paces a fast replay for watching.
+- **Stale configs are told exactly what to add**: a project scaffolded
+  before this feature has a config that silently ignores `FORGE_SPEC_CDP`
+  (observed live: every `--dashboard` attempt timed out "unwatched").
+  run-spec now checks the active config up front and prints the one-line
+  `launchOptions` opt-in to add, instead of a 20s timeout with no
+  explanation. Re-running `/forge init` won't update an existing config
+  (init preserves your files) — the printed line is the migration.
 
 ## 0.53.0 — Concurrency tune-up: timely signals, patient reads (2026-07-08)
 
