@@ -24,38 +24,64 @@ function check(name, ok, detail = '') {
   console.error(`FAIL: ${name}${detail ? ` — ${detail}` : ''}`)
 }
 
-// A minimal driver transcript: one forge-pw action + its flushed result.
-function transcript(startedIso, ref) {
-  const action = {
-    timestamp: startedIso,
-    agentName: 'driver',
-    teamName: TEAM,
-    message: {
-      content: [
-        {
-          type: 'tool_use',
-          name: 'Bash',
-          id: `tool-${ref}`,
-          input: { command: `node /plugin/scripts/forge-pw.mjs -s=fx click ${ref}` },
-        },
-      ],
+// A minimal driver transcript: one browser action + its flushed result, in
+// either invocation form — 'old' = standalone forge-pw.mjs, 'new' = the
+// forge-cli front door (0.45+). The 'new' form also carries an
+// invoke-snippet action so the front-door filter is pinned for both verbs.
+function transcript(startedIso, ref, form = 'old') {
+  const identity = { timestamp: startedIso, agentName: 'driver', teamName: TEAM }
+  const pwCmd =
+    form === 'new'
+      ? `node /plugin/scripts/forge-cli.mjs pw --json -s=fx click ${ref}`
+      : `node /plugin/scripts/forge-pw.mjs -s=fx click ${ref}`
+  const records = [
+    {
+      ...identity,
+      message: {
+        content: [{ type: 'tool_use', name: 'Bash', id: `tool-${ref}`, input: { command: pwCmd } }],
+      },
     },
-  }
-  const result = {
-    timestamp: startedIso,
-    agentName: 'driver',
-    teamName: TEAM,
-    message: {
-      content: [
-        {
-          type: 'tool_result',
-          tool_use_id: `tool-${ref}`,
-          content: `### Ran Playwright code\n\`\`\`js\nawait page.click('${ref}')\n\`\`\``,
-        },
-      ],
+    {
+      ...identity,
+      message: {
+        content: [
+          {
+            type: 'tool_result',
+            tool_use_id: `tool-${ref}`,
+            content: `### Ran Playwright code\n\`\`\`js\nawait page.click('${ref}')\n\`\`\``,
+          },
+        ],
+      },
     },
+  ]
+  if (form === 'new') {
+    records.push(
+      {
+        ...identity,
+        message: {
+          content: [
+            {
+              type: 'tool_use',
+              name: 'Bash',
+              id: `tool-${ref}-inv`,
+              input: {
+                command: `node /plugin/scripts/forge-cli.mjs invoke-snippet -s=fx --snippet /proj/forge/snippets/add-item-to-cart.ts --args '{}' --json`,
+              },
+            },
+          ],
+        },
+      },
+      {
+        ...identity,
+        message: {
+          content: [
+            { type: 'tool_result', tool_use_id: `tool-${ref}-inv`, content: `{"result": "ok"}` },
+          ],
+        },
+      },
+    )
   }
-  return JSON.stringify(action) + '\n' + JSON.stringify(result) + '\n'
+  return records.map((r) => JSON.stringify(r)).join('\n') + '\n'
 }
 
 function run(dir, extraArgs = []) {
@@ -80,8 +106,8 @@ try {
   // Drive B: started 30m ago, still live (fresh mtime).
   const oldPath = join(dir, 'aaaa-drive-a.jsonl')
   const newPath = join(dir, 'bbbb-drive-b.jsonl')
-  writeFileSync(oldPath, transcript(iso(driveAStart), 'eOLD'))
-  writeFileSync(newPath, transcript(iso(driveBStart), 'eNEW'))
+  writeFileSync(oldPath, transcript(iso(driveAStart), 'eOLD', 'old'))
+  writeFileSync(newPath, transcript(iso(driveBStart), 'eNEW', 'new'))
   const past = (now - 3 * 3600 * 1000) / 1000
   utimesSync(oldPath, past, past)
 
@@ -95,10 +121,13 @@ try {
   }
 
   // --started-after between the drives: drive A excluded → no warning.
+  // Drive B uses the forge-cli front door, so this also pins the 0.45+
+  // invocation forms: the pw action's echo AND the invoke-snippet action.
   {
     const r = run(dir, ['--started-after', iso(boundary)])
     check('filtered: no warning', !r.stdout.includes('# WARNING'), r.stdout)
-    check('filtered: reads drive B', r.stdout.includes("click('eNEW')"))
+    check('filtered: reads drive B (front-door pw form)', r.stdout.includes("click('eNEW')"), r.stdout)
+    check('filtered: front-door invoke-snippet recognized', r.stdout.includes('invoked snippet') && r.stdout.includes('add-item-to-cart'))
     check('filtered: drive A absent', !r.stdout.includes("click('eOLD')"))
   }
 

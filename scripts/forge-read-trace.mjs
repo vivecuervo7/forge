@@ -184,7 +184,10 @@ function parse(lines) {
     for (const c of content) {
       if (c?.type === 'tool_use' && c?.name === 'Bash') {
         const cmd = c.input?.command || ''
-        if (cmd.includes('forge-pw.mjs') || cmd.includes('forge-invoke-snippet.mjs')) {
+        // Match both invocation forms: the forge-cli front door (0.45+,
+        // `forge-cli.mjs pw` / `forge-cli.mjs invoke-snippet`) and the
+        // standalone scripts (`forge-pw.mjs` / `forge-invoke-snippet.mjs`).
+        if (/forge-pw\.mjs|forge-invoke-snippet\.mjs|forge-cli\.mjs\s+(?:--?\S+\s+)*(?:pw|invoke-snippet)\b/.test(cmd)) {
           actions.push({ idx, command: cmd, id: c.id })
         }
       } else if (c?.type === 'tool_result' && c?.tool_use_id) {
@@ -229,11 +232,13 @@ function format(a, results) {
   // renders as `—`). Collapse each continuation to a single space so matching
   // sees one flat command regardless of how the driver formatted it.
   const normCmd = cmd.replace(/\s*\\\n\s*/g, ' ')
-  if (normCmd.includes('forge-invoke-snippet.mjs')) {
+  if (/forge-invoke-snippet\.mjs|forge-cli\.mjs\s+(?:--?\S+\s+)*invoke-snippet\b/.test(normCmd)) {
     const m = normCmd.match(/--snippet\s+\S*\/([\w-]+)\.ts/)
     return `── invoked snippet ──\n  ${m ? m[1] : '(unknown)'}  (reuse — not new authoring)`
   }
-  const vm = normCmd.match(/forge-pw\.mjs\s+-s=\S+\s+([\w-]+)/)
+  // Verb = the first bare word after -s=<session>, in either invocation form
+  // (flags like --json may sit between the entry point and -s).
+  const vm = normCmd.match(/(?:forge-pw\.mjs|forge-cli\.mjs\s+(?:--?\S+\s+)*pw)\s+(?:--?\S+\s+)*-s=\S+\s+([\w-]+)/)
   const verb = vm ? vm[1] : '(?)'
   if (verb === 'snapshot' || verb === 'open') {
     return `── ${verb} ──  (orientation — no snippet code)`
