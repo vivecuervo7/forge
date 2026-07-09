@@ -57,8 +57,8 @@
 //   - No prior state, or `--full` → plain full view (baseline).
 //
 // Exit codes:
-//   0  observed (full or diff printed)
-//   1  snapshot file unreadable / empty
+//   0  observed (full or diff printed; --live on a blank page reports empty)
+//   1  snapshot file unreadable, or empty in file mode (a broken handoff)
 //   2  usage error
 //   3  --live snapshot failed (forge-pw error passed through)
 
@@ -270,6 +270,16 @@ try {
   process.exit(1)
 }
 if (!yaml.trim()) {
+  // In --live mode we took the snapshot ourselves and forge-pw succeeded (the
+  // status check above), so an empty result is a genuinely blank page — e.g.
+  // about:blank before the first navigation — not a failure. Report it as a
+  // valid empty observation (exit 0) so a caller doesn't treat a fresh session
+  // as an error. In file mode an empty file is a broken/missing handoff, which
+  // stays an error.
+  if (opts.live) {
+    console.log(`# observe: session=${opts.session} | 0 interactable, 0 signal | empty (page has no accessible content yet) | ~0 tok`)
+    process.exit(0)
+  }
   console.error('forge-observe: snapshot is empty')
   process.exit(1)
 }
