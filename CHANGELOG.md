@@ -5,6 +5,23 @@ every version bump. The full granular history is in the git log. Forge is young
 and pre-1.0 (built over June 2026), so a minor version can still carry a
 meaningful architecture change.
 
+## 0.56.0 — Pre-verify spec lint: catch the hang footgun before the cold run (2026-07-16)
+
+- **New `lint-spec` verb + a `run-spec` preamble.** Composed specs that call a
+  locator action or wait with no explicit `{ timeout }` — or lean on a fixed
+  `waitForTimeout` — are the dominant cost of the verify loop: with forge's
+  config (`actionTimeout` unset → 0), an untimed call on a locator that never
+  resolves pends to the whole test timeout, so one wrong selector burns the
+  full budget and reads as a mysterious "Test timeout exceeded" rather than
+  "this click never resolved." `run-spec` now statically scans the spec and
+  prints these by `file:line` as an advisory preamble before launching a
+  browser — turning "diagnose it after six 120s cold runs" into "flagged in
+  milliseconds up front." Run it standalone too: `forge-cli.mjs lint-spec
+  <spec> [--json]`. Advisory only — it never changes the run's outcome.
+- **Driver guidance** now makes explicit-timeout + state-gates part of the
+  pre-flight self-review, so the compose step aims for lint-clean specs rather
+  than discovering the footgun round by round.
+
 ## 0.55.0 — Kinder CLI: near-miss forgiveness and a working `--help` (2026-07-16)
 
 - **`forge-pw` forgives the two verb/flag slips drivers hit on nearly every

@@ -251,7 +251,7 @@ Path: `<PROJECT_FORGE_ROOT>/specs/<name>.spec.ts` (`mkdir -p` if needed). Name l
 
 **A spec left over from a previous run is a draft, not a source of truth.** Reconcile it against the trace *you* just produced — keep what matches what you drove, rewrite what doesn't. Never run an inherited spec blind and trust its selectors.
 
-**Pre-flight self-review:** bump any step's timeout that took noticeably long during the drive; confirm fixture idempotency; re-scan `forge.md` for documented gotchas and apply them now.
+**Pre-flight self-review:** bump any step's timeout that took noticeably long during the drive; confirm fixture idempotency; re-scan `forge.md` for documented gotchas and apply them now. Give every action and wait an explicit `{ timeout }` and prefer a state gate (`waitForResponse`, `expect(...).toBeVisible()`, `.waitFor({ state, timeout })`) over a fixed `waitForTimeout` — with the config's default `actionTimeout` of 0, an untimed call that never resolves pends to the whole test timeout, the commonest cause of a slow, mysterious cold-run failure. `run-spec` prints an advisory lint preamble flagging these by `file:line`; clear them before reading a failure as an intent mismatch.
 
 ---
 

@@ -138,6 +138,7 @@ import {
   loadFromRunner,
 } from './ensure-runner.mjs'
 import { looksLikeForgeRoot } from './common.mjs'
+import { lintSpec } from './lint-spec.mjs'
 
 function die(msg, code = 2) {
   console.error('forge-run-spec:', msg)
@@ -192,6 +193,21 @@ if (slowMoRaw != null) {
 // Spec path + forge root were validated above, before ensureRunnerDeps.
 const specPath = specPathAbs
 const projectForge = provisionalForgeRoot
+
+// Advisory lint preamble — surface the untimed-action / fixed-settle hang
+// footgun by file:line before spending a cold run to discover it. Never
+// changes the outcome or exit code; best-effort (an unreadable spec just
+// skips it — the run itself reports a missing file).
+try {
+  const findings = lintSpec(readFileSync(specPath, 'utf8'))
+  if (findings.length) {
+    console.error(`forge-run-spec: lint — ${findings.length} untimed/fixed-wait finding(s) (advisory, not a verdict):`)
+    for (const f of findings) {
+      console.error(`  ${relative(projectForge, specPath)}:${f.line}  [${f.kind}] ${f.message}`)
+    }
+    console.error('  (add an explicit timeout or a state gate; a failing cold run here often traces to one of these)')
+  }
+} catch { /* best-effort — the run's own file check is authoritative */ }
 
 // findProjectRunner + ensurePluginRunner are shared with forge-init.mjs via
 // forge-ensure-runner.mjs (imported above). /forge init pre-installs the
