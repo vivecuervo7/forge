@@ -153,6 +153,15 @@ try {
   rmSync(dir, { recursive: true, force: true })
 }
 
+// --help / -h / bare help print usage and exit 0 — never the "--team required"
+// error (help must not depend on the required flag being present).
+for (const flag of ['--help', '-h', 'help']) {
+  const r = spawnSync(process.execPath, [CLI, 'read-trace', flag], { encoding: 'utf8' })
+  check(`${flag}: exits 0`, r.status === 0, `status ${r.status}`)
+  check(`${flag}: prints usage`, r.stdout.includes('usage: forge-cli.mjs read-trace'), r.stdout)
+  check(`${flag}: not the --team error`, !r.stderr.includes('--team <TEAM_NAME> is required'), r.stderr)
+}
+
 if (failures > 0) {
   console.error(`\n${failures} failure(s)`)
   process.exit(1)

@@ -5,6 +5,27 @@ every version bump. The full granular history is in the git log. Forge is young
 and pre-1.0 (built over June 2026), so a minor version can still carry a
 meaningful architecture change.
 
+## 0.55.0 — Kinder CLI: near-miss forgiveness and a working `--help` (2026-07-16)
+
+- **`forge-pw` forgives the two verb/flag slips drivers hit on nearly every
+  run.** `navigate` is rewritten to `goto` and (for `screenshot`) `--path` to
+  `--filename`, each with a one-line stderr note naming the correct form.
+  Before, either slip returned playwright-cli's full multi-page usage dump and
+  cost the driver a wasted round; the map is deliberately tiny (the two slips
+  actually observed), not a spell-checker — playwright-cli still owns the real
+  verb surface.
+- **`read-trace --help` prints usage instead of erroring.** It parsed the
+  required `--team` before any help check, so `--help`/`-h`/`help` hit
+  "`--team` is required" and exit 2. Help now short-circuits to the usage block
+  and exits 0. (Its header's stale `forge-read-trace.mjs` invocation name is
+  corrected to the `forge-cli.mjs read-trace` front-door form to match.)
+- **Driver guidance names the slips up front** — `goto` not `navigate`,
+  `screenshot --filename` not `--path`, `--json` to see a `run-code` return
+  value or `console.log`, and in-page waits over shelling to `timeout` (absent
+  on stock macOS). The `run-spec` verify step no longer refers to a phantom
+  `forge-run-spec.mjs` script (the runnable surface is `forge-cli.mjs
+  run-spec`).
+
 ## 0.54.0 — Spec runs in the dashboard (2026-07-08)
 
 - **`run-spec --dashboard`** — the headless spec run renders live in the

@@ -94,7 +94,7 @@ The team auto-forms when the first teammate spawns. Skip straight to task creati
 ```
 TaskCreate(
   subject="forge driver: <USER_TASK>",
-  description="Drive the user's browser task end-to-end via playwright-cli session <SESSION_NAME>, scanning <FORGE_ROOT>/snippets/ and invoking matching snippets; signal each meaningful chunk to curator. MODE=<MODE>: in spec mode, after the curator sends snippets-ready, compose a self-contained .spec.ts in <FORGE_ROOT>/specs/ from the drive's own verbatim trace, run it cold via forge-run-spec.mjs, and self-fix (routing snippet-level fixes to the curator). Claim with TaskUpdate(status='in_progress') at start; keep in_progress through the whole run; TaskUpdate(status='completed') at the final report."
+  description="Drive the user's browser task end-to-end via playwright-cli session <SESSION_NAME>, scanning <FORGE_ROOT>/snippets/ and invoking matching snippets; signal each meaningful chunk to curator. MODE=<MODE>: in spec mode, after the curator sends snippets-ready, compose a self-contained .spec.ts in <FORGE_ROOT>/specs/ from the drive's own verbatim trace, run it cold via forge-cli.mjs run-spec, and self-fix (routing snippet-level fixes to the curator). Claim with TaskUpdate(status='in_progress') at start; keep in_progress through the whole run; TaskUpdate(status='completed') at the final report."
 )
 # Note as DRIVER_TASK_ID.
 

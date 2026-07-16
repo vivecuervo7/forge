@@ -6,7 +6,7 @@ Loaded by `/forge`'s router for the **run** route. The router stripped the `run`
 
 ## What this route does
 
-Re-runs an existing verified spec via `forge-run-spec.mjs`. No team is spawned — just the spec runner against an existing artifact.
+Re-runs an existing verified spec via `forge-cli.mjs run-spec`. No team is spawned — just the spec runner against an existing artifact.
 
 Optionally records a video (when `RECORD_AS` is set) at `forge/videos/<spec-basename>-<RECORD_AS>.webm`. The recording is evidence — typically a before/after workflow where the same spec runs twice against different code states.
 

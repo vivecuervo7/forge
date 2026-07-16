@@ -11,9 +11,9 @@
 // The transcript is the source of truth; this only ever READS it.
 //
 // Usage:
-//   node forge-read-trace.mjs --team <TEAM> [--since <cursor>] [--await <sec>]
-//                             [--driver <agentName>] [--project-dir <path>]
-//                             [--started-after <ISO or epoch>]
+//   forge-cli.mjs read-trace --team <TEAM> [--since <cursor>] [--await <sec>]
+//                            [--driver <agentName>] [--project-dir <path>]
+//                            [--started-after <ISO or epoch>]
 //
 // --started-after <t> — only consider transcripts still being written at (or
 // started after) time t. Two sequential drives under one parent share a
@@ -36,7 +36,20 @@ import { homedir } from 'node:os'
 // Parsed CLI state — assigned by main(), read by the locate/collect helpers.
 let team, since, awaitSec, driver, projectDir, startedAfterMs
 
+const USAGE = [
+  'usage: forge-cli.mjs read-trace --team <TEAM> [--since <cursor>] [--await <sec>]',
+  '                               [--driver <agentName>] [--project-dir <path>]',
+  '                               [--started-after <ISO or epoch>]',
+  '',
+  "Reads the driver's verbatim forge-pw actions forward from --since and prints",
+  'them plus a trailing `cursor: <N>` line to pass as the next --since.',
+].join('\n')
+
 export async function main(args) {
+  if (args.includes('--help') || args.includes('-h') || args[0] === 'help') {
+    console.log(USAGE)
+    process.exit(0)
+  }
   const opt = (name, def) => {
     const i = args.indexOf(name)
     return i >= 0 && i + 1 < args.length ? args[i + 1] : def

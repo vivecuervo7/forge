@@ -69,6 +69,47 @@ import { spawn } from 'node:child_process'
 
 const MIN_LENGTH = 8
 
+// Near-miss forgiveness. playwright-cli owns the real verb/flag surface;
+// forge-pw is a pass-through and holds no canonical list, so this is a
+// deliberately tiny map of the slips seen repeatedly in real drives — not a
+// spell-checker. A hit is rewritten and noted on stderr (the note teaches the
+// correct form without costing the driver a round on the full usage dump).
+const VERB_ALIASES = { navigate: 'goto' }
+// Per-verb flag aliases, keyed by the (resolved) verb.
+const FLAG_ALIASES = { screenshot: { '--path': '--filename' } }
+
+// Rewrite known verb/flag near-misses in place. The verb is the first
+// non-option token (playwright-cli takes global flags like `-s=<session>`
+// ahead of the subcommand), so options before it are skipped.
+export function applyAliases(args) {
+  const out = [...args]
+  const verbIdx = out.findIndex((a) => !a.startsWith('-'))
+  if (verbIdx === -1) return out
+
+  const original = out[verbIdx]
+  const verb = VERB_ALIASES[original]
+  if (verb) {
+    out[verbIdx] = verb
+    console.error(`forge-pw: '${original}' is not a playwright-cli verb — forwarding as '${verb}'`)
+  }
+
+  const flagMap = FLAG_ALIASES[out[verbIdx]]
+  if (flagMap) {
+    for (let i = verbIdx + 1; i < out.length; i++) {
+      for (const [from, to] of Object.entries(flagMap)) {
+        if (out[i] === from) {
+          out[i] = to
+          console.error(`forge-pw: '${from}' is not a '${out[verbIdx]}' flag — forwarding as '${to}'`)
+        } else if (out[i].startsWith(`${from}=`)) {
+          out[i] = `${to}${out[i].slice(from.length)}`
+          console.error(`forge-pw: '${from}=' is not a '${out[verbIdx]}' flag — forwarding as '${to}='`)
+        }
+      }
+    }
+  }
+  return out
+}
+
 function buildRedactMap() {
   const map = new Map()
   for (const [key, value] of Object.entries(process.env)) {
@@ -104,9 +145,11 @@ export function main(args) {
     filteredArgs.push(a)
   }
 
+  const aliasedArgs = applyAliases(filteredArgs)
+
   // In JSON mode, inject --json into playwright-cli's argv. Global
   // playwright-cli flags work in any position, so prepending is safe.
-  const childArgs = jsonMode ? ['--json', ...filteredArgs] : filteredArgs
+  const childArgs = jsonMode ? ['--json', ...aliasedArgs] : aliasedArgs
 
   const redactMap = buildRedactMap()
 
