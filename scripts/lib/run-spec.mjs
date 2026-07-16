@@ -412,7 +412,9 @@ if (stalled) {
     `forge-run-spec: stalled — no output for ${stallSecs}s; killed the runner. ` +
     (browserSeen
       ? 'A Playwright-managed browser process is still present — it may be orphaned; check before re-running.'
-      : 'No Playwright-managed browser process was found — the runner likely wedged before launching one.') +
+      : 'No Playwright-managed browser process was found — the runner likely wedged before launching one, ' +
+        'often a stale profile-dir lock or leftover Chrome processes from a SIGTERM\'d earlier run ' +
+        '(check `pgrep -fl chrome-for-testing` and clear stragglers before re-running).') +
     ' This is a wedged run, not a spec verdict: re-run once; if it stalls again, escalate.' +
     ' (Tune via FORGE_SPEC_STALL_SECS; 0 disables.)'
   )

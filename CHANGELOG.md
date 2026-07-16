@@ -5,6 +5,24 @@ every version bump. The full granular history is in the git log. Forge is young
 and pre-1.0 (built over June 2026), so a minor version can still carry a
 meaningful architecture change.
 
+## 0.58.0 — Sharper wedged-run diagnostic, quieter re-runs (2026-07-17)
+
+- **The stalled-run diagnostic now names the usual cause.** When the
+  inactivity watchdog kills a run that never launched a browser, it points at
+  the common culprit — a stale profile-dir lock or leftover Chrome processes
+  from a SIGTERM'd earlier run — with the `pgrep -fl chrome-for-testing` check
+  to clear them, instead of just "wedged before launching one."
+- **The driver stops re-passing a dead `--dashboard`.** Once `run-spec` warns
+  the active config doesn't honor `FORGE_SPEC_CDP` (so the run is unwatched),
+  the driver drops `--dashboard` from the rest of its verify re-runs rather
+  than re-printing the warning each round; if watching matters it surfaces the
+  one-line config migration to the lead once.
+- **The curator knows it can re-read earlier trace.** `read-trace`'s `--since`
+  is a caller-supplied offset, not a server cursor, so a smaller value (down to
+  `--since 0`) re-reads an earlier slice — documented so a curator that needs
+  to revisit a boundary lowers `--since` instead of hand-grepping the raw
+  transcript.
+
 ## 0.57.0 — Shutdown can't deadlock the run (2026-07-17)
 
 - **The Phase 5 shutdown wait is now bounded.** The lead sent each teammate a

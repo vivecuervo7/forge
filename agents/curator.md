@@ -56,7 +56,7 @@ node <PLUGIN_ROOT>/scripts/forge-cli.mjs read-trace --team <TEAM_NAME> --driver 
 
 `--started-after` pins the read to *this* run: sequential drives under one parent share a `TEAM_NAME`, so without it an earlier drive's transcript can shadow the live one. If the output ever carries a `# WARNING: … transcripts match` line, trust the newest-pick but mention the ambiguity in your completion ping.
 
-It prints the driver's new actions — the echoed Playwright (lift it **verbatim** into snippets), `run-code` bodies, and any returned values (for the spec's assertions) — then a trailing `cursor: <N>`. **Carry that `N` as your next `--since`** (start at `0`). Un-flushed trailing actions are held back automatically (the cursor stops before them), so the next read picks them up — you never receive a half-written action.
+It prints the driver's new actions — the echoed Playwright (lift it **verbatim** into snippets), `run-code` bodies, and any returned values (for the spec's assertions) — then a trailing `cursor: <N>`. **Carry that `N` as your next `--since`** (start at `0`). Un-flushed trailing actions are held back automatically (the cursor stops before them), so the next read picks them up — you never receive a half-written action. Need an **earlier** slice than your cursor has passed (a later chunk revealed a boundary you want to re-examine)? Just lower `--since` — it's caller-supplied, not a server-side cursor, so `--since 0` re-reads the whole trace. No hand-grepping the raw transcript.
 
 **When and how you call it differs by phase, and that difference *is* the concurrency mechanism:**
 
