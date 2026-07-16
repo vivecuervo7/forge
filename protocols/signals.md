@@ -27,4 +27,4 @@ Fire-and-forget and async, with two sync points: the driver waits on `snippets-r
 | `shutdown_request` | lead → teammate | team work is done — stand down | `message={"type":"shutdown_request","reason":"…"}` |
 | `shutdown_response` | teammate → lead | acknowledged | `{"type":"shutdown_response","request_id":<id>,"approve":true}` (carries `paneId` under tmux) |
 
-The lead waits for **both** completion pings before shutting anyone down; the curator stays alive through the driver's verify loop and completes on `run resolved`. Mid-run **steering** and **user-relay** (lead → teammate) are free-form, not fixed signals.
+The lead waits for **both** completion pings before shutting anyone down; the curator stays alive through the driver's verify loop and completes on `run resolved`. The `shutdown_response` is a courtesy ack, not a gate — a teammate that died after its completion ping never sends one, so the lead bounds the wait and verifies pane liveness directly rather than blocking (team-task.md §5.2). Mid-run **steering** and **user-relay** (lead → teammate) are free-form, not fixed signals.

@@ -5,6 +5,23 @@ every version bump. The full granular history is in the git log. Forge is young
 and pre-1.0 (built over June 2026), so a minor version can still carry a
 meaningful architecture change.
 
+## 0.57.0 — Shutdown can't deadlock the run (2026-07-17)
+
+- **The Phase 5 shutdown wait is now bounded.** The lead sent each teammate a
+  `shutdown_request` and then waited for the `shutdown_response` with no
+  timeout — fine when the teammate is alive, but a teammate that died or
+  wedged *after* its completion ping (so it cleared the §4.1 stall watchdog)
+  sends no response, and being dead emits no further events to wake the lead.
+  The wait hung the whole run until the user happened to send a message
+  (observed: a ~2h unattended deadlock). The browser was already closed
+  (§5.1), but cleanup never ran, so tmux panes leaked.
+- **Fix:** the `shutdown_response` is now a courtesy ack, not a gate. The lead
+  verifies each teammate's pane directly (`tmux list-panes`) in the same turn
+  it requests shutdown — gone means shut down, still-present gets force-killed
+  in §5.3 — and proceeds regardless. Same principle already applied to the
+  browser close: a dangling teammate must never strand the run. `signals.md`
+  now documents the `shutdown_response` as non-blocking.
+
 ## 0.56.0 — Pre-verify spec lint: catch the hang footgun before the cold run (2026-07-16)
 
 - **New `lint-spec` verb + a `run-spec` preamble.** Composed specs that call a

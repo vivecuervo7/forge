@@ -223,7 +223,7 @@ node <PLUGIN_ROOT>/scripts/forge-cli.mjs pw -s=<SESSION_NAME> close
 
 Do this **immediately, in this turn, before requesting teammate shutdown.** The close doesn't need the teammates' approvals, so it must never wait behind that async round-trip — waiting is exactly what leaves the browser lingering open after the work is visibly done. Route through `forge-pw`, not the bare `playwright-cli` binary (the guard hook blocks the bare binary). Closing by `SESSION_NAME` reliably catches the live browser however the run ended. Best-effort; fall back to killing the process tree if it survives. The driver may have already closed it — a no-op then.
 
-### 5.2. Request shutdown (both teammates)
+### 5.2. Request shutdown (both teammates) — bounded, never blocking
 
 For each of `driver` and `curator`:
 
@@ -231,15 +231,23 @@ For each of `driver` and `curator`:
 SendMessage(to="<teammate>", summary="team work complete; shutdown", message={"type": "shutdown_request", "reason": "team work done"})
 ```
 
-Wait for each `{"type": "shutdown_response", "approve": true, ...}`. The response includes a `paneId` (e.g. `"%105"`) when the backend is tmux — capture each for pane cleanup. If a teammate rejects, surface the reason. (The browser is already closed by now, so this wait costs nothing user-visible.)
+A clean `{"type": "shutdown_response", "approve": true, ...}` is the courtesy ack, and under tmux it carries a `paneId` (e.g. `"%105"`) for 5.3. **Do not gate the run on it.** A teammate that died or wedged after its completion ping sends no response — and, being dead, emits no further events to wake you — so an open-ended wait here hangs the whole run: the browser's already closed (5.1), but cleanup never finishes and the panes leak. Same principle as 5.1's browser close — a dangling teammate must never strand the run.
 
-### 5.3. Kill the leftover tmux panes
+So the pane, not the message, is the source of truth. **In the same turn you send the requests — without yielding into a wait for the responses** — verify each teammate directly (tmux backend):
+
+```bash
+tmux list-panes -a -F '#{pane_id} #{pane_title}'
+```
+
+A teammate whose pane is **gone** has shut down — done, nothing to clean. A teammate whose pane is **still present** gets force-killed in 5.3, whether or not it acked (its work is done and pinged; the browser's closed; killing a teammate that's exiting anyway is harmless). If a `shutdown_response` is already in your inbox, capture its `paneId`; but never sit waiting for one that may not come. If a teammate explicitly rejects, surface the reason and leave its pane alone.
+
+### 5.3. Kill any leftover teammate panes
 
 ```bash
 tmux kill-pane -t <paneId>
 ```
 
-Once per teammate, using the `paneId` from each `shutdown_response`. Best-effort; skip if no `paneId`.
+Once per teammate — `paneId` from a `shutdown_response` when you got one, otherwise the `pane_id` from the 5.2 `tmux list-panes` match (the `pane_title` carries the agent name). Best-effort; skip a teammate whose pane can't be found — already gone, or a non-tmux backend. A stray idle pane is harmless; completion must never block on cleaning it.
 
 ### 5.4. Apply teardown instructions (optional)
 
