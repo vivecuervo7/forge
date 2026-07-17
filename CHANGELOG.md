@@ -5,6 +5,26 @@ every version bump. The full granular history is in the git log. Forge is young
 and pre-1.0 (built over June 2026), so a minor version can still carry a
 meaningful architecture change.
 
+## 0.59.0 — A gone-quiet teammate gets a check-in, not an indefinite wait (2026-07-17)
+
+- **The §4.1 watchdog now recovers, not just gives up.** It was framed around
+  one cause — a teammate that finished but forgot to ping — and its only move
+  was to wait it out and end the run. But a teammate can also go quiet because
+  it's *stuck*: a wedged step, or a transient API overload (529) that stalled
+  its turn mid-work — the latter observed stalling a run for ~17h with no
+  recovery. Reframed as a general **gone-quiet check-in**: the lead asks "done,
+  still working, or stuck? — if your last turn stalled on a transient error,
+  resume; your context and trace are intact," and lets the reply decide
+  (completion → shutdown; resumes → keep waiting; stuck → route as a check-in;
+  silent → surface + proceed).
+- **No error diagnosis needed.** The lead can't send the check-in unless the
+  API is healthy right then — a transient overload that stalled a teammate
+  would have stalled the lead too — so if it can ask, a live teammate can
+  answer. The lead treats a stalled turn like any other blocker: attempt
+  recovery, escalate to the user only when the quiet persists. The 10-minute
+  bounded fallback (and browser-close-first) are unchanged, so it still can
+  never hang.
+
 ## 0.58.0 — Sharper wedged-run diagnostic, quieter re-runs (2026-07-17)
 
 - **The stalled-run diagnostic now names the usual cause.** When the

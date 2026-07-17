@@ -199,19 +199,24 @@ When collaborativeness is high you're an **active interlocutor**, not a passive 
 
 The lifecycle is otherwise unchanged — two teammates, two completion pings, the same Phase 5 shutdown. Collaborativeness is a *disposition* layered on the normal flow, not a separate path.
 
-### 4.1. Idle-notification stall watchdog
+### 4.1. Gone-quiet check-in
 
-A teammate that finished but forgot to ping appears as idle notifications with no completion summary. For each teammate you're still awaiting, keep a counter of consecutive bare idle notifications (a peer-DM summary resets it). At 3, nudge that teammate once:
+A teammate that's stopped sending signals could be **done but forgot to ping**, or **stuck** — a step wedged, or a transient API overload that stalled its turn mid-work. You can't tell which from the outside, so check in rather than assume either. For each teammate you're still awaiting, keep a counter of consecutive bare idle notifications (any peer-DM summary resets it). At 3, check in once:
 
 ```
-SendMessage(to="<teammate>", summary="status check", message="What's your status — done? If finished, SendMessage team-lead a completion summary so we can shut down.")
+SendMessage(to="<teammate>", summary="status check", message="You've gone quiet — done, still working, or stuck? If your last turn stalled on a transient error, pick up where you left off; your context and trace are intact. If finished, send team-lead a completion summary.")
 ```
 
-If it responds with a completion summary, treat it as the missing ping. If 2 more idle notifications arrive with no response, inspect on-disk artifacts (`ls <FORGE_ROOT>/snippets/`, `ls <FORGE_ROOT>/specs/`), surface state to the user, and proceed to Phase 5 — **the chromium close (5.1) runs regardless of the missing ping** (a dangling teammate must never strand the browser). **Bounded waiting:** if 10+ minutes pass without both pings AND no check-in/cannot-drive, surface to the user and proceed to Phase 5 anyway.
+**You don't need to diagnose why it went quiet.** That you can compose and send this at all means the API is healthy *now* — a transient overload that stalled a teammate mid-turn would have stalled yours too — so a live teammate can answer, and the reply (or continued silence) is what decides:
+
+- **Completion summary** → treat as the missing ping; head for shutdown.
+- **Resumes** (a chunk signal, progress, or "still going") → it was slow or transiently stalled and is moving again; reset the counter and keep waiting.
+- **Reports it's stuck** → route it like any check-in (`escalation.md` §3 — answer from the code, hand a steer, or take it to the user).
+- **Stays silent** — 2 more idle notifications with no response, or 10+ minutes with no ping / check-in / cannot-drive → inspect on-disk artifacts (`ls <FORGE_ROOT>/snippets/`, `ls <FORGE_ROOT>/specs/`), surface state to the user, and proceed to Phase 5 anyway. **The chromium close (5.1) runs regardless** — a dangling teammate must never strand the browser or the run.
 
 ## Phase 5 — Shut down and clean up
 
-A run can end several ways — normally both completion pings; also via the stall watchdog (4.1), a `cannot-drive`, or a user abort. **However it ends, you reach this phase, and your first act is to close the browser (5.1)** — you generated `SESSION_NAME` in 1.1 and own it, so you are the guaranteed backstop. The close needs nothing from the teammates, so it goes first and never waits on the shutdown handshake.
+A run can end several ways — normally both completion pings; also via the gone-quiet fallback (4.1), a `cannot-drive`, or a user abort. **However it ends, you reach this phase, and your first act is to close the browser (5.1)** — you generated `SESSION_NAME` in 1.1 and own it, so you are the guaranteed backstop. The close needs nothing from the teammates, so it goes first and never waits on the shutdown handshake.
 
 In the normal case — once **both** completion pings have arrived:
 
