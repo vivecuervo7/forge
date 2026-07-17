@@ -65,7 +65,7 @@ The full signal vocabulary — every name, direction, and message shape the team
 
 **With the curator** (`CURATOR_NAME`) — lightweight, async, fire-and-forget signals. These are **triggers carrying semantics, never content**: the curator reads the *actual code you ran* from your transcript; your signal just tells it a chunk is ready and what kind it is.
 
-- After each meaningful chunk: `SendMessage(to=CURATOR_NAME, summary="chunk complete: <short intent>", message="<invoked <snippet> | drove fresh: <intent>>. <if you bypassed a matching snippet: bypassed <snippet> — reason: snippet-failed | selector-changed>. Look at my trace.")`. **Do not paste the Playwright code** — the curator pulls it verbatim from the trace. When collaborativeness is high and the user teaches a quirk, append `taught gotcha: <the wait / retry / branch / non-obvious selector they taught, and why>` so the curator weaves it into the snippet body as code, not just prose.
+- After each meaningful chunk: `SendMessage(to=CURATOR_NAME, summary="chunk complete: <short intent>", message="<invoked <snippet> | drove fresh: <intent>>. <if you bypassed a matching snippet: bypassed <snippet> — reason: snippet-failed | selector-changed>. Look at my trace.")`. **Do not paste the Playwright code** — the curator pulls it verbatim from the trace. When collaborativeness is high and the user teaches a quirk, append `taught gotcha: <the wait / retry / branch / non-obvious selector they taught, and why>` so the curator weaves it into the snippet body as code, not just prose. An early chunk signal that fails to send because the curator isn't in the team roster yet is **non-fatal** — keep driving; the curator reads your trace forward from the start and backfills the early chunks.
 - At end of drive: `SendMessage(to=CURATOR_NAME, summary="drive complete", message="No more chunks. Wrap up authoring and send team-lead your completion ping.")`.
 - Fire and continue — **never block waiting on the curator** during the drive. The one place you wait: in spec mode you wait for the curator's `snippets-ready` before composing (Phase 4).
 - During the verify loop, when a failure is inside a composed snippet: `SendMessage(to=CURATOR_NAME, summary="patch-request: <snippet>", message="<snippet> failed cold at specs/<name>:<line>: <error>. <one-line cause>. Look at the failure + my trace and patch it.")`, then wait for its `patched` reply before re-running.
@@ -171,6 +171,8 @@ Each native command echoes the equivalent Playwright code in a `### Ran Playwrig
 
 **Determinism is load-bearing.** The patterns that make a step work headless — `pressSequentially` over `fill` for async-validated inputs, triple-click-then-`Delete` to clear, explicit `waitFor`/`waitForResponse`, `dispatchEvent` where a real click doesn't reach the handler — are exactly what a frozen spec must inherit. Drive with them deliberately.
 
+**Prefer SPA click-through over a hard reload when polling for post-write state.** A `reload`/`goto` can rehydrate stale state from a client persistence layer (redux-persist, a service-worker cache, IndexedDB) and re-serve the value you just changed — so a retry loop built on reload spins forever against a cache. Clicking through the app's own navigation forces a fresh read. Reach for a hard reload only when a cold load is what you actually want.
+
 **Settle patterns** — the recurring ways a page lies about being ready, and the standard first moves (which framework and which selector is project knowledge — check `forge.md`; the *moves* are universal):
 
 - **Deferred mutation** (command-bus backends, optimistic-update frontends): fence the write on its network response (`waitForResponse`), then poll the read until it's *stable* — several consecutive identical reads, not one (a single read latches false plateaus). Where the project scaffolds `snippets/_wait-until-stable.ts`, compose it. Guard against re-submitting a write that actually landed (check for the created id/count first).
@@ -228,6 +230,7 @@ You hold the verbatim trace; reuse it directly.
 - **Invoked steps**: `import` the snippet and compose its `run()` call with the **same args** you invoked it with.
 - **Fresh-drive steps**: inline the **exact** code you executed — the echoed Playwright or your `run-code` body — **verbatim**, including its determinism patterns. Don't re-derive from memory; reuse the literal fragment from your context.
 - **Assertions** come from the values your `run-code` actually returned. Assert those exact values; don't invent or omit. For a repro, the bug claim asserts the *correct* value the fix will produce (`expect.soft`), not the buggy value observed.
+- **Multi-actor flows** (one actor's action must affect another's live session — a force-logout, a real-time update, a permission change): give each actor its own `browser.newContext()` in the spec and drive both, even if during the drive a second actor's step was performed by hand or by a person. Playwright runs the contexts side by side, so the repro becomes self-contained.
 
 ```ts
 // Authored by forge:driver on <YYYY-MM-DD>.
@@ -327,7 +330,7 @@ Then go idle. Chromium is still warm; you stay reachable. On the lead's `{type: 
 
 ## A hint worth keeping (optional, rare)
 
-If the run surfaced a genuinely *recurring* piece of app knowledge that a future run would otherwise rediscover the hard way — a gotcha you hit and worked around, a selector you had to dig for, an env/setup fact — add **one** plain-language line to your completion ping: `Hint worth adding: <the pattern in a sentence> → forge.md`. The lead passes it to the user as a gentle suggestion; it blocks nothing and demands no structured format.
+If the run surfaced a genuinely *recurring* piece of app knowledge that a future run would otherwise rediscover the hard way — a gotcha you hit and worked around, a selector you had to dig for, an env/setup fact, an architectural or transport fact (e.g. an export that streams over long-polling rather than websockets) — add **one** plain-language line to your completion ping: `Hint worth adding: <the pattern in a sentence> → forge.md`. The lead passes it to the user as a gentle suggestion; it blocks nothing and demands no structured format.
 
 This is rare. A clean run surfaces nothing — so say nothing; silence is the honest default, not a slot to fill.
 

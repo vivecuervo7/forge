@@ -5,6 +5,30 @@ every version bump. The full granular history is in the git log. Forge is young
 and pre-1.0 (built over June 2026), so a minor version can still carry a
 meaningful architecture change.
 
+## 0.60.0 — Small drive/curate discipline fixes from the dogfood review (2026-07-17)
+
+Five one-line prompt fixes, each from an observed miss; the rest of the
+reviewed batch was dropped as already-covered or unimplementable:
+
+- **Driver:** a chunk signal that fails to send because the curator isn't in
+  the roster yet is non-fatal — keep driving; the curator backfills from the
+  trace (the design already treats a *missed* signal that way; this covers the
+  send *erroring*).
+- **Driver:** prefer SPA click-through over a hard `reload`/`goto` when polling
+  for post-write state — a reload can rehydrate stale state from a client
+  persistence layer (redux-persist / service-worker / IndexedDB), so a
+  reload-based retry loop spins against a cache forever.
+- **Driver:** a composed spec for a multi-actor flow can use a second
+  `browser.newContext()` for the other actor, even if that step was driven by
+  hand — so the repro is self-contained.
+- **Driver:** "hint worth adding" now names architectural/transport facts as
+  hint-worthy, not just gotchas/selectors/env (an export that streams over
+  long-polling, say), so durable app knowledge reaches `forge.md` through the
+  existing user-approved channel.
+- **Curator:** when splitting or refactoring a snippet, carry its caveats
+  forward verbatim — never upgrade a fragility note into a "confirmed working"
+  claim for a path the drive didn't exercise.
+
 ## 0.59.0 — A gone-quiet teammate gets a check-in, not an indefinite wait (2026-07-17)
 
 - **The §4.1 watchdog now recovers, not just gives up.** It was framed around
