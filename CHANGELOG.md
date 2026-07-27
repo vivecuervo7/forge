@@ -5,6 +5,48 @@ every version bump. The full granular history is in the git log. Forge is young
 and pre-1.0 (built over June 2026), so a minor version can still carry a
 meaningful architecture change.
 
+## 0.61.0 — Watched actions, and perception that isn't selectively blind (2026-07-27)
+
+Ported from the standalone `forge-cli` engine, then measured against it: five
+drives of the same task on the same site, scored on wall-clock, call counts,
+and the quality of the snippets each produced. The headline is the last of
+those — snippets carrying a real gate went from **0 of 3** to **3 of 3**, and a
+spec composed from a watched drive verified cold on the first round.
+
+- **`observe` no longer silently drops elements whose accessible name contains
+  `": "`.** Playwright quotes such a key wholesale, and the line parser couldn't
+  match the quoted form — so the element vanished with no warning and a header
+  count that agreed with itself. On a real project's captured snapshots, 13 of
+  102 were affected; on the sample shop it was hiding *every product link*.
+  A dropdown of colon-named options observed as empty, which is
+  indistinguishable from "the options never loaded".
+- **`observe` stops filtering by an allowlist of interesting roles.** The old
+  list excluded whole categories by construction — a validation message
+  rendered as a heading, a data grid's rows and cells, a status line as a
+  paragraph. Measured: a failed login showed the driver an unnamed dismiss
+  button and *not* the error beside it. Relevance is now "can you act on it, or
+  does it tell you something", with the noise named instead of the signal. The
+  view roughly doubles (10% → 23% of the raw snapshot) and still compresses ~4x.
+- **New verb `act` — perform an action and watch the page through it.** A
+  MutationObserver is installed before the action and drained after, so a toast
+  that lives 200ms can't slip between turns; then it settles on network
+  quiescence before reporting. Refs are `observe`'s, resolved via the `aria-ref`
+  engine, so the two are interchangeable.
+- **Gates reach the library.** After each action `act` reports the gate
+  candidates it *actually observed*, ranked by durability, for the curator to
+  choose from. There is deliberately no way to declare an expected outcome:
+  nominating a signal in advance drags the run toward the guess, and a
+  confirmed guess forecloses a better gate sitting in the same diff. Candidates
+  carry a timeout derived from the measured settle. An empty shortlist is a
+  real answer — a snippet with no gate and an honest caveat beats a confident
+  wrong one.
+- **`NO OBSERVABLE EFFECT`** is reported structurally when nothing measurable
+  changed — a stuck-signal that needs no prediction and so can't bias anything.
+- **Curator:** promote a chosen candidate to real code, keep the
+  `expect(...).toBeVisible({ timeout })` form (rewriting it as `waitFor` turns a
+  bounded gate into one that pends to the whole test timeout), and mark any
+  selector generalised beyond what the drive actually executed as unverified.
+
 ## 0.60.1 — `/forge export` actually produces a portable spec (2026-07-30)
 
 Export was inlining one import form and silently reporting success for the
