@@ -368,7 +368,15 @@ export function looksDynamicId(seg) {
   return seg.length >= 16 && /^[0-9A-Za-z]+$/.test(seg) && /\d/.test(seg) // ulid, nanoid, opaque
 }
 
-export function urlAssertion(url) {
+// A gate's timeout, grounded in what this action actually took to settle rather
+// than a guessed constant: three times the observed settle, floored at 5s. A
+// page that took 5s to quiet down deserves more headroom than one that took
+// 500ms, and the run just measured which it is.
+export function gateTimeout(settleMs = 0) {
+  return Math.max(5000, Math.ceil((settleMs * 3) / 1000) * 1000)
+}
+
+export function urlAssertion(url, timeoutMs) {
   let u
   try { u = new URL(url) } catch { return null }
   const segs = u.pathname.split('/').filter(Boolean)
@@ -378,18 +386,20 @@ export function urlAssertion(url) {
   const pattern = segs
     .map(s => (looksDynamicId(s) ? '[^\\/]+' : s.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')))
     .join('\\/')
-  return `await expect(page).toHaveURL(/\\/${pattern}\\/?$/);`
+  const t = timeoutMs ? `, { timeout: ${timeoutMs} }` : ''
+  return `await expect(page).toHaveURL(/\\/${pattern}\\/?$/${t});`
 }
 
 // The Playwright wait for one observed signal. `role` may be a tag name (the
 // mutation log reports tags for unlabelled nodes), so headings and non-ARIA
 // tags fall back to forms that actually exist.
-export function assertionFor({ role, name }) {
+export function assertionFor({ role, name }, timeoutMs) {
   const r = String(role || '').toLowerCase()
   const nm = JSON.stringify(name)
-  if (/^h[1-6]$/.test(r)) return `await expect(page.getByRole('heading', { name: ${nm} })).toBeVisible();`
-  if (ARIA_ROLES.has(r)) return `await expect(page.getByRole('${r}', { name: ${nm} })).toBeVisible();`
-  return `await expect(page.getByText(${nm})).toBeVisible();`
+  const t = timeoutMs ? `{ timeout: ${timeoutMs} }` : ''
+  if (/^h[1-6]$/.test(r)) return `await expect(page.getByRole('heading', { name: ${nm} })).toBeVisible(${t});`
+  if (ARIA_ROLES.has(r)) return `await expect(page.getByRole('${r}', { name: ${nm} })).toBeVisible(${t});`
+  return `await expect(page.getByText(${nm})).toBeVisible(${t});`
 }
 
 // The gate candidates that ACTUALLY occurred, best-first — never a single pick.
@@ -406,7 +416,8 @@ export function assertionFor({ role, name }) {
 // and a signal that merely COULD have appeared never becomes a wait.
 const MAX_CANDIDATES = 3
 
-export function gateCandidates(observed, { navigated, url } = {}) {
+export function gateCandidates(observed, { navigated, url, settleMs } = {}) {
+  const timeoutMs = gateTimeout(settleMs)
   const usable = observed.filter(c => c.name && !CONTENT_ROLES.has(String(c.role).toLowerCase()))
   const seen = new Set()
   const tiered = []
@@ -414,11 +425,11 @@ export function gateCandidates(observed, { navigated, url } = {}) {
     const key = c.kind === 'url' ? 'url' : `${c.role}|${c.name}`
     if (seen.has(key)) return
     seen.add(key)
-    tiered.push({ ...c, tier })
+    tiered.push({ ...c, tier, timeoutMs })
   }
   for (const c of usable) if (LIVE_ROLES.has(String(c.role).toLowerCase())) push({ kind: 'role', ...c }, 'live region')
   if (navigated && url) {
-    const a = urlAssertion(url)
+    const a = urlAssertion(url, timeoutMs)
     if (a) push({ kind: 'url', assertion: a }, 'navigation')
   }
   for (const c of usable) {
@@ -430,7 +441,7 @@ export function gateCandidates(observed, { navigated, url } = {}) {
 }
 
 export function candidateLine(c) {
-  return c.kind === 'url' ? c.assertion : assertionFor(c)
+  return c.kind === 'url' ? c.assertion : assertionFor(c, c.timeoutMs)
 }
 
 function runCode(session, body) {
@@ -503,7 +514,7 @@ export async function main(args) {
   const changes = parseObserveChanges(viewBody, rebaselined)
   const { transient, unlisted } = partitionLog(log || [], viewNames(viewBody))
 
-  const candidates = gateCandidates([...transient, ...unlisted, ...changes], { navigated, url: res.data.url })
+  const candidates = gateCandidates([...transient, ...unlisted, ...changes], { navigated, url: res.data.url, settleMs })
   // Structural, undeclared: nothing measurable happened. This is the escalation
   // trigger that survives dropping prospective expectations — the engine's
   // "K consecutive no-effect actions" needs no prediction to detect, so it

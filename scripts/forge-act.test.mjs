@@ -11,7 +11,7 @@
 import {
   parseArgs, partitionLog, viewNames,
   parseObserveChanges, isBaselineView, buildBody, playwrightCode,
-  assertionFor, gateCandidates, candidateLine, urlAssertion, looksDynamicId,
+  assertionFor, gateCandidates, candidateLine, urlAssertion, looksDynamicId, gateTimeout,
 } from './lib/act.mjs'
 
 let failures = 0
@@ -215,12 +215,12 @@ eq(
     { role: 'button', name: 'Remove' },
     { role: 'alert', name: 'Product added to shopping cart.' },
   ])[0]),
-  `await expect(page.getByRole('alert', { name: "Product added to shopping cart." })).toBeVisible();`,
+  `await expect(page.getByRole('alert', { name: "Product added to shopping cart." })).toBeVisible({ timeout: 5000 });`,
 )
 eq(
   'a navigation is offered when no live region appeared',
   gateCandidates([{ role: 'button', name: 'Remove' }], { navigated: true, url: 'https://shop.test/inventory.html' })[0],
-  { kind: 'url', assertion: `await expect(page).toHaveURL(/\\/inventory\\.html\\/?$/);`, tier: 'navigation' },
+  { kind: 'url', assertion: `await expect(page).toHaveURL(/\\/inventory\\.html\\/?$/, { timeout: 5000 });`, tier: 'navigation', timeoutMs: 5000 },
 )
 
 // A short list is better than a padded one; three is the cap.
@@ -244,6 +244,27 @@ eq(
 )
 eq('nothing observed → no candidates', gateCandidates([]), [])
 eq('a nameless change is not a signal', gateCandidates([{ role: 'alert', name: '' }]), [])
+
+// A gate's timeout is grounded in what THIS action took to settle, not a
+// guessed constant — a page that took 5s to quiet deserves more headroom than
+// one that took 500ms, and the run just measured which it is.
+eq('a fast settle still gets a 5s floor', gateTimeout(515), 5000)
+eq('a slow settle scales to 3x, rounded up to the second', gateTimeout(2916), 9000)
+eq('a very slow settle scales further', gateTimeout(5209), 16000)
+eq('no measurement falls back to the floor', gateTimeout(), 5000)
+
+// The emitted gate carries that timeout. An untimed `waitFor` pends to the whole
+// test timeout, which is the hang footgun lint-spec exists to catch.
+eq(
+  'a role gate carries its timeout',
+  candidateLine(gateCandidates([{ role: 'alert', name: 'Saved' }], { settleMs: 2916 })[0]),
+  `await expect(page.getByRole('alert', { name: "Saved" })).toBeVisible({ timeout: 9000 });`,
+)
+eq(
+  'a url gate carries its timeout',
+  candidateLine(gateCandidates([], { navigated: true, url: 'https://x.test/checkout', settleMs: 515 })[0]),
+  `await expect(page).toHaveURL(/\\/checkout\\/?$/, { timeout: 5000 });`,
+)
 
 // URL waits: an id that varies per run makes a useless assertion.
 check('a numeric segment is dynamic', looksDynamicId('12345'))
