@@ -153,13 +153,29 @@ node <PLUGIN_ROOT>/scripts/forge-cli.mjs invoke-snippet \
 
 `--args` is JSON matching the snippet's `meta.args`. For env-sourced args use shell expansion. For account/role resolution consult `forge.md`; if it doesn't document a named account, check in with the lead. If invocation fails, fall back to driving fresh and flag the bypass in the chunk signal.
 
-**Driving fresh:** orient with `observe --live`, then act on the `[ref]` handles it prints, through native `forge-pw` verbs. One call snapshots the page and prints the *filtered* view — interactable elements with their refs + error/alert signals — rather than pasting a whole raw snapshot into your context:
+**Driving fresh:** orient with `observe --live`, then act on the `[ref]` handles it prints. One call snapshots the page and prints the *filtered* view — interactable elements with their refs + error/alert signals — rather than pasting a whole raw snapshot into your context:
 
 ```bash
 node <PLUGIN_ROOT>/scripts/forge-cli.mjs observe --live -s=<SESSION_NAME>
-node <PLUGIN_ROOT>/scripts/forge-cli.mjs pw -s=<SESSION_NAME> click e3
-# echoes: await page.getByRole('button', { name: 'Sign In' }).click();
+node <PLUGIN_ROOT>/scripts/forge-cli.mjs act -s=<SESSION_NAME> click e3
 ```
+
+**Act through `act`, which watches the page while it acts.** It installs a mutation observer *before* the action, so anything that appears while you're mid-turn is captured, then settles the page and prints the view — one call in place of act-then-observe. Two things reach you that a separate observe cannot deliver:
+
+- **Transients** — a toast or `role=alert` flash that lived a few hundred ms is reported (`! …  (gone by now)`) even though nothing is on screen by the time you read it.
+- **Off-view causes** — content that appeared but whose role the filtered view drops (a validation message rendered as a heading, a status line as a paragraph) is listed too. This is routinely the thing that explains *why* an action did what it did.
+
+**Declare the outcome you expect** and the verdict comes back decided, so you read a fact rather than squinting at a diff:
+
+```bash
+node <PLUGIN_ROOT>/scripts/forge-cli.mjs act -s=<SESSION_NAME> fill e11 "$ADMIN_USERNAME"
+node <PLUGIN_ROOT>/scripts/forge-cli.mjs act -s=<SESSION_NAME> click e15 --expect='alert:added to cart'
+# → # act: … | settled in 512ms | expect alert:added to cart: SATISFIED
+```
+
+`--expect=<role>[:<text>]` matches against the transients *and* the settled view, so a signal that flashed counts as readily as one that stuck; `--expect-none` asserts the page stays quiet, which is the one reading a bare observe can't express — it turns "nothing happened" from an ambiguous absence into a confirmed observation. A violated expectation exits **6**, so it's a signal you're handed rather than one you have to notice. Treat a violation as the moment to look, not to press on.
+
+`act` covers the common verbs (`click`, `fill`, `type`, `press`, `select`, `hover`, `check`, `goto`). Anything outside that set is still `forge-pw` or `run-code` as before.
 
 It tracks the page URL itself, so a real navigation re-baselines to the full filtered view while an in-page popup stays a cheap diff. The default view keeps every element's *current* ref, so acting on what it prints is always safe. It folds an alert's message into its text — a settle/error sentinel you can wait on or assert — and collapses long dropdowns to one `option-list "first…last" = "N"` line, so open the list and type into its searchbox to filter rather than expecting all options inline. `forge-observe` is **perception only** — like a raw snapshot, its output isn't part of the action trace the curator reads or the spec you compose (those come from your action echoes and `run-code` bodies), so read it as freely as you need.
 

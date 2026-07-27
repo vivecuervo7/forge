@@ -252,15 +252,20 @@ function format(a, results) {
     return `── invoked snippet ──\n  ${m ? m[1] : '(unknown)'}  (reuse — not new authoring)`
   }
   // Verb = the first bare word after -s=<session> (flags like --json may sit
-  // between the entry point and -s).
-  const vm = normCmd.match(/forge-cli\.mjs\s+(?:--?\S+\s+)*pw\s+(?:--?\S+\s+)*-s=\S+\s+([\w-]+)/)
-  const verb = vm ? vm[1] : '(?)'
+  // between the entry point and -s). Both action-carrying entry points count:
+  // `pw` and `act`, the latter echoing the same `### Ran Playwright code` block
+  // (with the ref already resolved to a durable locator) so a watched action
+  // reaches the curator exactly like a bare one.
+  const vm = normCmd.match(/forge-cli\.mjs\s+(?:--?\S+\s+)*(pw|act)\s+(?:--?\S+\s+)*-s=\S+\s+([\w-]+)/)
+  const entry = vm ? vm[1] : 'pw'
+  const verb = vm ? vm[2] : '(?)'
   if (verb === 'snapshot' || verb === 'open') {
     return `── ${verb} ──  (orientation — no snippet code)`
   }
   const echo = extractEcho(res) || (verb === 'run-code' ? runCodeBody(normCmd) : null)
   const returned = extractReturned(res)
-  let block = `── drove fresh: ${verb === 'run-code' ? 'run-code' : `forge-pw ${verb}`} ──\n`
+  const label = verb === 'run-code' ? 'run-code' : `${entry === 'act' ? 'act' : 'forge-pw'} ${verb}`
+  let block = `── drove fresh: ${label} ──\n`
   block += `  playwright:\n${echo ? echo.split('\n').map((l) => '    ' + l).join('\n') : '    —'}`
   if (returned) block += `\n  returned: ${returned}`
   return block

@@ -110,7 +110,10 @@ export function applyAliases(args) {
   return out
 }
 
-function buildRedactMap() {
+// Exported so any verb that prints a command it built itself — `act` echoes the
+// Playwright equivalent of the action it ran — scrubs env-sourced values on the
+// same terms, rather than reimplementing the map and drifting from it.
+export function buildRedactMap() {
   const map = new Map()
   for (const [key, value] of Object.entries(process.env)) {
     if (typeof value !== 'string') continue
@@ -122,7 +125,7 @@ function buildRedactMap() {
   return map
 }
 
-function redact(text, map) {
+export function redact(text, map) {
   let result = text
   for (const [value, placeholder] of map) {
     if (result.includes(value)) {
