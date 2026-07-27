@@ -102,13 +102,41 @@ const OPTION_CAP = 8
 
 // One YAML snapshot line -> a node, or null if it isn't an element line.
 const LINE = /^(\s*)-\s+([^\s"[:]+)(?:\s+"((?:[^"\\]|\\.)*)")?((?:\s*\[[^\]]*\])*)\s*(?::\s*(.*?))?\s*$/
+
+// Playwright emits YAML, so it quotes anything that would otherwise reparse
+// wrongly — and the commonest trigger is a `: ` inside an accessible name
+// (prices, error prefixes, "Category: Item" labels). When the *key* needs
+// quoting it wraps the WHOLE descriptor in single quotes and doubles any inner
+// `'`, turning
+//     - button "Add to cart: Backpack" [ref=e12]:
+// into
+//     - 'button "Add to cart: Backpack" [ref=e12]':
+// which LINE cannot match — so the element was silently dropped from the view.
+// Nothing surfaced the loss: the element simply wasn't there, and the header's
+// count agreed with itself. Unwrap the key before matching.
+const QUOTED_KEY = /^(\s*)-\s+'((?:[^']|'')*)'\s*:?\s*$/
+function unquoteKey(line) {
+  const q = QUOTED_KEY.exec(line)
+  return q ? `${q[1]}- ${q[2].replace(/''/g, "'")}` : line
+}
+
+// The same quoting applies to a node's *value* (double-quoted, backslash
+// escapes) — a value keeping its literal quotes would corrupt an alert's folded
+// message and any exact-match a driver does against it.
+function unquoteValue(value) {
+  if (value.length < 2 || value[0] !== '"' || value[value.length - 1] !== '"') return value
+  return value.slice(1, -1).replace(/\\(["\\/bfnrt])/g, (_, c) => (
+    { b: '\b', f: '\f', n: '\n', r: '\r', t: '\t' }[c] ?? c
+  ))
+}
+
 function parseLine(line) {
-  const m = LINE.exec(line)
+  const m = LINE.exec(unquoteKey(line))
   if (!m) return null
   const [, indent, role, name = '', brackets = '', value = ''] = m
   const ref = (/\[ref=(e\d+)\]/.exec(brackets) || [])[1] || null
   const flags = FLAGS.filter(f => brackets.includes(`[${f}]`))
-  return { indent: indent.length, role, name, ref, flags, value: value.trim() }
+  return { indent: indent.length, role, name, ref, flags, value: unquoteValue(value.trim()) }
 }
 
 // Gather the text a node carries in its descendants (indented deeper), so a
@@ -127,7 +155,7 @@ function descendantText(nodes, i) {
 // two alerts with different messages are different). Interactables with neither
 // a ref nor a name are unactionable noise (e.g. a hidden native `combobox`) and
 // are dropped. Long option runs collapse to one summary line.
-function extract(yaml) {
+export function extract(yaml) {
   const nodes = yaml.split('\n').map(parseLine).filter(Boolean)
   const raw = []
   for (let i = 0; i < nodes.length; i++) {
