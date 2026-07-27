@@ -33,25 +33,32 @@
 //   forge-cli.mjs act -s=<name> goto <url> [options]
 //
 //   -s=<name> / --session=<name>   the playwright-cli session (required)
-//   --expect=<role>[:<text>]       declare the expected outcome; the verdict is
-//                                  deterministic (see "Expectations" below)
-//   --expect-none                  declare that nothing should change
 //   --quiet=<ms>                   quiet window that counts as settled (500)
 //   --timeout=<ms>                 give up settling after this (8000)
 //   --raw                          also print the transient log's raw entries
 //
-// Expectations: the driver states the outcome up front and the script returns
-// the verdict, rather than the driver squinting at a diff and deciding for
-// itself. That matters because it makes "it didn't work" a *fact the tool
-// reports* — including the case a bare observe cannot express at all: with
-// `--expect-none`, a quiet page is a positive confirmation rather than an
-// ambiguous absence ("did nothing happen, or did I look too early?").
+// Gate candidates: there is deliberately NO way to declare an expected outcome.
+// A gate is only ever derived from what was observed after the action, and it
+// is offered as a shortlist rather than a pick.
 //
-// A match is checked against the transient log AND the settled diff, so an
-// expectation is satisfied by a signal that flashed as readily as one that
-// stuck. `--expect=alert` matches on role alone; `--expect=alert:added`
-// additionally requires the accessible name to contain "added"
-// (case-insensitive).
+// Both properties are the same guard against the same failure. Nominating a
+// signal in advance drags the outcome toward the prediction — and even when the
+// predicted thing does happen, it is not necessarily the BEST thing to wait on,
+// so a satisfied prediction quietly forecloses a better gate that was sitting
+// right there in the diff. Measured on a real drive: the one declaration that
+// passed named a signal the observed ranking would have picked anyway (it added
+// nothing), while the one that failed reported a violation on a correct action
+// and its wrong verdict then suppressed the real observation entirely.
+//
+// So the choice is made once, late, by whoever has the context: candidates are
+// ranked by durability (live region → navigation → landmark → other) and the
+// curator picks knowing what the snippet is for. An empty shortlist is a real
+// answer — better a snippet with no gate and a caveat than a confident wrong one.
+//
+// What survives from the contract idea is the part that needs no prediction:
+// `NO OBSERVABLE EFFECT` is reported structurally whenever nothing measurable
+// changed, which is the engine's "K consecutive no-effect actions" escalation
+// trigger and cannot bias anything, because it names no signal.
 //
 // Refs are the ones `observe` prints — resolved via Playwright's `aria-ref`
 // selector engine — so the two verbs are interchangeable in the same session.
@@ -60,10 +67,9 @@
 // between them.
 //
 // Exit codes:
-//   0  acted (expectation satisfied, or none declared)
+//   0  acted
 //   2  usage error
 //   3  the action itself failed (playwright error passed through)
-//   6  expectation VIOLATED — the declared outcome did not occur
 
 import { spawnSync } from 'node:child_process'
 import { dirname, join } from 'node:path'
@@ -80,14 +86,12 @@ const NO_REF = new Set(['goto'])
 export function parseArgs(argv) {
   const opts = {
     session: null, action: null, ref: null, value: null,
-    expect: null, expectNone: false, quiet: 500, timeout: 8000, raw: false,
+    quiet: 500, timeout: 8000, raw: false,
     unknownFlags: [],
   }
   const positional = []
   for (const a of argv) {
-    if (a === '--expect-none') opts.expectNone = true
-    else if (a === '--raw') opts.raw = true
-    else if (a.startsWith('--expect=')) opts.expect = a.slice('--expect='.length)
+    if (a === '--raw') opts.raw = true
     else if (a.startsWith('--quiet=')) opts.quiet = Number(a.slice('--quiet='.length))
     else if (a.startsWith('--timeout=')) opts.timeout = Number(a.slice('--timeout='.length))
     else if (a.startsWith('--session=')) opts.session = a.slice('--session='.length)
@@ -108,24 +112,6 @@ export function parseArgs(argv) {
     opts.value = positional[2] ?? null
   }
   return opts
-}
-
-// The declared expectation, parsed into a role + optional name substring.
-export function parseExpect(spec) {
-  if (!spec) return null
-  const i = spec.indexOf(':')
-  if (i < 0) return { role: spec.trim().toLowerCase(), text: null }
-  return { role: spec.slice(0, i).trim().toLowerCase(), text: spec.slice(i + 1).trim().toLowerCase() || null }
-}
-
-// Does any observed change satisfy the expectation? Candidates are
-// `{role, name}` drawn from BOTH the transient log and the settled diff — a
-// signal that flashed counts exactly as much as one that stuck.
-export function matches(expect, candidates) {
-  if (!expect) return null
-  return candidates.some(c =>
-    c.role.toLowerCase() === expect.role &&
-    (!expect.text || (c.name || '').toLowerCase().includes(expect.text)))
 }
 
 // The in-page half: install the observer, act, drain, settle. Returned as one
@@ -406,21 +392,45 @@ export function assertionFor({ role, name }) {
   return `await expect(page.getByText(${nm})).toBeVisible();`
 }
 
-// Pick the most durable signal among the ones that ACTUALLY occurred. Bounded
-// to observation by construction: a wait can't be suggested for something that
-// never happened.
-export function suggestPostcondition(candidates, { navigated, url } = {}) {
-  const usable = candidates.filter(c => c.name && !CONTENT_ROLES.has(String(c.role).toLowerCase()))
-  const live = usable.find(c => LIVE_ROLES.has(String(c.role).toLowerCase()))
-  if (live) return { kind: 'role', ...live }
+// The gate candidates that ACTUALLY occurred, best-first — never a single pick.
+//
+// A shortlist rather than a verdict, because the choice needs context this
+// function does not have: what the snippet is FOR, which values will be
+// parameterised, whether the flow is reused across products or users. Ranking
+// is a hint from role alone; the curator decides. Offering one pick reads as a
+// decision already made, and hides that there was a trade-off at all.
+//
+// Bounded to observation by construction — a gate cannot be proposed for
+// something that never happened. That is the whole guarantee: no gate is ever
+// nominated in advance, so nothing biases the action toward its own prediction,
+// and a signal that merely COULD have appeared never becomes a wait.
+const MAX_CANDIDATES = 3
+
+export function gateCandidates(observed, { navigated, url } = {}) {
+  const usable = observed.filter(c => c.name && !CONTENT_ROLES.has(String(c.role).toLowerCase()))
+  const seen = new Set()
+  const tiered = []
+  const push = (c, tier) => {
+    const key = c.kind === 'url' ? 'url' : `${c.role}|${c.name}`
+    if (seen.has(key)) return
+    seen.add(key)
+    tiered.push({ ...c, tier })
+  }
+  for (const c of usable) if (LIVE_ROLES.has(String(c.role).toLowerCase())) push({ kind: 'role', ...c }, 'live region')
   if (navigated && url) {
     const a = urlAssertion(url)
-    if (a) return { kind: 'url', assertion: a }
+    if (a) push({ kind: 'url', assertion: a }, 'navigation')
   }
-  const landmark = usable.find(c =>
-    LANDMARK_ROLES.has(String(c.role).toLowerCase()) || /^h[1-6]$/.test(String(c.role).toLowerCase()))
-  if (landmark) return { kind: 'role', ...landmark }
-  return usable.length ? { kind: 'role', ...usable[0] } : null
+  for (const c of usable) {
+    const r = String(c.role).toLowerCase()
+    if (LANDMARK_ROLES.has(r) || /^h[1-6]$/.test(r)) push({ kind: 'role', ...c }, 'landmark')
+  }
+  for (const c of usable) push({ kind: 'role', ...c }, 'other')
+  return tiered.slice(0, MAX_CANDIDATES)
+}
+
+export function candidateLine(c) {
+  return c.kind === 'url' ? c.assertion : assertionFor(c)
 }
 
 function runCode(session, body) {
@@ -443,7 +453,7 @@ function runCode(session, body) {
 export async function main(args) {
   const opts = parseArgs(args)
   if (!opts.session || !opts.action) {
-    console.error('act: usage: forge-cli.mjs act -s=<name> <click|fill|press|select|hover|check|goto> [<ref>] [<value>] [--expect=<role>[:<text>]] [--expect-none]')
+    console.error('act: usage: forge-cli.mjs act -s=<name> <click|fill|press|select|hover|check|goto> [<ref>] [<value>] [--quiet=<ms>] [--timeout=<ms>] [--raw]')
     process.exit(2)
   }
   const known = WITH_VALUE.has(opts.action) || REF_ONLY.has(opts.action) || NO_REF.has(opts.action)
@@ -460,11 +470,12 @@ export async function main(args) {
     console.error(`act: '${opts.action}' needs a value — e.g. forge-cli.mjs act -s=${opts.session} ${opts.action} ${opts.ref} "text"`)
     process.exit(2)
   }
-  if (opts.expect && opts.expectNone) {
-    console.error('act: --expect and --expect-none are contradictory; declare one')
-    process.exit(2)
+  // A removed flag is worth naming rather than filing under "unknown": drivers
+  // reached for it, and the reason it's gone is the point.
+  for (const f of opts.unknownFlags.filter(f => /^--expect/.test(f))) {
+    console.error(`act: '${f}' no longer exists — act never predicts an outcome. It reports the gate candidates it actually observed; pick one from the block it prints.`)
   }
-  for (const f of opts.unknownFlags) {
+  for (const f of opts.unknownFlags.filter(f => !/^--expect/.test(f))) {
     console.error(`act: '${f}' is not an act flag — ignored. act prints a summary already; read its output whole rather than piping it through \`tail\`.`)
   }
 
@@ -492,21 +503,18 @@ export async function main(args) {
   const changes = parseObserveChanges(viewBody, rebaselined)
   const { transient, unlisted } = partitionLog(log || [], viewNames(viewBody))
 
-  const expect = parseExpect(opts.expect)
-  let verdict = null
-  if (expect) verdict = matches(expect, [...transient, ...unlisted, ...changes]) ? 'SATISFIED' : 'VIOLATED'
-  else if (opts.expectNone) {
-    // A navigation is itself a change, so it can never satisfy "expect none"
-    // even when the destination happens to render a quiet page.
-    verdict = (!navigated && transient.length === 0 && unlisted.length === 0 && changes.length === 0)
-      ? 'SATISFIED' : 'VIOLATED'
-  }
+  const candidates = gateCandidates([...transient, ...unlisted, ...changes], { navigated, url: res.data.url })
+  // Structural, undeclared: nothing measurable happened. This is the escalation
+  // trigger that survives dropping prospective expectations — the engine's
+  // "K consecutive no-effect actions" needs no prediction to detect, so it
+  // can't bias the action toward an outcome the way declaring one did.
+  const noEffect = !navigated && transient.length === 0 && unlisted.length === 0 && changes.length === 0
 
   // ORDER IS LOAD-BEARING: longest first, most important last.
   //
   // Drivers habitually pipe a command through `tail -N`, which keeps the END of
   // the output. With the summary printed first it was the part that got cut —
-  // observed costing real damage: a driver never saw its own SATISFIED verdict,
+  // observed costing real damage: a driver never saw its own action's result,
   // re-ran an add-to-cart, and double-added the item; and the echo block was
   // truncated out of the transcript, so the curator could not read the code it
   // authors snippets from and had to reconstruct locators from the view.
@@ -536,7 +544,7 @@ export async function main(args) {
   ]
   if (navigated) bits.push('navigated')
   if (error) bits.push(`action error: ${error}`)
-  if (verdict) bits.push(`expect ${opts.expectNone ? 'none' : opts.expect}: ${verdict}`)
+  if (noEffect) bits.push('NO OBSERVABLE EFFECT')
   console.log(`# act: ${bits.join(' | ')}`)
 
   // The trace echo, in the shape read-trace already extracts. Redacted on the
@@ -546,23 +554,19 @@ export async function main(args) {
   console.log('### Ran Playwright code')
   console.log('```js')
   console.log(redact(code, map))
-  // A declared expectation was genuinely checked, so its wait belongs in the
-  // block as code — that is what the curator lifts into the snippet, and it is
-  // the difference between a snippet that gates on its outcome and a bare click
-  // that races. An UNdeclared postcondition is a hypothesis about what to wait
-  // for next time, so it is offered as a marked comment instead: echoing it as
-  // code would present a check that never ran as one that did.
-  if (verdict === 'SATISFIED' && expect) {
-    console.log(redact(assertionFor({ role: expect.role, name: expect.text ?? '' }), map))
-  } else if (!expect && !opts.expectNone) {
-    const pc = suggestPostcondition([...transient, ...unlisted, ...changes], { navigated, url: res.data.url })
-    if (pc) {
-      const line = pc.kind === 'url' ? pc.assertion : assertionFor(pc)
-      console.log(`// forge: suggested postcondition (observed, not asserted) — ${redact(line, map)}`)
-    }
+  // Candidates are comments, never code: none of them ran. `act` settled and
+  // watched, but it did not evaluate these as assertions, and emitting them as
+  // code would claim a check that never happened.
+  if (candidates.length) {
+    console.log(`// forge: gate candidates — all OBSERVED after this action; pick one for the snippet:`)
+    candidates.forEach((c, i) => console.log(`//   ${i + 1}. [${c.tier}] ${redact(candidateLine(c), map)}`))
+  } else if (noEffect) {
+    console.log('// forge: no gate candidate — nothing observable changed after this action.')
+  } else {
+    console.log('// forge: no durable gate candidate — what changed was instance content only.')
   }
   console.log('```')
 
   if (error) process.exit(3)
-  process.exit(verdict === 'VIOLATED' ? 6 : 0)
+  process.exit(0)
 }

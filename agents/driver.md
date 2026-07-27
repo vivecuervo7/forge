@@ -165,19 +165,20 @@ node <PLUGIN_ROOT>/scripts/forge-cli.mjs act -s=<SESSION_NAME> click e3
 - **Transients** — a toast or `role=alert` flash that lived a few hundred ms is reported (`! …  (gone by now)`) even though nothing is on screen by the time you read it.
 - **Off-view causes** — content that appeared but whose role the filtered view drops (a validation message rendered as a heading, a status line as a paragraph) is listed too. This is routinely the thing that explains *why* an action did what it did.
 
-**Declare the outcome you expect** and the verdict comes back decided, so you read a fact rather than squinting at a diff:
+**`act` never predicts an outcome, and there is no way to declare one.** After each action it reports the gate candidates it *actually observed*, best-first, for the curator to choose from:
 
 ```bash
-node <PLUGIN_ROOT>/scripts/forge-cli.mjs act -s=<SESSION_NAME> fill e11 "$ADMIN_USERNAME"
-node <PLUGIN_ROOT>/scripts/forge-cli.mjs act -s=<SESSION_NAME> click e15 --expect='alert:added to cart'
-# → # act: … | settled in 512ms | expect alert:added to cart: SATISFIED
+node <PLUGIN_ROOT>/scripts/forge-cli.mjs act -s=<SESSION_NAME> click e15
+# → // forge: gate candidates — all OBSERVED after this action; pick one for the snippet:
+#   //   1. [live region] await expect(page.getByRole('alert', { name: "Product added to shopping cart." })).toBeVisible();
+#   //   2. [landmark]    await expect(page.getByRole('button', { name: "Compare" })).toBeVisible();
 ```
 
-`--expect=<role>[:<text>]` matches against the transients *and* the settled view, so a signal that flashed counts as readily as one that stuck; `--expect-none` asserts the page stays quiet, which is the one reading a bare observe can't express — it turns "nothing happened" from an ambiguous absence into a confirmed observation. A violated expectation exits **6**, so it's a signal you're handed rather than one you have to notice. Treat a violation as the moment to look, not to press on.
+This is deliberate, and it is why you get a shortlist rather than a verdict. Naming a signal in advance drags the run toward your own guess — and even when the guessed thing does happen, it needn't be the *best* thing to wait on, so a confirmed guess quietly forecloses a better gate sitting in the same diff. Ranking is by durability (live region → navigation → landmark), but it's a hint: the curator picks, holding context you don't have at action time. An empty list is a real answer too — a snippet with no gate and an honest caveat beats a confident wrong one.
 
-**Declare an expectation when you have a real prediction** — reuse, a flow you know, a step the user just taught you. **On novel ground, declare nothing and let the page tell you**: `act` still watches, settles, and reports, and it *suggests* the postcondition itself from what genuinely occurred, ranked for durability (a live region, then a navigation, then a stable landmark — never a price or an item name, which pass this run and fail the next). A suggestion is bounded to observation by construction, so it can't invent a wait for something that never happened. Guessing an expectation you don't hold is worse than omitting it.
+Candidates are always comments, never code: `act` settled and watched, but it did not evaluate them as assertions.
 
-Either way the outcome reaches the snippet, which is the point: a declared expectation was genuinely checked so it echoes as code the curator lifts, while a suggestion echoes as a marked comment — a hypothesis about what to wait for next time, never presented as a check that ran. This is what stops a snippet being authored as a bare click that races on the next run.
+**`NO OBSERVABLE EFFECT` in the header is your structural stuck-signal.** It means nothing measurable changed — no transient, no view change, no navigation. One is worth a look; several in a row means you're driving a page that isn't responding to you, and that's the moment to re-observe or check in with the lead rather than press on. You don't have to notice it yourself; the header says it.
 
 `act` covers the common verbs (`click`, `fill`, `type`, `press`, `select`, `hover`, `check`, `goto`). Anything outside that set is still `forge-pw` or `run-code` as before.
 

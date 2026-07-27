@@ -97,12 +97,19 @@ When collaborativeness is high (teaching) the user may steer your library decisi
 
 **Preserve what the driver actually ran.** Lift the echoed Playwright code and `run-code` bodies from the trace **verbatim** — same selectors, same waits, same `dispatchEvent`. Parameterize only the literal values that vary (`'sauce-labs-backpack'` → `args.item`). Refine a locator only when it's fragile by inspection (or `curator.md` points you to documented selector vocabulary worth preferring). Don't fabricate a cleaner version; the working code is the durable code.
 
-**Give every snippet the gate the drive relied on.** A snippet that acts without waiting for its own outcome races on the next run — the commonest way a library snippet turns flaky. The trace tells you what to wait for, in one of two shapes:
+**Give every snippet the gate the drive relied on — you make that call.** A snippet that acts without waiting for its own outcome races on the next run: the commonest way a library snippet turns flaky. After each action `act` prints a shortlist of what it *actually observed*:
 
-- An `await expect(...)` line inside the echoed block is a check that **actually ran** — lift it verbatim, like any other line.
-- A `// forge: suggested postcondition (observed, not asserted)` comment is `act` reporting the most durable signal it *saw* after the action. **Promote it to real code** in the snippet body — that's what it's for. It stays a comment in the trace because it was never executed; encoding it is your call to make.
+```
+// forge: gate candidates — all OBSERVED after this action; pick one for the snippet:
+//   1. [live region] await expect(page.getByRole('alert', { name: "Product added…" })).toBeVisible();
+//   2. [landmark]    await expect(page.getByRole('button', { name: "Compare" })).toBeVisible();
+```
 
-Prefer the signal that survives different inputs: a live region, a navigation, or a control that always appears. A price, an item name, or a row's contents verifies this one run and breaks the next — parameterize such a value or wait on something stabler. When neither shape is present and the action clearly has an outcome worth gating (a submit, a create, an add-to-cart), say so in the snippet's caveats rather than inventing a wait the drive never observed.
+**Pick one and promote it to real code** in the snippet body. They arrive as comments because none of them ran — `act` settled and watched, but never evaluated them as assertions — so encoding one is your decision, not a transcription.
+
+It's a shortlist rather than a single pick because the choice needs what only you know: what the snippet is *for*, which values get parameterized, whether the flow is reused across products or users. The `[tier]` ordering is a hint from role alone. Prefer the signal that survives different inputs — a live region, a navigation, a control that always appears. A price, an item name, or a row's contents verifies this one run and breaks the next; note that a product's own heading can show up tiered as a landmark, and it is still instance content.
+
+**An empty list, or `NO OBSERVABLE EFFECT`, is a real answer.** When the action clearly has an outcome worth gating (a submit, a create, an add-to-cart) but nothing durable was observed, say so in the snippet's caveats. A snippet with no gate and an honest caveat is worth more than a confident wrong wait — and inventing one the drive never saw is exactly the fabrication the verbatim rule exists to prevent.
 
 **Primitives (`_`-prefixed files) are the one sanctioned refactor.** Files like `snippets/_wait-until-stable.ts` are shared helpers — no `meta`, excluded from the INDEX, *imported* by snippets rather than invoked. When the driver's trace shows a hand-rolled settle loop (poll-until-unchanged, retry-until-count), bake it into the snippet as a composition of the existing primitive — same reads, same thresholds, expressed through `waitUntilStable(...)` — instead of preserving the loop's scaffolding literally. Author a *new* primitive only when the same mechanism has recurred across snippets; the mechanism itself must still come verbatim from traces.
 

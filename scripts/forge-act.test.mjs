@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // forge-act.test.mjs — the pure parts of the watched-action verb: argument
-// parsing, expectation matching, mutation-log partitioning, and the run-code
+// parsing, gate-candidate ranking, mutation-log partitioning, and the run-code
 // body it builds. Everything here is a pure transform (no browser, no spawn),
 // so it's unit-tested by import; the in-page half is exercised by driving a
 // real session.
@@ -9,9 +9,9 @@
 // Exit 0 = all cases pass; 1 = failures (each printed).
 
 import {
-  parseArgs, parseExpect, matches, partitionLog, viewNames,
+  parseArgs, partitionLog, viewNames,
   parseObserveChanges, isBaselineView, buildBody, playwrightCode,
-  assertionFor, suggestPostcondition, urlAssertion, looksDynamicId,
+  assertionFor, gateCandidates, candidateLine, urlAssertion, looksDynamicId,
 } from './lib/act.mjs'
 
 let failures = 0
@@ -36,33 +36,22 @@ eq('fill: value is the third positional', fillArgs.value, 'standard_user')
 const gotoArgs = parseArgs(['-s=demo', 'goto', 'https://example.com'])
 eq('goto: url lands in value, not ref', [gotoArgs.ref, gotoArgs.value], [null, 'https://example.com'])
 
-const optArgs = parseArgs(['-s=demo', 'click', 'e1', '--expect=alert:saved', '--quiet=250', '--timeout=3000'])
-eq('options parse', [optArgs.expect, optArgs.quiet, optArgs.timeout], ['alert:saved', 250, 3000])
-eq('--expect-none is a flag', parseArgs(['--expect-none']).expectNone, true)
+const optArgs = parseArgs(['-s=demo', 'click', 'e1', '--quiet=250', '--timeout=3000'])
+eq('options parse', [optArgs.quiet, optArgs.timeout], [250, 3000])
 eq('--session= long form', parseArgs(['--session=demo']).session, 'demo')
+
+// act deliberately has no way to declare an expected outcome. A driver reaching
+// for the removed flag is told why, rather than having it silently dropped.
+eq('a removed --expect flag is caught', parseArgs(['-s=d', 'click', 'e1', '--expect=alert']).unknownFlags, ['--expect=alert'])
 
 // A flag act doesn't have was silently dropped in a real drive, so it looked
 // honoured. It's collected and reported instead.
 eq('an unknown flag is collected, not silently dropped', parseArgs(['-s=d', 'click', 'e1', '--json']).unknownFlags, ['--json'])
 eq('an unknown flag does not become a positional', parseArgs(['-s=d', 'click', 'e1', '--json']).ref, 'e1')
-eq('known flags are not reported as unknown', parseArgs(['-s=d', 'click', 'e1', '--raw', '--expect=alert']).unknownFlags, [])
+eq('known flags are not reported as unknown', parseArgs(['-s=d', 'click', 'e1', '--raw', '--quiet=100']).unknownFlags, [])
 
 // A value that looks like a flag must survive as a value.
 eq('value beginning with a dash is not eaten', parseArgs(['-s=d', 'fill', 'e1', '-5']).value, '-5')
-
-// --- expectation parsing + matching ---
-
-eq('role only', parseExpect('alert'), { role: 'alert', text: null })
-eq('role:text', parseExpect('alert:Saved'), { role: 'alert', text: 'saved' })
-eq('empty text after colon is treated as absent', parseExpect('alert:'), { role: 'alert', text: null })
-eq('no expectation', parseExpect(null), null)
-
-const cands = [{ role: 'alert', name: 'Item added to cart' }, { role: 'button', name: 'Checkout' }]
-eq('role match', matches(parseExpect('alert'), cands), true)
-eq('role+substring match is case-insensitive', matches(parseExpect('alert:ADDED'), cands), true)
-eq('right role, wrong text', matches(parseExpect('alert:removed'), cands), false)
-eq('wrong role', matches(parseExpect('status'), cands), false)
-eq('no candidates', matches(parseExpect('alert'), []), false)
 
 // --- mutation-log partitioning ---
 
@@ -206,34 +195,55 @@ eq(
   `await expect(page.getByText("1")).toBeVisible();`,
 )
 
-// Ranking: durability across runs, not whatever changed first.
+// Gate candidates: a ranked SHORTLIST, never a single pick. Offering one pick
+// reads as a decision already made and hides that there was a trade-off; the
+// curator chooses knowing what the snippet is for.
+
+const tiersOf = list => list.map(c => c.tier)
+
 eq(
-  'a live region outranks a landmark',
-  suggestPostcondition([
+  'ranked live region → navigation → landmark',
+  tiersOf(gateCandidates(
+    [{ role: 'button', name: 'Remove' }, { role: 'alert', name: 'Product added to shopping cart.' }],
+    { navigated: true, url: 'https://shop.test/checkout' },
+  )),
+  ['live region', 'navigation', 'landmark'],
+)
+eq(
+  'the best candidate leads',
+  candidateLine(gateCandidates([
     { role: 'button', name: 'Remove' },
     { role: 'alert', name: 'Product added to shopping cart.' },
-  ]),
-  { kind: 'role', role: 'alert', name: 'Product added to shopping cart.' },
+  ])[0]),
+  `await expect(page.getByRole('alert', { name: "Product added to shopping cart." })).toBeVisible();`,
 )
 eq(
-  'a navigation outranks a landmark when no live region appeared',
-  suggestPostcondition([{ role: 'button', name: 'Remove' }], { navigated: true, url: 'https://shop.test/inventory.html' }),
-  { kind: 'url', assertion: `await expect(page).toHaveURL(/\\/inventory\\.html\\/?$/);` },
-)
-eq(
-  'a landmark is taken when nothing better occurred',
-  suggestPostcondition([{ role: 'span', name: '1' }, { role: 'button', name: 'Remove' }]),
-  { kind: 'role', role: 'button', name: 'Remove' },
+  'a navigation is offered when no live region appeared',
+  gateCandidates([{ role: 'button', name: 'Remove' }], { navigated: true, url: 'https://shop.test/inventory.html' })[0],
+  { kind: 'url', assertion: `await expect(page).toHaveURL(/\\/inventory\\.html\\/?$/);`, tier: 'navigation' },
 )
 
-// Instance content verifies this run and breaks the next one.
+// A short list is better than a padded one; three is the cap.
+check('the shortlist is capped at three', gateCandidates(
+  Array.from({ length: 9 }, (_, i) => ({ role: 'button', name: `B${i}` })),
+).length === 3)
 eq(
-  'content roles are excluded outright',
-  suggestPostcondition([{ role: 'img', name: 'Backpack photo' }, { role: 'gridcell', name: '$29.99' }]),
-  null,
+  'duplicates collapse rather than filling the list',
+  gateCandidates([
+    { role: 'alert', name: 'Saved' }, { role: 'alert', name: 'Saved' }, { role: 'button', name: 'Close' },
+  ]).length,
+  2,
 )
-eq('nothing observed → nothing suggested', suggestPostcondition([]), null)
-eq('a nameless change is not a signal', suggestPostcondition([{ role: 'alert', name: '' }]), null)
+
+// An empty shortlist is a real answer — better no gate plus a caveat than a
+// confident wrong one.
+eq(
+  'instance content yields no candidate at all',
+  gateCandidates([{ role: 'img', name: 'Backpack photo' }, { role: 'gridcell', name: '$29.99' }]),
+  [],
+)
+eq('nothing observed → no candidates', gateCandidates([]), [])
+eq('a nameless change is not a signal', gateCandidates([{ role: 'alert', name: '' }]), [])
 
 // URL waits: an id that varies per run makes a useless assertion.
 check('a numeric segment is dynamic', looksDynamicId('12345'))
