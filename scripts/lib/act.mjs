@@ -81,6 +81,7 @@ export function parseArgs(argv) {
   const opts = {
     session: null, action: null, ref: null, value: null,
     expect: null, expectNone: false, quiet: 500, timeout: 8000, raw: false,
+    unknownFlags: [],
   }
   const positional = []
   for (const a of argv) {
@@ -91,7 +92,13 @@ export function parseArgs(argv) {
     else if (a.startsWith('--timeout=')) opts.timeout = Number(a.slice('--timeout='.length))
     else if (a.startsWith('--session=')) opts.session = a.slice('--session='.length)
     else if (a.startsWith('-s=')) opts.session = a.slice('-s='.length)
-    else if (!a.startsWith('--')) positional.push(a)
+    // Noted rather than ignored: a flag `act` doesn't have was silently dropped
+    // in a real drive (`--json`, reached for when the driver couldn't see its
+    // own verdict), so it looked honoured and the driver drew a false
+    // conclusion. Note it on stderr and carry on — forge-pw's near-miss
+    // treatment — rather than failing and costing a round.
+    else if (a.startsWith('--')) opts.unknownFlags.push(a)
+    else positional.push(a)
   }
   opts.action = positional[0] ?? null
   if (opts.action && NO_REF.has(opts.action)) {
@@ -359,9 +366,20 @@ const ARIA_ROLES = new Set([
   'status', 'switch', 'tab', 'table', 'tabpanel', 'textbox', 'tooltip', 'treeitem',
 ])
 
-// Path segments that vary per run — an id in a URL makes a useless assertion.
+// Path segments that vary per run — an id baked into a URL assertion makes it
+// pass once and fail forever after.
+//
+// The last clause is the general catch: any long unbroken alphanumeric run that
+// contains a digit is an opaque identifier, whatever the encoding. Enumerating
+// formats does not hold — a real ULID (`01KYGVP859P19531MVQQ0Q4RHP`) slipped
+// through a digits/hex/UUID check and hard-coded one product into a suggested
+// wait. Real path words stay clear of it: they're shorter, or hyphenated or
+// dotted (`sauce-labs-backpack`, `inventory.html`), or carry no digit at all.
 export function looksDynamicId(seg) {
-  return /^\d+$/.test(seg) || /^[0-9a-f]{8}-[0-9a-f]{4}/i.test(seg) || /^[0-9a-f]{12,}$/i.test(seg)
+  if (/^\d+$/.test(seg)) return true // 42
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(seg)) return true // uuid
+  if (/^[0-9a-f]{12,}$/i.test(seg)) return true // long hex
+  return seg.length >= 16 && /^[0-9A-Za-z]+$/.test(seg) && /\d/.test(seg) // ulid, nanoid, opaque
 }
 
 export function urlAssertion(url) {
@@ -446,6 +464,9 @@ export async function main(args) {
     console.error('act: --expect and --expect-none are contradictory; declare one')
     process.exit(2)
   }
+  for (const f of opts.unknownFlags) {
+    console.error(`act: '${f}' is not an act flag — ignored. act prints a summary already; read its output whole rather than piping it through \`tail\`.`)
+  }
 
   // Resolve the semantic locator BEFORE acting — after the action the ref may
   // be stale, or the element gone.
@@ -481,11 +502,47 @@ export async function main(args) {
       ? 'SATISFIED' : 'VIOLATED'
   }
 
+  // ORDER IS LOAD-BEARING: longest first, most important last.
+  //
+  // Drivers habitually pipe a command through `tail -N`, which keeps the END of
+  // the output. With the summary printed first it was the part that got cut —
+  // observed costing real damage: a driver never saw its own SATISFIED verdict,
+  // re-ran an add-to-cart, and double-added the item; and the echo block was
+  // truncated out of the transcript, so the curator could not read the code it
+  // authors snippets from and had to reconstruct locators from the view.
+  //
+  // So the bulky settled view goes first (it is the most re-derivable part — one
+  // `observe` brings it back), and the verdict plus the trace echo go last,
+  // where `tail` preserves them.
+  const map = buildRedactMap()
+  console.log(view || '# act: no view (observe returned nothing)')
+
+  if (transient.length || unlisted.length) {
+    console.log('# seen during the action, and NOT in the settled view above:')
+    for (const t of transient) console.log(`  ! ${t.role} ${JSON.stringify(t.name)}   (gone by now)`)
+    for (const u of unlisted) console.log(`  + ${u.role} ${JSON.stringify(u.name)}`)
+  } else if (navigated) {
+    console.log('# not tracked across a navigation (the diff above carries the change)')
+  }
+  if (opts.raw && log?.length) {
+    console.log('# raw mutation log:')
+    for (const e of log) console.log(`  ${e.edge === 'appeared' ? '+' : '-'} ${e.role} ${JSON.stringify(e.name)}`)
+  }
+
+  const bits = [
+    `session=${opts.session}`,
+    `${opts.action}${opts.ref ? ` ${opts.ref}` : ''}`,
+    settled ? `settled in ${settleMs}ms` : `UNSETTLED after ${settleMs}ms`,
+  ]
+  if (navigated) bits.push('navigated')
+  if (error) bits.push(`action error: ${error}`)
+  if (verdict) bits.push(`expect ${opts.expectNone ? 'none' : opts.expect}: ${verdict}`)
+  console.log(`# act: ${bits.join(' | ')}`)
+
   // The trace echo, in the shape read-trace already extracts. Redacted on the
   // same terms as forge-pw's own output: `act` prints this line itself, so an
   // env-sourced value would otherwise reach the transcript in the clear.
   const code = playwrightCode(opts, locator)
-  const map = buildRedactMap()
   console.log('### Ran Playwright code')
   console.log('```js')
   console.log(redact(code, map))
@@ -505,29 +562,6 @@ export async function main(args) {
     }
   }
   console.log('```')
-
-  const bits = [
-    `session=${opts.session}`,
-    `${opts.action}${opts.ref ? ` ${opts.ref}` : ''}`,
-    settled ? `settled in ${settleMs}ms` : `UNSETTLED after ${settleMs}ms`,
-  ]
-  if (navigated) bits.push('navigated')
-  if (error) bits.push(`action error: ${error}`)
-  if (verdict) bits.push(`expect ${opts.expectNone ? 'none' : opts.expect}: ${verdict}`)
-  console.log(`# act: ${bits.join(' | ')}`)
-
-  if (transient.length || unlisted.length) {
-    console.log('# seen during the action, and NOT in the settled view below:')
-    for (const t of transient) console.log(`  ! ${t.role} ${JSON.stringify(t.name)}   (gone by now)`)
-    for (const u of unlisted) console.log(`  + ${u.role} ${JSON.stringify(u.name)}`)
-  } else if (navigated) {
-    console.log('# not tracked across a navigation (the diff below carries the change)')
-  }
-  if (opts.raw && log?.length) {
-    console.log('# raw mutation log:')
-    for (const e of log) console.log(`  ${e.edge === 'appeared' ? '+' : '-'} ${e.role} ${JSON.stringify(e.name)}`)
-  }
-  console.log(view || '# act: no view (observe returned nothing)')
 
   if (error) process.exit(3)
   process.exit(verdict === 'VIOLATED' ? 6 : 0)

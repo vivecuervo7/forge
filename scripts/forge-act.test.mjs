@@ -41,6 +41,12 @@ eq('options parse', [optArgs.expect, optArgs.quiet, optArgs.timeout], ['alert:sa
 eq('--expect-none is a flag', parseArgs(['--expect-none']).expectNone, true)
 eq('--session= long form', parseArgs(['--session=demo']).session, 'demo')
 
+// A flag act doesn't have was silently dropped in a real drive, so it looked
+// honoured. It's collected and reported instead.
+eq('an unknown flag is collected, not silently dropped', parseArgs(['-s=d', 'click', 'e1', '--json']).unknownFlags, ['--json'])
+eq('an unknown flag does not become a positional', parseArgs(['-s=d', 'click', 'e1', '--json']).ref, 'e1')
+eq('known flags are not reported as unknown', parseArgs(['-s=d', 'click', 'e1', '--raw', '--expect=alert']).unknownFlags, [])
+
 // A value that looks like a flag must survive as a value.
 eq('value beginning with a dash is not eaten', parseArgs(['-s=d', 'fill', 'e1', '-5']).value, '-5')
 
@@ -233,6 +239,15 @@ eq('a nameless change is not a signal', suggestPostcondition([{ role: 'alert', n
 check('a numeric segment is dynamic', looksDynamicId('12345'))
 check('a uuid segment is dynamic', looksDynamicId('3f2504e0-4f89-11d3-9a0c-0305e82c3301'))
 check('a word segment is not dynamic', !looksDynamicId('inventory'))
+// A real ULID slipped a digits/hex/UUID check and hard-coded one product into a
+// suggested wait, so the rule is now "long opaque alphanumeric run with a digit"
+// rather than an enumeration of formats.
+check('a ULID segment is dynamic', looksDynamicId('01KYGVP859P19531MVQQ0Q4RHP'))
+check('a nanoid-ish segment is dynamic', looksDynamicId('V1StGXR8Z5jdHi6BmyT'))
+check('a hyphenated slug is not dynamic', !looksDynamicId('sauce-labs-backpack'))
+check('a dotted filename is not dynamic', !looksDynamicId('inventory.html'))
+check('a long digitless word is not dynamic', !looksDynamicId('administratorsettings'))
+check('a short versioned segment is not dynamic', !looksDynamicId('v2'))
 eq(
   'a dynamic segment is generalised, with every separator escaped',
   urlAssertion('https://shop.test/product/98765/detail'),
