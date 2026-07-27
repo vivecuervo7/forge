@@ -12,6 +12,7 @@ import {
   parseArgs, partitionLog, viewNames,
   parseObserveChanges, isBaselineView, buildBody, playwrightCode,
   assertionFor, gateCandidates, candidateLine, urlAssertion, looksDynamicId, gateTimeout,
+  isRef, asSelector, locatorFor,
 } from './lib/act.mjs'
 
 let failures = 0
@@ -27,14 +28,14 @@ function eq(name, got, want) {
 // --- argument parsing ---
 
 const clickArgs = parseArgs(['-s=demo', 'click', 'e12'])
-eq('click: session/action/ref', [clickArgs.session, clickArgs.action, clickArgs.ref], ['demo', 'click', 'e12'])
+eq('click: session/action/target', [clickArgs.session, clickArgs.action, clickArgs.target], ['demo', 'click', 'e12'])
 
 const fillArgs = parseArgs(['-s=demo', 'fill', 'e3', 'standard_user'])
 eq('fill: value is the third positional', fillArgs.value, 'standard_user')
 
 // goto takes a URL where a ref would otherwise sit.
 const gotoArgs = parseArgs(['-s=demo', 'goto', 'https://example.com'])
-eq('goto: url lands in value, not ref', [gotoArgs.ref, gotoArgs.value], [null, 'https://example.com'])
+eq('goto: url lands in value, not target', [gotoArgs.target, gotoArgs.value], [null, 'https://example.com'])
 
 const optArgs = parseArgs(['-s=demo', 'click', 'e1', '--quiet=250', '--timeout=3000'])
 eq('options parse', [optArgs.quiet, optArgs.timeout], [250, 3000])
@@ -47,7 +48,7 @@ eq('a removed --expect flag is caught', parseArgs(['-s=d', 'click', 'e1', '--exp
 // A flag act doesn't have was silently dropped in a real drive, so it looked
 // honoured. It's collected and reported instead.
 eq('an unknown flag is collected, not silently dropped', parseArgs(['-s=d', 'click', 'e1', '--json']).unknownFlags, ['--json'])
-eq('an unknown flag does not become a positional', parseArgs(['-s=d', 'click', 'e1', '--json']).ref, 'e1')
+eq('an unknown flag does not become a positional', parseArgs(['-s=d', 'click', 'e1', '--json']).target, 'e1')
 eq('known flags are not reported as unknown', parseArgs(['-s=d', 'click', 'e1', '--raw', '--quiet=100']).unknownFlags, [])
 
 // A value that looks like a flag must survive as a value.
@@ -121,9 +122,48 @@ check('full (baseline) is a baseline', isBaselineView('# observe: s=x | 3 intera
 check('full+marks is NOT a baseline', !isBaselineView('# observe: s=x | 4 interactable, 0 signal | full+marks (1 changed) | ~9 tok'))
 check('diff is NOT a baseline', !isBaselineView('# observe: s=x | 4 interactable, 0 signal | diff (2 changes) | ~9 tok'))
 
+// --- targets: a ref OR a selector ---
+//
+// Taking only refs meant a driver wanting the generalisable form had to drop to
+// `run-code`, losing the watched window and the gate candidates on exactly the
+// actions most worth capturing.
+
+check('an observe ref is recognised', isRef('e12'))
+check('a multi-digit ref is recognised', isRef('e1652'))
+check('a css selector is not a ref', !isRef('[data-test="product-name"]'))
+check('a selector that merely starts with e is not a ref', !isRef('em.price'))
+check('an empty target is not a ref', !isRef(''))
+
+eq('a ref becomes an aria-ref selector', asSelector('e12'), 'aria-ref=e12')
+eq('a selector passes through untouched', asSelector('[data-test="row"] >> nth=0'), '[data-test="row"] >> nth=0')
+
+eq(
+  'buildBody targets a ref through the aria-ref engine',
+  buildBody({ action: 'click', target: 'e12', value: null, quiet: 1, timeout: 1 }).includes('"aria-ref=e12"'),
+  true,
+)
+eq(
+  'buildBody targets a selector verbatim',
+  buildBody({ action: 'click', target: '[data-test="product-name"] >> nth=0', value: null, quiet: 1, timeout: 1 })
+    .includes(JSON.stringify('[data-test="product-name"] >> nth=0')),
+  true,
+)
+
+// A supplied selector is already durable, so there is nothing to resolve — and
+// crucially no subprocess to spawn, so this is safe to assert without a session.
+const SEL = '[data-test="product-name"] >> nth=0'
+eq('a selector needs no resolution and is echoed as given', locatorFor('no-such-session', SEL), `locator(${JSON.stringify(SEL)})`)
+eq('an empty target resolves to nothing', locatorFor('s', null), null)
+
+eq(
+  'a selector target echoes durable code with no unresolved-ref marker',
+  playwrightCode({ action: 'click', target: SEL, value: null }, `locator(${JSON.stringify(SEL)})`),
+  `await page.locator(${JSON.stringify(SEL)}).click();`,
+)
+
 // --- the generated run-code body ---
 
-const body = buildBody({ action: 'click', ref: 'e12', value: null, quiet: 500, timeout: 8000 })
+const body = buildBody({ action: 'click', target: 'e12', value: null, quiet: 500, timeout: 8000 })
 check('body is a page arrow function', body.startsWith('async page => {'))
 check('ref resolves through the aria-ref engine', body.includes('aria-ref=e12'))
 check('observer is installed before the action', body.indexOf('MutationObserver') < body.indexOf('.click()'))
@@ -132,10 +172,10 @@ check('settle is bounded by the timeout', body.includes('< 8000'))
 
 // Values are JSON-embedded, so quotes and backslashes can't break out of the
 // generated source.
-const tricky = buildBody({ action: 'fill', ref: 'e3', value: 'a"b\\c', quiet: 500, timeout: 8000 })
+const tricky = buildBody({ action: 'fill', target: 'e3', value: 'a"b\\c', quiet: 500, timeout: 8000 })
 check('a value with quotes/backslashes is safely embedded', tricky.includes(JSON.stringify('a"b\\c')))
-check('goto targets the page, not a locator', buildBody({ action: 'goto', ref: null, value: 'https://example.com', quiet: 1, timeout: 1 }).includes('page.goto("https://example.com")'))
-check('type maps to pressSequentially', buildBody({ action: 'type', ref: 'e3', value: 'hi', quiet: 1, timeout: 1 }).includes('pressSequentially'))
+check('goto targets the page, not a locator', buildBody({ action: 'goto', target: null, value: 'https://example.com', quiet: 1, timeout: 1 }).includes('page.goto("https://example.com")'))
+check('type maps to pressSequentially', buildBody({ action: 'type', target: 'e3', value: 'hi', quiet: 1, timeout: 1 }).includes('pressSequentially'))
 
 // --- the echoed Playwright code ---
 //
@@ -144,32 +184,32 @@ check('type maps to pressSequentially', buildBody({ action: 'type', ref: 'e3', v
 
 eq(
   'click echoes the resolved semantic locator',
-  playwrightCode({ action: 'click', ref: 'e15', value: null }, `locator('[data-test="login-button"]')`),
+  playwrightCode({ action: 'click', target: 'e15', value: null }, `locator('[data-test="login-button"]')`),
   `await page.locator('[data-test="login-button"]').click();`,
 )
 eq(
   'fill echoes its value',
-  playwrightCode({ action: 'fill', ref: 'e3', value: 'standard_user' }, `getByLabel('Username')`),
+  playwrightCode({ action: 'fill', target: 'e3', value: 'standard_user' }, `getByLabel('Username')`),
   `await page.getByLabel('Username').fill("standard_user");`,
 )
 eq(
   'type maps to pressSequentially in the echo too',
-  playwrightCode({ action: 'type', ref: 'e3', value: 'hi' }, `getByLabel('U')`),
+  playwrightCode({ action: 'type', target: 'e3', value: 'hi' }, `getByLabel('U')`),
   `await page.getByLabel('U').pressSequentially("hi");`,
 )
 eq(
   'select maps to selectOption',
-  playwrightCode({ action: 'select', ref: 'e4', value: 'AU' }, `getByRole('combobox')`),
+  playwrightCode({ action: 'select', target: 'e4', value: 'AU' }, `getByRole('combobox')`),
   `await page.getByRole('combobox').selectOption("AU");`,
 )
 eq(
   'goto needs no locator',
-  playwrightCode({ action: 'goto', ref: null, value: 'https://example.com' }, null),
+  playwrightCode({ action: 'goto', target: null, value: 'https://example.com' }, null),
   `await page.goto("https://example.com");`,
 )
 eq(
   'an unresolved ref is echoed, but flagged rather than passed off as durable',
-  playwrightCode({ action: 'click', ref: 'e9', value: null }, null),
+  playwrightCode({ action: 'click', target: 'e9', value: null }, null),
   `await page.locator('aria-ref=e9').click();  // unresolved ref — needs a durable selector`,
 )
 

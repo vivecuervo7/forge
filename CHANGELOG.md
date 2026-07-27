@@ -40,6 +40,12 @@ spec composed from a watched drive verified cold on the first round.
   carry a timeout derived from the measured settle. An empty shortlist is a
   real answer — a snippet with no gate and an honest caveat beats a confident
   wrong one.
+- **`act` targets a ref *or* a selector.** A ref is per-snapshot and never
+  survives into a snippet; a selector is what the curator can keep. Taking only
+  refs meant a driver reaching for the generalisable form had to drop to
+  `run-code` — losing the watched window and the gate candidates on exactly the
+  actions most worth capturing, which is what happened on the measured
+  spec-mode drive.
 - **`NO OBSERVABLE EFFECT`** is reported structurally when nothing measurable
   changed — a stuck-signal that needs no prediction and so can't bias anything.
 - **Curator:** promote a chosen candidate to real code, keep the

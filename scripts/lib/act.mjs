@@ -25,11 +25,11 @@
 // mid-render one.
 //
 // Usage:
-//   forge-cli.mjs act -s=<name> click <ref> [options]
-//   forge-cli.mjs act -s=<name> fill <ref> <value> [options]
-//   forge-cli.mjs act -s=<name> press <ref> <key> [options]
-//   forge-cli.mjs act -s=<name> select <ref> <value> [options]
-//   forge-cli.mjs act -s=<name> hover|check|uncheck <ref> [options]
+//   forge-cli.mjs act -s=<name> click <target> [options]
+//   forge-cli.mjs act -s=<name> fill <target> <value> [options]
+//   forge-cli.mjs act -s=<name> press <target> <key> [options]
+//   forge-cli.mjs act -s=<name> select <target> <value> [options]
+//   forge-cli.mjs act -s=<name> hover|check|uncheck <target> [options]
 //   forge-cli.mjs act -s=<name> goto <url> [options]
 //
 //   -s=<name> / --session=<name>   the playwright-cli session (required)
@@ -60,8 +60,16 @@
 // changed, which is the engine's "K consecutive no-effect actions" escalation
 // trigger and cannot bias anything, because it names no signal.
 //
-// Refs are the ones `observe` prints — resolved via Playwright's `aria-ref`
-// selector engine — so the two verbs are interchangeable in the same session.
+// A <target> is either an `observe` ref (`e12`, resolved through Playwright's
+// `aria-ref` engine, so the two verbs are interchangeable in one session) or
+// any Playwright selector (`[data-test="product-name"] >> nth=0`). Both are
+// accepted because they serve different ends: a ref is the cheap way to act on
+// what you just saw, while a selector is what survives into a snippet. Taking
+// only refs meant a driver wanting the generalisable form had to drop to
+// `run-code` — losing the watched window and the gate candidates on exactly the
+// actions most worth capturing. A supplied selector needs no resolution: it is
+// already durable, so it is echoed as given.
+//
 // The settled view is taken through `observe --live` rather than snapshotted
 // in-page, which keeps ref numbering and the change-marker baseline shared
 // between them.
@@ -78,14 +86,23 @@ import { buildRedactMap, redact } from './pw.mjs'
 
 const FORGE_CLI = join(dirname(fileURLToPath(import.meta.url)), '..', 'forge-cli.mjs')
 
-// Actions that take a ref plus a value, vs a ref alone, vs neither.
+// An `observe` ref (`e12`) or any Playwright selector. Refs are per-snapshot
+// and per-instance; a selector is what generalises into a snippet, so `act`
+// has to accept both or it loses the watched window exactly on the actions
+// most likely to become library code. Measured: a driver dropped to `run-code`
+// for `[data-test="product-name"] >> nth=0`, and that action alone produced no
+// gate candidates, leaving the curator to invent one.
+export const isRef = t => /^e\d+$/.test(String(t ?? ''))
+export const asSelector = t => (isRef(t) ? `aria-ref=${t}` : String(t))
+
+// Actions that take a target plus a value, vs a target alone, vs neither.
 const WITH_VALUE = new Set(['fill', 'press', 'select', 'type'])
 const REF_ONLY = new Set(['click', 'hover', 'check', 'uncheck', 'focus', 'dblclick'])
 const NO_REF = new Set(['goto'])
 
 export function parseArgs(argv) {
   const opts = {
-    session: null, action: null, ref: null, value: null,
+    session: null, action: null, target: null, value: null,
     quiet: 500, timeout: 8000, raw: false,
     unknownFlags: [],
   }
@@ -108,7 +125,7 @@ export function parseArgs(argv) {
   if (opts.action && NO_REF.has(opts.action)) {
     opts.value = positional[1] ?? null
   } else {
-    opts.ref = positional[1] ?? null
+    opts.target = positional[1] ?? null
     opts.value = positional[2] ?? null
   }
   return opts
@@ -117,8 +134,8 @@ export function parseArgs(argv) {
 // The in-page half: install the observer, act, drain, settle. Returned as one
 // `async page => {...}` body for run-code. Values are JSON-embedded so quoting
 // and shell-expansion hazards can't reach the page.
-export function buildBody({ action, ref, value, quiet, timeout }) {
-  const target = ref ? `page.locator(${JSON.stringify(`aria-ref=${ref}`)})` : 'page'
+export function buildBody({ action, target: t, value, quiet, timeout }) {
+  const target = t ? `page.locator(${JSON.stringify(asSelector(t))})` : 'page'
   let call
   if (action === 'goto') call = `await page.goto(${JSON.stringify(value)})`
   else if (action === 'fill') call = `await ${target}.fill(${JSON.stringify(value ?? '')})`
@@ -298,9 +315,12 @@ export function isBaselineView(header) {
 // `generate-locator`, the same resolution its own echoes use). If that fails,
 // the raw ref is echoed with a marker rather than passing a stale handle off as
 // durable — the curator can then see it needs a real selector.
-export function locatorFor(session, ref) {
-  if (!ref) return null
-  const r = spawnSync(process.execPath, [FORGE_CLI, 'pw', '--json', `-s=${session}`, 'generate-locator', ref], { encoding: 'utf8' })
+export function locatorFor(session, target) {
+  if (!target) return null
+  // A selector the driver supplied is already durable — it is not tied to this
+  // snapshot, so there is nothing to resolve and nothing to warn about.
+  if (!isRef(target)) return `locator(${JSON.stringify(target)})`
+  const r = spawnSync(process.execPath, [FORGE_CLI, 'pw', '--json', `-s=${session}`, 'generate-locator', target], { encoding: 'utf8' })
   if (r.status !== 0) return null
   try {
     // `pw --json` returns {"result": "locator('…')"} — the locator is already a
@@ -314,8 +334,8 @@ export function locatorFor(session, ref) {
 // in which case the raw ref is echoed with a trailing marker so the curator can
 // see the selector still needs a durable form, rather than a per-snapshot
 // handle being passed off as one.
-export function playwrightCode({ action, value, ref }, locator) {
-  const target = locator ? `page.${locator}` : `page.locator('aria-ref=${ref}')`
+export function playwrightCode({ action, value, target: t }, locator) {
+  const target = locator ? `page.${locator}` : `page.locator('aria-ref=${t}')`
   const arg = value == null ? '' : JSON.stringify(value)
   let line
   switch (action) {
@@ -473,12 +493,12 @@ export async function main(args) {
     console.error("act: for anything outside this set, drive it with `pw run-code` (act covers the common verbs, not the whole surface)")
     process.exit(2)
   }
-  if (!NO_REF.has(opts.action) && !opts.ref) {
-    console.error(`act: '${opts.action}' needs a ref — e.g. forge-cli.mjs act -s=${opts.session} ${opts.action} e12`)
+  if (!NO_REF.has(opts.action) && !opts.target) {
+    console.error(`act: '${opts.action}' needs a target — an observe ref (e12) or a Playwright selector ('[data-test="row"] >> nth=0')`)
     process.exit(2)
   }
   if (WITH_VALUE.has(opts.action) && opts.value == null) {
-    console.error(`act: '${opts.action}' needs a value — e.g. forge-cli.mjs act -s=${opts.session} ${opts.action} ${opts.ref} "text"`)
+    console.error(`act: '${opts.action}' needs a value — e.g. forge-cli.mjs act -s=${opts.session} ${opts.action} ${opts.target} "text"`)
     process.exit(2)
   }
   // A removed flag is worth naming rather than filing under "unknown": drivers
@@ -492,7 +512,7 @@ export async function main(args) {
 
   // Resolve the semantic locator BEFORE acting — after the action the ref may
   // be stale, or the element gone.
-  const locator = NO_REF.has(opts.action) ? null : locatorFor(opts.session, opts.ref)
+  const locator = NO_REF.has(opts.action) ? null : locatorFor(opts.session, opts.target)
 
   const res = runCode(opts.session, buildBody(opts))
   if (!res.ok) {
@@ -550,7 +570,7 @@ export async function main(args) {
 
   const bits = [
     `session=${opts.session}`,
-    `${opts.action}${opts.ref ? ` ${opts.ref}` : ''}`,
+    `${opts.action}${opts.target ? ` ${opts.target}` : ''}`,
     settled ? `settled in ${settleMs}ms` : `UNSETTLED after ${settleMs}ms`,
   ]
   if (navigated) bits.push('navigated')
