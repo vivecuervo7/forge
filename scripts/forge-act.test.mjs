@@ -11,6 +11,7 @@
 import {
   parseArgs, parseExpect, matches, partitionLog, viewNames,
   parseObserveChanges, isBaselineView, buildBody, playwrightCode,
+  assertionFor, suggestPostcondition, urlAssertion, looksDynamicId,
 } from './lib/act.mjs'
 
 let failures = 0
@@ -176,6 +177,87 @@ eq(
   playwrightCode({ action: 'click', ref: 'e9', value: null }, null),
   `await page.locator('aria-ref=e9').click();  // unresolved ref — needs a durable selector`,
 )
+
+// --- postconditions: the wait a snippet inherits ---
+//
+// Left implicit, the settle `act` performs is invisible to the composed
+// snippet, and the curator authors a bare click that races. These turn the
+// signal the driver already relied on into the gate the snippet waits for.
+
+eq(
+  'an ARIA role becomes a getByRole wait',
+  assertionFor({ role: 'alert', name: 'Added to cart' }),
+  `await expect(page.getByRole('alert', { name: "Added to cart" })).toBeVisible();`,
+)
+eq(
+  'a heading tag maps to the heading role, which is what exists',
+  assertionFor({ role: 'h3', name: 'Username is required' }),
+  `await expect(page.getByRole('heading', { name: "Username is required" })).toBeVisible();`,
+)
+eq(
+  'a non-ARIA tag falls back to text',
+  assertionFor({ role: 'span', name: '1' }),
+  `await expect(page.getByText("1")).toBeVisible();`,
+)
+
+// Ranking: durability across runs, not whatever changed first.
+eq(
+  'a live region outranks a landmark',
+  suggestPostcondition([
+    { role: 'button', name: 'Remove' },
+    { role: 'alert', name: 'Product added to shopping cart.' },
+  ]),
+  { kind: 'role', role: 'alert', name: 'Product added to shopping cart.' },
+)
+eq(
+  'a navigation outranks a landmark when no live region appeared',
+  suggestPostcondition([{ role: 'button', name: 'Remove' }], { navigated: true, url: 'https://shop.test/inventory.html' }),
+  { kind: 'url', assertion: `await expect(page).toHaveURL(/\\/inventory\\.html\\/?$/);` },
+)
+eq(
+  'a landmark is taken when nothing better occurred',
+  suggestPostcondition([{ role: 'span', name: '1' }, { role: 'button', name: 'Remove' }]),
+  { kind: 'role', role: 'button', name: 'Remove' },
+)
+
+// Instance content verifies this run and breaks the next one.
+eq(
+  'content roles are excluded outright',
+  suggestPostcondition([{ role: 'img', name: 'Backpack photo' }, { role: 'gridcell', name: '$29.99' }]),
+  null,
+)
+eq('nothing observed → nothing suggested', suggestPostcondition([]), null)
+eq('a nameless change is not a signal', suggestPostcondition([{ role: 'alert', name: '' }]), null)
+
+// URL waits: an id that varies per run makes a useless assertion.
+check('a numeric segment is dynamic', looksDynamicId('12345'))
+check('a uuid segment is dynamic', looksDynamicId('3f2504e0-4f89-11d3-9a0c-0305e82c3301'))
+check('a word segment is not dynamic', !looksDynamicId('inventory'))
+eq(
+  'a dynamic segment is generalised, with every separator escaped',
+  urlAssertion('https://shop.test/product/98765/detail'),
+  `await expect(page).toHaveURL(/\\/product\\/[^\\/]+\\/detail\\/?$/);`,
+)
+eq('the root is not a distinctive destination', urlAssertion('https://shop.test/'), null)
+eq('an unparseable url yields no wait', urlAssertion('not a url'), null)
+
+// The emitted line is source the curator pastes into a snippet, so the regex it
+// contains has to actually parse — and match the page it was derived from.
+for (const [label, url, alsoMatches] of [
+  ['simple path', 'https://shop.test/inventory.html', 'https://shop.test/inventory.html'],
+  ['dynamic id', 'https://shop.test/product/98765/detail', 'https://shop.test/product/42/detail'],
+]) {
+  const line = urlAssertion(url)
+  const src = /toHaveURL\((\/.*\/)\)/.exec(line)?.[1]
+  let re = null
+  try { re = eval(src) } catch { /* reported below */ }
+  check(`${label}: emitted regex parses`, re instanceof RegExp, `from ${line}`)
+  if (re) {
+    check(`${label}: matches the observed url`, re.test(new URL(url).pathname))
+    check(`${label}: matches an equivalent url`, re.test(new URL(alsoMatches).pathname))
+    check(`${label}: does not match an unrelated path`, !re.test('/something/else'))
+  }
+}
 
 if (failures > 0) {
   console.error(`\n${failures} failure(s)`)

@@ -336,6 +336,75 @@ export function playwrightCode({ action, value, ref }, locator) {
   return locator || action === 'goto' ? line : `${line}  // unresolved ref — needs a durable selector`
 }
 
+// --- postconditions: the wait a snippet inherits ---
+//
+// The signal the driver used to know an action worked is exactly the signal a
+// durable snippet should wait on, so the two are one decision made once. Left
+// implicit, it's lost: `act` settles at runtime, which is invisible to the
+// composed snippet — the curator would author a bare `.click()` with no gate,
+// and the snippet races on the next run.
+//
+// Durability is the whole point, so candidates are ranked by how well a signal
+// survives the same flow running with different inputs. Instance content (a
+// product's name, a price, an image caption) verifies this run and breaks the
+// next one, so it ranks last and is excluded outright where the role gives it
+// away.
+const LIVE_ROLES = new Set(['alert', 'status', 'alertdialog'])
+const LANDMARK_ROLES = new Set(['button', 'link', 'tab', 'heading', 'menuitem', 'menubar', 'navigation'])
+const CONTENT_ROLES = new Set(['figure', 'img', 'image', 'paragraph', 'cell', 'row', 'gridcell', 'listitem', 'p', 'span', 'div'])
+const ARIA_ROLES = new Set([
+  'alert', 'alertdialog', 'button', 'checkbox', 'columnheader', 'combobox', 'dialog', 'grid',
+  'gridcell', 'heading', 'link', 'list', 'listbox', 'listitem', 'menu', 'menubar', 'menuitem',
+  'navigation', 'option', 'progressbar', 'radio', 'row', 'searchbox', 'slider', 'spinbutton',
+  'status', 'switch', 'tab', 'table', 'tabpanel', 'textbox', 'tooltip', 'treeitem',
+])
+
+// Path segments that vary per run — an id in a URL makes a useless assertion.
+export function looksDynamicId(seg) {
+  return /^\d+$/.test(seg) || /^[0-9a-f]{8}-[0-9a-f]{4}/i.test(seg) || /^[0-9a-f]{12,}$/i.test(seg)
+}
+
+export function urlAssertion(url) {
+  let u
+  try { u = new URL(url) } catch { return null }
+  const segs = u.pathname.split('/').filter(Boolean)
+  if (!segs.length) return null // the root is not a distinctive destination
+  // Every `/` is escaped — the result is a regex LITERAL, so an unescaped
+  // separator would close it early and the emitted line wouldn't parse.
+  const pattern = segs
+    .map(s => (looksDynamicId(s) ? '[^\\/]+' : s.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')))
+    .join('\\/')
+  return `await expect(page).toHaveURL(/\\/${pattern}\\/?$/);`
+}
+
+// The Playwright wait for one observed signal. `role` may be a tag name (the
+// mutation log reports tags for unlabelled nodes), so headings and non-ARIA
+// tags fall back to forms that actually exist.
+export function assertionFor({ role, name }) {
+  const r = String(role || '').toLowerCase()
+  const nm = JSON.stringify(name)
+  if (/^h[1-6]$/.test(r)) return `await expect(page.getByRole('heading', { name: ${nm} })).toBeVisible();`
+  if (ARIA_ROLES.has(r)) return `await expect(page.getByRole('${r}', { name: ${nm} })).toBeVisible();`
+  return `await expect(page.getByText(${nm})).toBeVisible();`
+}
+
+// Pick the most durable signal among the ones that ACTUALLY occurred. Bounded
+// to observation by construction: a wait can't be suggested for something that
+// never happened.
+export function suggestPostcondition(candidates, { navigated, url } = {}) {
+  const usable = candidates.filter(c => c.name && !CONTENT_ROLES.has(String(c.role).toLowerCase()))
+  const live = usable.find(c => LIVE_ROLES.has(String(c.role).toLowerCase()))
+  if (live) return { kind: 'role', ...live }
+  if (navigated && url) {
+    const a = urlAssertion(url)
+    if (a) return { kind: 'url', assertion: a }
+  }
+  const landmark = usable.find(c =>
+    LANDMARK_ROLES.has(String(c.role).toLowerCase()) || /^h[1-6]$/.test(String(c.role).toLowerCase()))
+  if (landmark) return { kind: 'role', ...landmark }
+  return usable.length ? { kind: 'role', ...usable[0] } : null
+}
+
 function runCode(session, body) {
   const r = spawnSync(process.execPath, [FORGE_CLI, 'pw', '--json', `-s=${session}`, 'run-code', body], { encoding: 'utf8' })
   if (r.status !== 0) return { ok: false, stderr: r.stderr || r.stdout || '' }
@@ -416,9 +485,25 @@ export async function main(args) {
   // same terms as forge-pw's own output: `act` prints this line itself, so an
   // env-sourced value would otherwise reach the transcript in the clear.
   const code = playwrightCode(opts, locator)
+  const map = buildRedactMap()
   console.log('### Ran Playwright code')
   console.log('```js')
-  console.log(redact(code, buildRedactMap()))
+  console.log(redact(code, map))
+  // A declared expectation was genuinely checked, so its wait belongs in the
+  // block as code — that is what the curator lifts into the snippet, and it is
+  // the difference between a snippet that gates on its outcome and a bare click
+  // that races. An UNdeclared postcondition is a hypothesis about what to wait
+  // for next time, so it is offered as a marked comment instead: echoing it as
+  // code would present a check that never ran as one that did.
+  if (verdict === 'SATISFIED' && expect) {
+    console.log(redact(assertionFor({ role: expect.role, name: expect.text ?? '' }), map))
+  } else if (!expect && !opts.expectNone) {
+    const pc = suggestPostcondition([...transient, ...unlisted, ...changes], { navigated, url: res.data.url })
+    if (pc) {
+      const line = pc.kind === 'url' ? pc.assertion : assertionFor(pc)
+      console.log(`// forge: suggested postcondition (observed, not asserted) — ${redact(line, map)}`)
+    }
+  }
   console.log('```')
 
   const bits = [
