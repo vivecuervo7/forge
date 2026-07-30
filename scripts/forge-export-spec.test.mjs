@@ -678,6 +678,8 @@ test('flow', async ({ page, persona }) => {
 
 // --- failure modes --------------------------------------------------------
 
+// A spec that imports no snippets is already portable — the caller asked for a
+// portable copy and one exists, so that's a success, not an error.
 {
   const noImports = `import { test, expect } from '@playwright/test'
 
@@ -685,8 +687,61 @@ test('flow', async ({ page }) => {
   await page.goto('https://www.saucedemo.com/')
 })
 `
-  const err = caught(() => run(noImports, SNIPPETS))
-  check('failure: already-inlined spec exits 6', err?.code === 6, `got ${err?.code}`)
+  const r = run(noImports, SNIPPETS)
+  check('self-contained: reported as such', r.alreadySelfContained === true)
+  check('self-contained: copied verbatim', r.text === noImports)
+  check('self-contained: nothing claimed as inlined', r.modules.length === 0)
+}
+
+// External reaches are named rather than rewritten — rewriting would mean
+// editing the spec body, and staying silent means an ENOENT deep in a flow.
+{
+  const snippets = {
+    'upload-sheet': `import { resolve } from 'node:path'
+
+export async function run(page, args) {
+  const file = resolve(__dirname, '..', 'fixtures', 'orders.xlsx')
+  await page.locator('input[type="file"]').setInputFiles(file)
+  return { uploaded: true }
+}
+`,
+  }
+  const spec = `import { test, expect } from '@playwright/test'
+import { run as uploadSheet } from '../snippets/upload-sheet'
+
+test('flow', async ({ page }) => {
+  await uploadSheet(page, {})
+})
+`
+  const r = run(spec, snippets, { originalDir: '/project/forge/specs' })
+
+  check(
+    'reaches: __dirname in a snippet warned about',
+    r.warnings.some((w) => w.includes('__dirname') && w.includes('upload-sheet')),
+    r.warnings.join(' | ')
+  )
+  check(
+    'reaches: warning names where it now resolves',
+    r.warnings.some((w) => w.includes('/project/forge/specs'))
+  )
+  check(
+    'reaches: the code is left alone',
+    /resolve\(__dirname, '\.\.', 'fixtures', 'orders\.xlsx'\)/.test(r.text),
+    'detection only — rewriting would break the verbatim guarantee'
+  )
+
+  // A clean spec must not be warned about.
+  const clean = run(
+    `import { test, expect } from '@playwright/test'
+import * as login from '../snippets/login'
+
+test('flow', async ({ page }) => {
+  await login.run(page, { username: 'u', password: 'p' })
+})
+`,
+    SNIPPETS
+  )
+  check('reaches: no false positive on a clean spec', clean.warnings.length === 0, clean.warnings.join(' | '))
 }
 
 {

@@ -62,7 +62,8 @@
 //   2   usage / arg error
 //   4   spec file not found
 //   5   output exists (use --force)
-//   6   no snippet imports found in spec (already inlined?)
+//       (a spec with no snippet imports is already self-contained: copied
+//        verbatim, reported as such, exit 0)
 //   7   a snippet in the closure couldn't be found or parsed
 //   8   dependency cycle between snippets
 
@@ -710,6 +711,64 @@ function mergeExternalImports(externals, needsBaseTest) {
   return lines
 }
 
+// Constructs that reach outside the file for something the export can't carry.
+// An exported spec is only as portable as its references: `__dirname` silently
+// re-points at wherever the export landed, and a read or a child process needs
+// something to exist on the machine running it. Export doesn't rewrite these —
+// doing so would mean editing the spec body — but it must not stay silent about
+// them either, because they fail at run time, deep in a flow, as an ENOENT that
+// looks nothing like "your exported spec had an unportable reference".
+// Only two things actually break when the file moves. Filesystem access in
+// general does NOT qualify: reading back a download the test just made is
+// self-contained and portable, so flagging every `readFileSync` would bury the
+// real cases in noise. Nor does bare `exec(`/`spawn(` — in practice that's
+// `RegExp.prototype.exec` far more often than a process.
+const EXTERNAL_REACHES = [
+  { re: /\b__dirname\b/, what: '`__dirname`' },
+  { re: /\b__filename\b/, what: '`__filename`' },
+  { re: /\b(?:execFileSync|execSync|spawnSync)\s*\(|from 'node:child_process'/, what: 'a child process' },
+]
+
+function externalReachWarnings(reaches, originalDir) {
+  if (!reaches.length) return []
+  const byWhere = new Map()
+  for (const r of reaches) {
+    if (!byWhere.has(r.where)) byWhere.set(r.where, [])
+    byWhere.get(r.where).push(r)
+  }
+
+  const out = []
+  for (const [where, items] of byWhere) {
+    const kinds = [...new Set(items.map((i) => i.what))].join(', ')
+    const sample = items[0].line.length > 96 ? `${items[0].line.slice(0, 93)}…` : items[0].line
+    out.push(
+      `${where} reaches outside the file (${kinds}) and export cannot make that portable — ` +
+        `e.g. \`${sample}\`. ` +
+        (originalDir
+          ? `Anything resolved relative to the file now resolves against the export's own directory, not ${originalDir}. `
+          : '') +
+        `Copy what it needs alongside the export, or point it at an env var.`
+    )
+  }
+  return out
+}
+
+function findExternalReaches(text, where) {
+  const found = []
+  text.split('\n').forEach((line) => {
+    // An ambient shim only describes a global; it isn't itself a reach.
+    if (/^\s*declare\s/.test(line)) return
+    if (/^\s*\/\//.test(line)) return
+    for (const { re, what } of EXTERNAL_REACHES) {
+      if (re.test(line)) {
+        found.push({ where, what, line: line.trim() })
+        break
+      }
+    }
+  })
+  return found
+}
+
 // ---- the transformation --------------------------------------------------
 
 /**
@@ -722,7 +781,13 @@ function mergeExternalImports(externals, needsBaseTest) {
  * @param {string} [opts.sourceLabel] what to name as the source in the header
  * @param {string} [opts.date] ISO date for the header
  */
-export function exportSpec({ specText, loadModule, sourceLabel = 'a composed spec', date }) {
+export function exportSpec({
+  specText,
+  loadModule,
+  sourceLabel = 'a composed spec',
+  date,
+  originalDir,
+}) {
   const warnings = []
   const specImports = []
   const specExternals = []
@@ -733,8 +798,21 @@ export function exportSpec({ specText, loadModule, sourceLabel = 'a composed spe
     else specExternals.push(imp)
   }
 
+  // A spec with no snippet imports is already self-contained — the caller asked
+  // for a portable copy and one already exists, so hand it back rather than
+  // treating "nothing to inline" as a failure. Its external references still
+  // get reported.
   if (specImports.length === 0) {
-    fail("no snippet imports found (nothing matching `from '../snippets/<name>'`) — already inlined?", 6)
+    const reaches = findExternalReaches(specText, 'the spec')
+    return {
+      text: specText,
+      modules: [],
+      transitive: [],
+      directImports: [],
+      fixtureModules: [],
+      alreadySelfContained: true,
+      warnings: externalReachWarnings(reaches, originalDir),
+    }
   }
 
   const modules = buildClosure(specImports, loadModule)
@@ -830,12 +908,22 @@ export function exportSpec({ specText, loadModule, sourceLabel = 'a composed spe
 
   const text = out.join('\n').replace(/\n{4,}/g, '\n\n\n').replace(/\s+$/, '') + '\n'
 
+  // Report unportable references in what actually shipped: the inlined modules
+  // plus the spec's own body. A stubbed fixture module is excluded — its reaches
+  // are why it was stubbed, and that already has its own warning.
+  const reaches = findExternalReaches(body, 'the spec body')
+  for (const name of runtimeOrder) {
+    reaches.push(...findExternalReaches(modules.get(name).body, `snippet "${name}"`))
+  }
+  warnings.push(...externalReachWarnings(reaches, originalDir))
+
   return {
     text,
     modules: runtimeOrder,
     transitive,
     directImports: [...new Set(specImports.map((i) => i.module))],
     fixtureModules,
+    alreadySelfContained: false,
     warnings,
   }
 }
@@ -895,6 +983,7 @@ export function main(argv) {
         const rel = relative(dirname(outputPath), specPath)
         return !rel || rel.startsWith('../../') ? basename(specPath) : rel
       })(),
+      originalDir: dirname(specPath),
     })
   } catch (err) {
     if (err instanceof ExportError) die(err.message, err.code)
@@ -904,12 +993,16 @@ export function main(argv) {
   writeFileSync(outputPath, result.text)
 
   console.log(`forge-export-spec: exported ${specPath} → ${outputPath}`)
-  console.log(
-    `  Inlined ${result.modules.length} module(s): ` +
-      `${result.directImports.length} imported directly by the spec, ` +
-      `${result.transitive.length} pulled in transitively.`
-  )
-  console.log(`  Modules: ${result.modules.join(', ')}`)
+  if (result.alreadySelfContained) {
+    console.log('  No snippet imports — the spec was already self-contained and was copied verbatim.')
+  } else {
+    console.log(
+      `  Inlined ${result.modules.length} module(s): ` +
+        `${result.directImports.length} imported directly by the spec, ` +
+        `${result.transitive.length} pulled in transitively.`
+    )
+    console.log(`  Modules: ${result.modules.join(', ')}`)
+  }
   for (const w of result.warnings) console.log(`  WARNING: ${w}`)
   process.exit(0)
 }

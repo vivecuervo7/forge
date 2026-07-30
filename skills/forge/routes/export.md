@@ -28,6 +28,17 @@ The spec's own comments are never touched. They're the author's documentation of
 
 If you want a snippet's reasoning, read it in `forge/snippets/` or the composed spec; the library remains the source of truth, and the export is a shipping snapshot.
 
+### References export can't make portable
+
+An exported spec is only as portable as what it reaches for. Two constructs are reported as warnings rather than rewritten, since rewriting would mean editing the spec body:
+
+- **`__dirname` / `__filename`** — these silently re-point at wherever the export landed, so a fixture file loaded via `resolve(__dirname, '../fixtures/x.xlsx')` won't be found. The warning names the original directory so you can copy the file alongside, or switch the spec to an env var.
+- **Child processes** (`execFileSync` and friends) — whatever they invoke has to exist on the machine running the spec.
+
+Generic filesystem access is deliberately *not* flagged: reading back a download the test just made is self-contained, and warning on every `readFileSync` would bury the real cases.
+
+A spec that imports no snippets is **already self-contained**. That's a success, not an error — it's copied verbatim and reported as such.
+
 One thing export cannot carry: a **fixture module** — a snippet exporting `test` (Playwright's `test.extend`) whose fixtures reach outside `snippets/` for project-local scripts or credentials. Those are replaced by a stub that reads `FORGE_FIXTURE_<NAME>` and throws a named error when unset, and the export warns naming the env var. The caller supplies the value or wires their own fixture; the gap is loud at run time rather than silently absent.
 
 ## Phase 1 — Discovery
@@ -122,12 +133,11 @@ If `export-spec` returned a non-zero exit code, surface its error verbatim and d
 - **You are a thin wrapper.** Transformation logic lives in `scripts/lib/export-spec.mjs`. This route exists for UX — path defaulting, spec listing, friendly error surfaces.
 - **Default output location is canonical.** `<PROJECT_ROOT>/forge-exports/<name>.spec.ts`. Only deviate with explicit `--output`.
 - **Invoke the script for file writing.** The script writes; you `mkdir -p` the parent directory beforehand — the script doesn't create directories.
-- **Surface script errors verbatim.** If `export-spec` fails, the user needs the exact reason (missing spec, no snippet imports, etc.).
+- **Surface script errors verbatim.** If `export-spec` fails, the user needs the exact reason (missing spec, missing snippet, dependency cycle).
 
 ## Failure modes
 
 - **Spec doesn't exist under `forge/specs/`** — surface "spec not found" with available specs.
 - **No `forge/` directory** — surface find-root's error and instruct `/forge init`.
-- **No snippet imports (exit 6)** — surface its message; the spec is already self-contained (or was never composed), so there's nothing to inline.
 - **A snippet in the closure is missing (exit 7)** — the message names it. Usually a snippet deleted or renamed after the spec was composed; re-run `/forge spec` or fix the import.
 - **Dependency cycle between snippets (exit 8)** — the message names the cycle path. Inlined modules are defined in dependency order, which a cycle makes impossible; break it in the library.

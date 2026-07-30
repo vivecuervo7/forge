@@ -33,6 +33,18 @@ wrapping instead of splicing `run()` bodies into call sites:
   warns naming the variable.
 - **Cycles and missing snippets are reported** (exit 8 / 7) instead of producing
   quietly broken output.
+- **Unportable references are named.** An exported spec is only as portable as
+  what it reaches for, and `__dirname` silently re-points at wherever the export
+  landed — so a fixture loaded via `resolve(__dirname, '../fixtures/x.xlsx')`
+  fails as an ENOENT deep in a flow that looks nothing like its cause. Those and
+  child-process calls are now warned about, naming the original directory.
+  Detection only: rewriting them would mean editing the spec body. Generic
+  filesystem access is deliberately not flagged — reading back a download the
+  test just made is self-contained, and warning on every `readFileSync` would
+  bury the real cases.
+- **A spec with no snippet imports is a success, not an error.** It's already
+  self-contained, which is what the caller asked for, so it's copied verbatim
+  and reported as such instead of exiting 6.
 - **Snippet comments are dropped from the inlined copy.** A snippet's
   commentary is written for the library — authorship, accreted patch notes
   ("recurred an eighth time … needs a live drive to isolate"), selector
