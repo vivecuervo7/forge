@@ -625,7 +625,7 @@ test('flow', async ({ page }) => {
 {
   const snippets = {
     ...SNIPPETS,
-    _persona: `import { test as base } from '@playwright/test'
+    '_test-account': `import { test as base } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
 import { resolve } from 'node:path'
 
@@ -634,10 +634,10 @@ declare const __dirname: string
 const SCRIPTS_DIR = resolve(__dirname, '..', 'hints', 'scripts')
 
 export const test = base.extend({
-  persona: [
+  account: [
     async ({}, use) => {
-      const n = execFileSync('bash', [resolve(SCRIPTS_DIR, 'claim.sh')]).toString()
-      await use({ n })
+      const id = execFileSync('bash', [resolve(SCRIPTS_DIR, 'provision.sh')]).toString()
+      await use({ id })
     },
     { scope: 'worker' },
   ],
@@ -646,34 +646,37 @@ export const test = base.extend({
 export { expect } from '@playwright/test'
 `,
   }
-  const spec = `import { test, expect } from '../snippets/_persona'
+  const spec = `import { test, expect } from '../snippets/_test-account'
 import * as login from '../snippets/login'
 
-test('flow', async ({ page, persona }) => {
-  await login.run(page, persona)
+test('flow', async ({ page, account }) => {
+  await login.run(page, account)
 })
 `
   const r = run(spec, snippets)
 
-  check('fixture: reported as replaced, not inlined', r.fixtureModules.join() === '_persona')
-  check('fixture: not counted among inlined modules', !r.modules.includes('_persona'))
+  check('fixture: reported as replaced, not inlined', r.fixtureModules.join() === '_test-account')
+  check('fixture: not counted among inlined modules', !r.modules.includes('_test-account'))
   check('fixture: base test imported for rebuilding', /import \{ test as base, expect \}/.test(r.text))
   check('fixture: stub extends base', /const test = base\.extend<[^>]*>\(\{/.test(r.text))
-  check('fixture: stub reads an env var', /process\.env\.FORGE_FIXTURE_PERSONA/.test(r.text))
+  check('fixture: stub reads an env var', /process\.env\.FORGE_FIXTURE_ACCOUNT/.test(r.text))
   check('fixture: stub throws when unset', /throw new Error\(/.test(r.text))
-  check('fixture: warning surfaced', r.warnings.some((w) => w.includes('_persona')))
+  check('fixture: warning surfaced', r.warnings.some((w) => w.includes('_test-account')))
   check(
     'fixture: env var named in the warning',
-    r.warnings.some((w) => w.includes('FORGE_FIXTURE_PERSONA'))
+    r.warnings.some((w) => w.includes('FORGE_FIXTURE_ACCOUNT'))
   )
   check(
     'fixture: project-local path machinery not carried over',
-    !/claim\.sh/.test(r.text),
+    !/provision\.sh/.test(r.text),
     "the fixture's own body must not travel"
   )
   check('fixture: no snippet path survives', !/from '\.\.\/snippets\//.test(r.text))
 
-  check('fixtureNames: parses top-level fixture keys', fixtureNames(snippets._persona).join() === 'persona')
+  check(
+    'fixtureNames: parses top-level fixture keys',
+    fixtureNames(snippets['_test-account']).join() === 'account'
+  )
 }
 
 // --- failure modes --------------------------------------------------------
