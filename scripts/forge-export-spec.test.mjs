@@ -432,22 +432,69 @@ test('flow', async ({ page }) => {
   check('comments: authorship line dropped', !/Authored by/.test(r.text))
   check('comments: patch narrative dropped', !/recurred a fourth time/.test(r.text))
   check(
-    'comments: leading doc region dropped whole',
+    'comments: leading doc region dropped',
     !/Opens the cart\. Call after login\./.test(r.text),
     'the header region is library documentation, not test documentation'
   )
+  check('comments: in-body patch note dropped', !/selector went ambiguous/.test(r.text))
+  check('comments: explanatory caveat dropped too', !/40s margin/.test(r.text))
+  check('comments: hedged NOTE dropped', !/the badge count lags the click/.test(r.text))
   check(
-    'comments: in-body patch note dropped',
-    !/selector went ambiguous/.test(r.text),
-    'a provenance-led block is narrative wherever it sits'
+    'comments: no comment survives in an inlined module',
+    !/^\s*\/\//m.test(r.text.slice(r.text.indexOf('const $openCart'), r.text.indexOf('test('))),
+    'the module region should be code only'
   )
-  check(
-    'comments: explanatory caveat kept',
-    /40s margin, not the usual 10s/.test(r.text),
-    'this is why the code looks odd — it has to survive'
-  )
-  check('comments: hedged NOTE kept', /the badge count lags the click/.test(r.text))
+
   check('comments: the code itself is intact', /\.cart-link'\)\.first\(\)\.click\(\)/.test(r.text))
+  check('comments: the timeout survives its comment', /timeout: 40000/.test(r.text))
+  check('comments: return value intact', /return \{ opened: true \}/.test(r.text))
+}
+
+// Trailing comments go, but only the comment — never the code beside them, and
+// never a `//` that is really inside a string.
+{
+  const snippets = {
+    'go-to-cart': `export async function run(page, args) {
+  const BASE = 'https://www.saucedemo.com/' // canonical host
+  await page.goto(BASE + 'cart.html') // trailing note
+  const ratio = args.width / args.height // not a comment: division
+  /* block form */
+  await page.waitForURL('https://www.saucedemo.com/cart.html')
+  // eslint-disable-next-line playwright/no-wait-for-timeout
+  await page.waitForTimeout(100)
+  return { ratio }
+}
+`,
+  }
+  const spec = `import { test, expect } from '@playwright/test'
+import { run as goToCart } from '../snippets/go-to-cart'
+
+test('flow', async ({ page }) => {
+  await goToCart(page, { width: 4, height: 3 })
+})
+`
+  const r = run(spec, snippets)
+
+  check('trailing: comment text removed', !/canonical host/.test(r.text) && !/trailing note/.test(r.text))
+  check('trailing: block comment removed', !/block form/.test(r.text))
+  check(
+    'trailing: URL inside a string untouched',
+    (r.text.match(/https:\/\/www\.saucedemo\.com\//g) ?? []).length === 2,
+    'the // in https:// is string content, not a comment'
+  )
+  check('trailing: code beside the comment kept', /await page\.goto\(BASE \+ 'cart\.html'\)/.test(r.text))
+  check(
+    'trailing: division not mistaken for a comment',
+    /const ratio = args\.width \/ args\.height/.test(r.text)
+  )
+  check(
+    'trailing: functional directive preserved',
+    /eslint-disable-next-line playwright\/no-wait-for-timeout/.test(r.text),
+    'removing a suppression re-arms the rule it silenced'
+  )
+  // The body is re-indented into the IIFE, so assert leading whitespace exists
+  // rather than a fixed width — the point is that stripping didn't eat it.
+  check('trailing: indentation preserved', /^\s{4}await page\.waitForTimeout\(100\)$/m.test(r.text))
 }
 
 // Comment stripping is line-based, so a comment-SHAPED line that is really

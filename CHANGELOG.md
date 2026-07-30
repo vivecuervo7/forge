@@ -33,14 +33,17 @@ wrapping instead of splicing `run()` bodies into call sites:
   warns naming the variable.
 - **Cycles and missing snippets are reported** (exit 8 / 7) instead of producing
   quietly broken output.
-- **Library commentary is dropped from the inlined copy.** A snippet's leading
-  doc block and any provenance-led comment block ("Patched by … recurred an
-  eighth time … needs a live drive to isolate") is curation history addressed to
-  the next maintainer; in a shipped spec it buries the code — on a real export,
-  44% of the file was comments. Standalone explanations (why a wait is 40s, why a
-  locator needs `.first()`) are kept, and the spec's own comments are untouched.
-  Stripping is string-aware, so a comment-shaped line inside injected script
-  text survives.
+- **Snippet comments are dropped from the inlined copy.** A snippet's
+  commentary is written for the library — authorship, accreted patch notes
+  ("recurred an eighth time … needs a live drive to isolate"), selector
+  reasoning. In a shipped spec it buries the code: on a real export 44% of the
+  file was comments, and the file went 1530 → 896 lines once they went. The
+  spec's own comments stay untouched, since on a repro spec the root-cause
+  write-up is the most valuable thing in the file. Functional comments
+  (`@ts-expect-error`, `eslint-disable`, …) are preserved — removing a
+  suppression re-arms the rule it silenced — and stripping is string-aware, so
+  a comment-shaped line inside injected script text survives as the source it
+  is.
 
 The verb had no tests, which is how it drifted out of step with the spec shape
 the driver emits. It now has a matrix that executes the generated code rather
