@@ -5,6 +5,40 @@ every version bump. The full granular history is in the git log. Forge is young
 and pre-1.0 (built over June 2026), so a minor version can still carry a
 meaningful architecture change.
 
+## 0.60.1 — `/forge export` actually produces a portable spec (2026-07-30)
+
+Export was inlining one import form and silently reporting success for the
+rest, so most exported specs were not self-contained — and one failure mode
+made an export pass green while asserting nothing. Rewritten around whole-module
+wrapping instead of splicing `run()` bodies into call sites:
+
+- **Every import form is handled**, not just `import * as X from '../snippets/Y'`.
+  The `import { run as X }` and `import { helper }` forms — by now the common
+  ones — were invisible to the old matcher, which left their `../snippets/…`
+  paths in the output while still claiming success.
+- **The transitive closure travels.** A snippet that imports a sibling brings it
+  along, recursively; previously nothing beyond the spec's own imports was
+  followed, so inlined bodies referenced identifiers that weren't there.
+- **No more false green.** A snippet whose `run()` is a one-line delegator to a
+  sibling export (a common shape) used to be spliced as a bare `return` inside
+  the test's own function: the test exited at that step, asserted nothing, and
+  reported a pass. Whole-module wrapping keeps the sibling in scope.
+- **Bodies stay verbatim.** Each module becomes one IIFE with its dependencies
+  injected by destructuring, so no identifier rewriting happens inside snippet
+  bodies, and the spec body — call sites, selectors, assertions — is untouched.
+- **Fixture modules are stubbed, loudly.** A snippet exporting `test` whose
+  fixtures reach outside `snippets/` (project-local scripts, credentials) can't
+  travel in a portable file. Each fixture becomes a stub reading
+  `FORGE_FIXTURE_<NAME>` that throws a named error when unset, and the export
+  warns naming the variable.
+- **Cycles and missing snippets are reported** (exit 8 / 7) instead of producing
+  quietly broken output.
+
+The verb had no tests, which is how it drifted out of step with the spec shape
+the driver emits. It now has a matrix that executes the generated code rather
+than only parsing it, since the failure worth catching is an export that loads
+and does nothing.
+
 ## 0.60.0 — Small drive/curate discipline fixes from the dogfood review (2026-07-17)
 
 Five one-line prompt fixes, each from an observed miss; the rest of the
