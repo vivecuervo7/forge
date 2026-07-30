@@ -22,6 +22,8 @@ The exported spec lives outside `forge/` deliberately — composed form (evolves
 
 Every module in the spec's **transitive** closure travels, not just the ones the spec imports by name: a snippet that imports a sibling brings that sibling along, recursively. Each becomes one module-scoped IIFE holding the snippet's source verbatim, with its dependencies injected by destructuring, and the spec's import lines become plain bindings against those modules. The spec body itself is never rewritten, so call sites, selectors and assertions survive byte-for-byte.
 
+Snippet **library commentary is dropped** from the inlined copy: each module's leading doc block (authorship, call notes, accreted patch history) plus any comment block deeper in the body that opens with a provenance marker — `Authored by`, `Patched by`, `Fixed <date>:`, `Refactored`, and so on. Those are addressed to whoever maintains the snippet next, and in a shipped artifact they bury the code. Standalone explanatory comments — why a wait is 40s, why a locator needs `.first()` — are kept, because they explain code that would otherwise read as wrong. The spec's own comments are never touched; they're the author's documentation of the scenario.
+
 One thing export cannot carry: a **fixture module** — a snippet exporting `test` (Playwright's `test.extend`) whose fixtures reach outside `snippets/` for project-local scripts or credentials. Those are replaced by a stub that reads `FORGE_FIXTURE_<NAME>` and throws a named error when unset, and the export warns naming the env var. The caller supplies the value or wires their own fixture; the gap is loud at run time rather than silently absent.
 
 ## Phase 1 — Discovery

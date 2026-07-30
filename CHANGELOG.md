@@ -33,6 +33,14 @@ wrapping instead of splicing `run()` bodies into call sites:
   warns naming the variable.
 - **Cycles and missing snippets are reported** (exit 8 / 7) instead of producing
   quietly broken output.
+- **Library commentary is dropped from the inlined copy.** A snippet's leading
+  doc block and any provenance-led comment block ("Patched by … recurred an
+  eighth time … needs a live drive to isolate") is curation history addressed to
+  the next maintainer; in a shipped spec it buries the code — on a real export,
+  44% of the file was comments. Standalone explanations (why a wait is 40s, why a
+  locator needs `.first()`) are kept, and the spec's own comments are untouched.
+  Stripping is string-aware, so a comment-shaped line inside injected script
+  text survives.
 
 The verb had no tests, which is how it drifted out of step with the spec shape
 the driver emits. It now has a matrix that executes the generated code rather

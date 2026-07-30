@@ -201,6 +201,111 @@ function stripMeta(src) {
   return src.slice(0, m.index) + src.slice(end).replace(/^\n+/, '\n')
 }
 
+const COMMENT_LINE = /^\s*\/\//
+
+// Which lines BEGIN inside a template literal. Comment stripping is line-based,
+// so without this a `// …` line that is really injected-script source (snippets
+// pass script text to addInitScript/evaluate) would be deleted — changing
+// behaviour while still compiling cleanly.
+//
+// A hand-rolled scanner tracking strings, comments and `${}` nesting. Regex
+// literals are deliberately not modelled: distinguishing `/` as division from a
+// regex needs real parsing, and a regex would only mislead this scanner if it
+// contained a quote or backtick, which is vanishingly rare in snippet code.
+export function templateLiteralLines(src) {
+  const inside = new Set()
+  // Brace counters for each `${…}` expression we've descended into; a non-empty
+  // stack means an enclosing template is waiting for us to come back out.
+  const exprStack = []
+  let state = 'code'
+  let line = 0
+
+  for (let i = 0; i < src.length; i++) {
+    const c = src[i]
+    const n = src[i + 1]
+
+    if (c === '\n') {
+      line++
+      if (state === 'tpl') inside.add(line)
+      if (state === 'line-comment') state = 'code'
+      continue
+    }
+
+    if (state === 'code') {
+      if (c === '\\') i++
+      else if (c === '/' && n === '/') { state = 'line-comment'; i++ }
+      else if (c === '/' && n === '*') { state = 'block-comment'; i++ }
+      else if (c === "'") state = 'single'
+      else if (c === '"') state = 'double'
+      else if (c === '`') state = 'tpl'
+      else if (exprStack.length && c === '{') exprStack[exprStack.length - 1]++
+      else if (exprStack.length && c === '}') {
+        if (exprStack[exprStack.length - 1] === 0) {
+          exprStack.pop()
+          state = 'tpl'
+        } else exprStack[exprStack.length - 1]--
+      }
+    } else if (state === 'block-comment') {
+      if (c === '*' && n === '/') { state = 'code'; i++ }
+    } else if (state === 'single' || state === 'double') {
+      if (c === '\\') i++
+      else if ((state === 'single' && c === "'") || (state === 'double' && c === '"')) state = 'code'
+    } else if (state === 'tpl') {
+      if (c === '\\') i++
+      else if (c === '`') state = 'code'
+      else if (c === '$' && n === '{') { exprStack.push(0); state = 'code'; i++ }
+    }
+  }
+  return inside
+}
+// Markers that open a curation note rather than an explanation. Grounded in the
+// library's actual leading words; `Authored`/`PATCHED` alone account for most of
+// it. Deliberately excludes hedged words like `Confirmed` and `NOTE`, which lead
+// genuine caveats as often as bookkeeping.
+const PROVENANCE = /^\s*\/\/\s*(authored|patched|fixed|refactored|updated|split|extracted|renamed|re-verified|rewritten|superseded)\b/i
+
+// A snippet's leading comment region is its library documentation — who authored
+// it, how to call it, how it has been patched. Useful in the library, noise in a
+// shipped artifact, so the whole region goes: consecutive comment and blank
+// lines from the top of the module until the first line of actual code.
+export function stripLeadingDocBlock(src) {
+  const lines = src.split('\n')
+  const inTemplate = templateLiteralLines(src)
+  let i = 0
+  while (
+    i < lines.length &&
+    !inTemplate.has(i) &&
+    (COMMENT_LINE.test(lines[i]) || lines[i].trim() === '')
+  ) {
+    i++
+  }
+  return lines.slice(i).join('\n')
+}
+
+// Curation narrative that sits deeper in the body — accreted patch notes
+// addressed to whoever maintains the snippet next. A block is dropped whole when
+// its FIRST line opens with a provenance marker; blocks that merely mention a
+// date or ticket further in stay, since those are usually explaining a
+// constraint rather than logging a change.
+export function stripProvenanceBlocks(src) {
+  const lines = src.split('\n')
+  const inTemplate = templateLiteralLines(src)
+  const isComment = (i) => COMMENT_LINE.test(lines[i]) && !inTemplate.has(i)
+
+  const keep = []
+  for (let i = 0; i < lines.length; i++) {
+    if (!isComment(i)) {
+      keep.push(lines[i])
+      continue
+    }
+    const start = i
+    while (i + 1 < lines.length && isComment(i + 1)) i++
+    if (PROVENANCE.test(lines[start])) continue
+    keep.push(...lines.slice(start, i + 1))
+  }
+  return keep.join('\n')
+}
+
 // Catalogue the module's `type` / `interface` declarations and drop their
 // `export` keyword, but leave them where they sit: TypeScript allows a type
 // alias or interface inside a function body, and a type left in place can
@@ -281,6 +386,10 @@ export function analyseModule(name, src) {
   }
 
   body = stripMeta(body)
+  // Library-facing commentary is dropped from the inlined copy. Only the
+  // module's own text is touched — the spec's comments are its author's
+  // documentation of the scenario and survive intact.
+  body = stripProvenanceBlocks(stripLeadingDocBlock(body))
   const { body: afterDeclares, declares } = liftDeclares(body)
   const { body: afterTypes, typeDecls } = catalogueTypes(afterDeclares)
   const { body: afterExports, names } = collectExports(afterTypes)

@@ -394,6 +394,120 @@ test('flow', async ({ page }) => {
   )
 }
 
+// --- library commentary stripped, explanations kept -----------------------
+
+{
+  const snippets = {
+    'open-cart': `// Authored by forge:curator on 2025-01-01 (PROJ-123 drive).
+// Patched by forge:curator on 2025-01-02: recurred a fourth time for a fresh
+// name — needs a live drive to isolate rather than a static read. No
+// behavioural change made here.
+//
+// Opens the cart. Call after login.
+export const meta = { description: 'Open the cart.', args: {}, tags: ['cart'] }
+
+export async function run(page, args) {
+  // 40s margin, not the usual 10s: a cold dev-server build can take that long
+  // to mount the badge.
+  await page.waitForSelector('.cart-badge', { timeout: 40000 })
+
+  // Patched by forge:curator on 2025-01-03: switched to .first() after the
+  // selector went ambiguous.
+  await page.locator('.cart-link').first().click()
+
+  // NOTE: the badge count lags the click by one tick.
+  return { opened: true }
+}
+`,
+  }
+  const spec = `import { test, expect } from '@playwright/test'
+import { run as openCart } from '../snippets/open-cart'
+
+test('flow', async ({ page }) => {
+  await openCart(page, {})
+})
+`
+  const r = run(spec, snippets)
+
+  check('comments: authorship line dropped', !/Authored by/.test(r.text))
+  check('comments: patch narrative dropped', !/recurred a fourth time/.test(r.text))
+  check(
+    'comments: leading doc region dropped whole',
+    !/Opens the cart\. Call after login\./.test(r.text),
+    'the header region is library documentation, not test documentation'
+  )
+  check(
+    'comments: in-body patch note dropped',
+    !/selector went ambiguous/.test(r.text),
+    'a provenance-led block is narrative wherever it sits'
+  )
+  check(
+    'comments: explanatory caveat kept',
+    /40s margin, not the usual 10s/.test(r.text),
+    'this is why the code looks odd — it has to survive'
+  )
+  check('comments: hedged NOTE kept', /the badge count lags the click/.test(r.text))
+  check('comments: the code itself is intact', /\.cart-link'\)\.first\(\)\.click\(\)/.test(r.text))
+}
+
+// Comment stripping is line-based, so a comment-SHAPED line that is really
+// string content must not be touched — that would change behaviour silently
+// while still compiling.
+{
+  const snippets = {
+    'inject-shim': `// Authored by forge:curator on 2025-01-01.
+export async function run(page, args) {
+  await page.addInitScript(\`
+// Authored by nobody — this line is script source, not a comment.
+// Patched later: still script source.
+window.__shim = true
+\`)
+  return { injected: true }
+}
+`,
+  }
+  const spec = `import { test, expect } from '@playwright/test'
+import { run as injectShim } from '../snippets/inject-shim'
+
+test('flow', async ({ page }) => {
+  await injectShim(page, {})
+})
+`
+  const r = run(spec, snippets)
+  check(
+    'comments: template-literal content preserved',
+    /this line is script source, not a comment/.test(r.text) &&
+      /Patched later: still script source/.test(r.text),
+    'string content that looks like a comment must survive'
+  )
+  check('comments: the real authorship line still dropped', !/Authored by forge:curator/.test(r.text))
+  check('comments: injected script intact', /window\.__shim = true/.test(r.text))
+}
+
+// The spec's own comments are the author's documentation of the scenario and
+// must survive even when they look like provenance.
+{
+  const specBody = `test('flow', async ({ page }) => {
+  // Patched by hand on 2025-01-01: this comment is the spec author's, not a
+  // snippet's, so it stays.
+  await login.run(page, { username: 'standard_user' })
+})
+`
+  const spec = `// Reproduces: PROJ-123 — cart badge fails to increment.
+// Authored by a human, and this header is the point of the artifact.
+import { test, expect } from '@playwright/test'
+import * as login from '../snippets/login'
+
+${specBody}`
+  const r = run(spec, SNIPPETS)
+  check('comments: spec header preserved', /Reproduces: PROJ-123/.test(r.text))
+  check(
+    'comments: provenance-looking spec header preserved',
+    /Authored by a human, and this header is the point/.test(r.text)
+  )
+  check('comments: spec body still byte-identical', r.text.endsWith(specBody))
+}
+
 // --- deduplication --------------------------------------------------------
 
 {
