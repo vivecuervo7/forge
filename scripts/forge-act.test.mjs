@@ -177,6 +177,17 @@ check('a value with quotes/backslashes is safely embedded', tricky.includes(JSON
 check('goto targets the page, not a locator', buildBody({ action: 'goto', target: null, value: 'https://example.com', quiet: 1, timeout: 1 }).includes('page.goto("https://example.com")'))
 check('type maps to pressSequentially', buildBody({ action: 'type', target: 'e3', value: 'hi', quiet: 1, timeout: 1 }).includes('pressSequentially'))
 
+// Rich widgets drop characters typed faster than their own handlers run, and a
+// driver needing a keystroke delay had to leave `act` for `run-code`.
+eq('--delay parses', parseArgs(['-s=d', 'type', 'e3', 'abc', '--delay=40']).delay, 40)
+check('a delay reaches the typed call', buildBody({ action: 'type', target: 'e3', value: 'hi', quiet: 1, timeout: 1, delay: 40 }).includes('{ delay: 40 }'))
+check('no delay leaves the call unadorned', !buildBody({ action: 'type', target: 'e3', value: 'hi', quiet: 1, timeout: 1 }).includes('delay'))
+eq(
+  'the echo carries the delay so the snippet inherits it',
+  playwrightCode({ action: 'type', target: 'e3', value: 'hi', delay: 40 }, `getByLabel('U')`),
+  `await page.getByLabel('U').pressSequentially("hi", { delay: 40 });`,
+)
+
 // --- the echoed Playwright code ---
 //
 // The curator authors snippets from this echo and a spec is composed from it,

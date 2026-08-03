@@ -34,6 +34,14 @@
 //
 //   -s=<name> / --session=<name>   the playwright-cli session (required)
 //   --quiet=<ms>                   quiet window that counts as settled (500)
+//   --delay=<ms>                   `type` only: pause between keystrokes. Rich
+//                                  widgets (Kendo, DevExpress, Telerik) and
+//                                  async-validated inputs drop characters typed
+//                                  faster than their own handlers run, and a
+//                                  driver needing this had to leave `act` for
+//                                  `run-code` — losing the watched window on a
+//                                  step that is fiddly precisely because it is
+//                                  worth capturing.
 //   --timeout=<ms>                 give up settling after this (8000)
 //   --raw                          also print the transient log's raw entries
 //
@@ -103,13 +111,14 @@ const NO_REF = new Set(['goto'])
 export function parseArgs(argv) {
   const opts = {
     session: null, action: null, target: null, value: null,
-    quiet: 500, timeout: 8000, raw: false,
+    quiet: 500, timeout: 8000, delay: 0, raw: false,
     unknownFlags: [],
   }
   const positional = []
   for (const a of argv) {
     if (a === '--raw') opts.raw = true
     else if (a.startsWith('--quiet=')) opts.quiet = Number(a.slice('--quiet='.length))
+    else if (a.startsWith('--delay=')) opts.delay = Number(a.slice('--delay='.length))
     else if (a.startsWith('--timeout=')) opts.timeout = Number(a.slice('--timeout='.length))
     else if (a.startsWith('--session=')) opts.session = a.slice('--session='.length)
     else if (a.startsWith('-s=')) opts.session = a.slice('-s='.length)
@@ -134,12 +143,12 @@ export function parseArgs(argv) {
 // The in-page half: install the observer, act, drain, settle. Returned as one
 // `async page => {...}` body for run-code. Values are JSON-embedded so quoting
 // and shell-expansion hazards can't reach the page.
-export function buildBody({ action, target: t, value, quiet, timeout }) {
+export function buildBody({ action, target: t, value, quiet, timeout, delay }) {
   const target = t ? `page.locator(${JSON.stringify(asSelector(t))})` : 'page'
   let call
   if (action === 'goto') call = `await page.goto(${JSON.stringify(value)})`
   else if (action === 'fill') call = `await ${target}.fill(${JSON.stringify(value ?? '')})`
-  else if (action === 'type') call = `await ${target}.pressSequentially(${JSON.stringify(value ?? '')})`
+  else if (action === 'type') call = `await ${target}.pressSequentially(${JSON.stringify(value ?? '')}${delay ? `, { delay: ${delay} }` : ''})`
   else if (action === 'press') call = `await ${target}.press(${JSON.stringify(value ?? '')})`
   else if (action === 'select') call = `await ${target}.selectOption(${JSON.stringify(value ?? '')})`
   else call = `await ${target}.${action}()`
@@ -334,14 +343,14 @@ export function locatorFor(session, target) {
 // in which case the raw ref is echoed with a trailing marker so the curator can
 // see the selector still needs a durable form, rather than a per-snapshot
 // handle being passed off as one.
-export function playwrightCode({ action, value, target: t }, locator) {
+export function playwrightCode({ action, value, target: t, delay }, locator) {
   const target = locator ? `page.${locator}` : `page.locator('aria-ref=${t}')`
   const arg = value == null ? '' : JSON.stringify(value)
   let line
   switch (action) {
     case 'goto': line = `await page.goto(${arg});`; break
     case 'fill': line = `await ${target}.fill(${arg});`; break
-    case 'type': line = `await ${target}.pressSequentially(${arg});`; break
+    case 'type': line = `await ${target}.pressSequentially(${arg}${delay ? `, { delay: ${delay} }` : ''});`; break
     case 'press': line = `await ${target}.press(${arg});`; break
     case 'select': line = `await ${target}.selectOption(${arg});`; break
     default: line = `await ${target}.${action}();`

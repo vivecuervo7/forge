@@ -46,6 +46,10 @@ spec composed from a watched drive verified cold on the first round.
   `run-code` — losing the watched window and the gate candidates on exactly the
   actions most worth capturing, which is what happened on the measured
   spec-mode drive.
+- **`act type … --delay=<ms>`** for inputs that drop characters typed at full
+  speed (Kendo/DevExpress/Telerik, async-validated fields) — previously a trip
+  to `run-code`, which cost the watched window on a step that is fiddly
+  precisely because it is worth capturing.
 - **`NO OBSERVABLE EFFECT`** is reported structurally when nothing measurable
   changed — a stuck-signal that needs no prediction and so can't bias anything.
 - **Curator:** promote a chosen candidate to real code, keep the
