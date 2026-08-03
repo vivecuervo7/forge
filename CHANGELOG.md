@@ -52,9 +52,12 @@ spec composed from a watched drive verified cold on the first round.
   precisely because it is worth capturing.
 - **`NO OBSERVABLE EFFECT`** is reported structurally when nothing measurable
   changed — a stuck-signal that needs no prediction and so can't bias anything.
-- **Curator:** promote a chosen candidate to real code, keep the
-  `expect(...).toBeVisible({ timeout })` form (rewriting it as `waitFor` turns a
-  bounded gate into one that pends to the whole test timeout), and mark any
+- **Curator:** promote a chosen candidate to real code, and carry its **timeout**
+  across whatever form you write it in — an untimed wait pends to the whole test
+  timeout and surfaces as a mystery hang rather than a failed wait. Translating
+  the form is fine and often necessary (`waitFor({ state: 'attached' })` for a
+  visually-hidden input, a `waitForResponse` fence for an async save); where a
+  project documents its own gating convention, that wins. Also: mark any
   selector generalised beyond what the drive actually executed as unverified.
 
 ## 0.60.1 — `/forge export` actually produces a portable spec (2026-07-30)
