@@ -139,6 +139,81 @@ eq(
   ],
 )
 
+// --- relevance: informative content, not an allowlist of roles ---
+//
+// The allowlist this replaces excluded whole categories of meaningful content by
+// construction. On a real drive a failed login surfaced an unnamed dismiss
+// button and NOT the error text beside it — the driver could see that something
+// went wrong but not what, and re-observing never recovered it.
+
+eq(
+  'a validation message rendered as a heading reaches the view',
+  seen(`- heading "Epic sadface: Username is required" [level=3] [ref=e26]`),
+  ['heading "Epic sadface: Username is required" [e26]'],
+)
+eq(
+  "a data grid's cells reach the view",
+  seen(`- gridcell "Forge Test: Observe CS" [ref=e366]\n- columnheader "Name" [ref=e360]`),
+  ['gridcell "Forge Test: Observe CS" [e366]', 'columnheader "Name" [e360]'],
+)
+
+// An interactable earns its place by being actionable, so a ref is enough —
+// an icon button or a close `X` has no name and is still what you click.
+eq(
+  'an unnamed interactable with a ref is kept',
+  seen(`- button "" [ref=e27]`),
+  ['button "" [e27]'],
+)
+eq(
+  'an unnamed, ref-less interactable is still noise',
+  seen(`- combobox`),
+  [],
+)
+// Anything non-interactive earns its place by telling you something.
+eq(
+  'an unnamed non-interactive element is dropped',
+  seen(`- figure [ref=e40]`),
+  [],
+)
+
+// Roles the platform marks as having no semantics, and the snapshot's own
+// metadata lines, are the bulk of a page and carry nothing on their own.
+eq(
+  'anonymous roles and /meta lines are dropped, semantic siblings kept',
+  seen(
+    `- generic "Cmd" [ref=e5]\n` +
+    `- text: for this application.\n` +
+    `- /url: /product/4\n` +
+    `- heading "Checkout" [ref=e7]`,
+  ),
+  ['heading "Checkout" [e7]'],
+)
+
+// A row's accessible name is its cells' text concatenated, so keeping both
+// reports every value twice — measured at 92 rows against 90 identically-named
+// gridcells on one page. The children are more precise, so the container goes.
+eq(
+  'a container whose name is just its children is dropped in favour of them',
+  seen(`- row "Alice Smith Active" [ref=e50]:\n  - gridcell "Alice Smith" [ref=e51]\n  - gridcell "Active" [ref=e52]`),
+  ['gridcell "Alice Smith" [e51]', 'gridcell "Active" [e52]'],
+)
+eq(
+  'a container carrying MORE than its children survives',
+  seen(`- row "Alice Smith — overdue" [ref=e50]:\n  - gridcell "Alice Smith" [ref=e51]`),
+  ['row "Alice Smith — overdue" [e50]', 'gridcell "Alice Smith" [e51]'],
+)
+// Never dedup something you act on or must read.
+eq(
+  'a button wrapping its own label is not swallowed by it',
+  seen(`- button "Save" [ref=e60]:\n  - text: Save`),
+  ['button "Save" [e60]'],
+)
+eq(
+  "an alert folds its message and doesn't repeat it",
+  seen(`- alert [ref=e9]:\n  - listitem: Please provide a value`),
+  ['alert "Please provide a value" [e9]'],
+)
+
 if (failures > 0) {
   console.error(`\n${failures} failure(s)`)
   process.exit(1)

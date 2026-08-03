@@ -153,13 +153,38 @@ node <PLUGIN_ROOT>/scripts/forge-cli.mjs invoke-snippet \
 
 `--args` is JSON matching the snippet's `meta.args`. For env-sourced args use shell expansion. For account/role resolution consult `forge.md`; if it doesn't document a named account, check in with the lead. If invocation fails, fall back to driving fresh and flag the bypass in the chunk signal.
 
-**Driving fresh:** orient with `observe --live`, then act on the `[ref]` handles it prints, through native `forge-pw` verbs. One call snapshots the page and prints the *filtered* view — interactable elements with their refs + error/alert signals — rather than pasting a whole raw snapshot into your context:
+**Driving fresh:** orient with `observe --live`, then act on the `[ref]` handles it prints. One call snapshots the page and prints the *filtered* view — interactable elements with their refs + error/alert signals — rather than pasting a whole raw snapshot into your context:
 
 ```bash
 node <PLUGIN_ROOT>/scripts/forge-cli.mjs observe --live -s=<SESSION_NAME>
-node <PLUGIN_ROOT>/scripts/forge-cli.mjs pw -s=<SESSION_NAME> click e3
-# echoes: await page.getByRole('button', { name: 'Sign In' }).click();
+node <PLUGIN_ROOT>/scripts/forge-cli.mjs act -s=<SESSION_NAME> click e3
 ```
+
+**Act through `act`, which watches the page while it acts.** It installs a mutation observer *before* the action, so anything that appears while you're mid-turn is captured, then settles the page and prints the view — one call in place of act-then-observe. Two things reach you that a separate observe cannot deliver:
+
+- **Transients** — a toast or `role=alert` flash that lived a few hundred ms is reported (`! …  (gone by now)`) even though nothing is on screen by the time you read it.
+- **Off-view causes** — content that appeared but whose role the filtered view drops (a validation message rendered as a heading, a status line as a paragraph) is listed too. This is routinely the thing that explains *why* an action did what it did.
+
+**`act` never predicts an outcome, and there is no way to declare one.** After each action it reports the gate candidates it *actually observed*, best-first, for the curator to choose from:
+
+```bash
+node <PLUGIN_ROOT>/scripts/forge-cli.mjs act -s=<SESSION_NAME> click e15
+# → // forge: gate candidates — all OBSERVED after this action; pick one for the snippet:
+#   //   1. [live region] await expect(page.getByRole('alert', { name: "Product added to shopping cart." })).toBeVisible();
+#   //   2. [landmark]    await expect(page.getByRole('button', { name: "Compare" })).toBeVisible();
+```
+
+This is deliberate, and it is why you get a shortlist rather than a verdict. Naming a signal in advance drags the run toward your own guess — and even when the guessed thing does happen, it needn't be the *best* thing to wait on, so a confirmed guess quietly forecloses a better gate sitting in the same diff. Ranking is by durability (live region → navigation → landmark), but it's a hint: the curator picks, holding context you don't have at action time. An empty list is a real answer too — a snippet with no gate and an honest caveat beats a confident wrong one.
+
+Candidates are always comments, never code: `act` settled and watched, but it did not evaluate them as assertions.
+
+**`NO OBSERVABLE EFFECT` in the header is your structural stuck-signal.** It means nothing measurable changed — no transient, no view change, no navigation. One is worth a look; several in a row means you're driving a page that isn't responding to you, and that's the moment to re-observe or check in with the lead rather than press on. You don't have to notice it yourself; the header says it.
+
+`act` covers the common verbs (`click`, `fill`, `type`, `press`, `select`, `hover`, `check`, `goto`). Anything outside that set is still `forge-pw` or `run-code` as before. For an input that drops characters typed at full speed — rich widgets (Kendo, DevExpress, Telerik) and async-validated fields — `act … type <target> <text> --delay=<ms>` keeps that step inside the watched window instead of costing you a trip to `run-code`; `--quiet=<ms>` likewise buys a slow app a longer settle.
+
+**A target is a ref *or* a selector.** `act … click e12` acts on what you just observed; `act … click '[data-test="product-name"] >> nth=0'` acts on a selector directly. Reach for the selector form whenever the step is one a snippet will want — a ref is per-snapshot and per-instance, so it never survives into the library, while the selector you drove is the thing the curator can keep. Dropping to `run-code` for that shape costs you the watched window *and* the gate candidates on precisely the actions most worth capturing, so prefer `act` and let `run-code` keep the jobs it's genuinely for (value capture, multi-step atomic logic, APIs off the native surface). A selector you supply is already durable, so it's echoed exactly as you wrote it.
+
+**Read `act`'s output whole — it is already summarised.** The settled view comes first and the part you act on comes last: the transients, the verdict, then the echoed Playwright. Piping through `tail -N` is safe (that ordering exists so it is), but `head`, or a `tail` short enough to clip the closing block, drops the verdict and the echo — and the echo is what the curator reads to author the snippet, so clipping it costs the library, not just you.
 
 It tracks the page URL itself, so a real navigation re-baselines to the full filtered view while an in-page popup stays a cheap diff. The default view keeps every element's *current* ref, so acting on what it prints is always safe. It folds an alert's message into its text — a settle/error sentinel you can wait on or assert — and collapses long dropdowns to one `option-list "first…last" = "N"` line, so open the list and type into its searchbox to filter rather than expecting all options inline. `forge-observe` is **perception only** — like a raw snapshot, its output isn't part of the action trace the curator reads or the spec you compose (those come from your action echoes and `run-code` bodies), so read it as freely as you need.
 

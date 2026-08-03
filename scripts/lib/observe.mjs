@@ -38,11 +38,33 @@
 //   --diff            aggressive: print only what changed since the last observe
 //   --full            print a plain full view and reset the comparison baseline
 //
-// Filtering: keeps interactables + signal roles (alert/status). Signals fold in
-// their descendant text (so an alert shows its message, not an empty name).
-// Long option runs collapse to one `option-list "first…last" = "N"` line (a big
-// dropdown is noise the driver filters via its searchbox). Interactables with
-// neither a ref nor a name are dropped as unactionable.
+// Filtering: two tests, because nodes earn their place two different ways.
+// An **interactable** is kept because you can act on it — a ref is enough, so an
+// icon button or a close `X` with no accessible name still shows up. Anything
+// **else** is kept if it tells you something: a name or a value. Dropped are
+// roles the platform marks as having no semantics at all (`generic`, `none`,
+// bare `text`) and the snapshot's own `/url` / `/placeholder` metadata lines.
+//
+// This is deliberately NOT an allowlist of interesting roles. That is what it
+// used to be, and it excluded whole categories of meaningful content by
+// construction — a validation message rendered as a heading, a data grid's rows
+// and cells, a status line as a paragraph. Measured on a real drive: a failed
+// login showed the driver an unnamed dismiss button and not the error beside it,
+// so it could see something went wrong but not what, and no amount of
+// re-observing recovered it. Naming the noise instead of the signal means a role
+// nobody anticipated still gets through.
+//
+// Signals fold in their descendant text (so an alert shows its message, not an
+// empty name) and those descendants are then skipped rather than repeated.
+// Containers whose name is merely their children's text run together are
+// dropped in favour of the children — a grid row's accessible name is its cells
+// concatenated, so keeping both reports every value twice. Long option runs
+// collapse to one `option-list "first…last" = "N"` line (a big dropdown is noise
+// the driver filters via its searchbox).
+//
+// Cost of showing non-interactive content, measured across 104 real snapshots:
+// the view roughly doubles (10% → 23% of the raw snapshot), so it still
+// compresses ~4x while ceasing to be selectively blind.
 //
 // Behaviour:
 //   - Default → full filtered list with change markers (+ new / ~ changed /
@@ -69,12 +91,29 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { findForgeRoot } from './common.mjs'
 
+// Roles the driver can act on. No longer a filter — the view keeps informative
+// content whatever its role — but still worth naming, because these are what a
+// `[ref]` is worth acting on and what the option-run collapse keys off.
 const INTERACTABLE = new Set([
   'button', 'link', 'textbox', 'combobox', 'checkbox', 'radio', 'option',
   'menuitem', 'menuitemcheckbox', 'menuitemradio', 'tab', 'switch', 'slider',
   'searchbox', 'spinbutton', 'listbox',
 ])
 const SIGNAL = new Set(['alert', 'alertdialog', 'status']) // errors / live regions
+
+// Roles that are the platform saying "this has no semantic role" — layout
+// divs and loose text runs. They may carry text, but a page's meaningful
+// content is nearly always also present on a semantic ancestor or descendant,
+// and on a real app these are the bulk: 140 of one page's 170 added lines were
+// `generic` fragments like "Cmd" and "K". Excluded by name rather than by
+// omission from an allowlist, so a role nobody thought of still gets through.
+const ANONYMOUS = new Set(['generic', 'none', 'text', 'InlineTextBox'])
+
+// Lines beginning `/` are the AI snapshot's metadata for the PARENT element
+// (`/url` for a link's target, `/placeholder` for an input's hint) rather than
+// elements in their own right. The flat parse can't attach them upward, and
+// emitting them as elements is just wrong.
+const isMeta = role => role.startsWith('/')
 const FLAGS = ['checked', 'selected', 'disabled', 'expanded', 'pressed']
 
 // churn ratio above which a diff is treated as a navigation (re-baseline)
@@ -151,34 +190,84 @@ function descendantText(nodes, i) {
   return parts.join(' ').trim().slice(0, 100)
 }
 
-// Parse -> items. Signals fold in their descendant text (and don't collapse —
-// two alerts with different messages are different). Interactables with neither
-// a ref nor a name are unactionable noise (e.g. a hidden native `combobox`) and
-// are dropped. Long option runs collapse to one summary line.
+// Parse -> items. Relevance is decided by whether a node carries information —
+// an accessible name or a value — not by a closed list of roles.
+//
+// The allowlist this replaces was a standing blind spot, because it excluded
+// whole categories of meaningful content by construction. A validation message
+// rendered as a heading, a data grid's cells and rows, a status line as a
+// paragraph: all silently absent, however important. Measured on a real drive,
+// a failed login showed the driver an unnamed dismiss button and NOT the error
+// text sitting beside it — it could see that something went wrong but not what.
+// No amount of re-observing recovered it; the role simply wasn't on the list.
+//
+// So the test is inverted, the same way the engine's perception core did it:
+// keep what the platform says is meaningful, drop only what is structurally
+// anonymous. A node with neither a name nor a value is a layout wrapper and
+// carries nothing, which is the bulk of any snapshot — so this stays cheap
+// while ceasing to be selectively blind.
+//
+// Signals still fold in their descendant text, and those descendants are then
+// skipped so the message isn't reported twice. Long option runs still collapse.
 export function extract(yaml) {
   const nodes = yaml.split('\n').map(parseLine).filter(Boolean)
   const raw = []
+  const consumed = new Set()
   for (let i = 0; i < nodes.length; i++) {
+    if (consumed.has(i)) continue
     const n = nodes[i]
     if (SIGNAL.has(n.role)) {
       const text = n.name || descendantText(nodes, i)
-      raw.push({ role: n.role, name: text, ref: n.ref, key: `${n.role}|${text}`, state: '' })
-    } else if (INTERACTABLE.has(n.role)) {
-      if (!n.ref && !n.name) continue // unactionable, unlabelled — noise
-      raw.push({
-        role: n.role, name: n.name, ref: n.ref,
-        key: `${n.role}|${n.name}`,
-        state: [n.value, ...n.flags].filter(Boolean).join(','),
-      })
+      // The folded descendants are this message; don't emit them again.
+      for (let j = i + 1; j < nodes.length && nodes[j].indent > n.indent; j++) consumed.add(j)
+      raw.push({ role: n.role, name: text, ref: n.ref, key: `${n.role}|${text}`, state: '', indent: n.indent })
+      continue
     }
+    if (isMeta(n.role) || ANONYMOUS.has(n.role)) continue
+    const state = [n.value, ...n.flags].filter(Boolean).join(',')
+    // Two different tests, because the two kinds of node earn their place
+    // differently. An interactable is worth showing because you can ACT on it —
+    // an icon button or a close `X` has no accessible name and is still the
+    // control you need, so a ref is enough. Everything else is worth showing
+    // only if it TELLS you something, so it needs a name or a value.
+    if (INTERACTABLE.has(n.role) ? (!n.ref && !n.name) : (!n.name && !state)) continue
+    raw.push({
+      role: n.role, name: n.name, ref: n.ref,
+      key: `${n.role}|${n.name || state}`,
+      state, indent: n.indent,
+    })
   }
+  // Drop containers whose name is just their children's text run together.
+  //
+  // A grid row's accessible name is the concatenation of its cells', so keeping
+  // both reports every value twice — measured at 92 rows against 90 gridcells
+  // carrying identical names on one page, and roughly half the cost of showing
+  // non-interactive content at all. The children are strictly more precise (one
+  // value each, individually addressable), so the container is the one to go.
+  //
+  // Interactables and signals are never dropped this way: a `button "Save"`
+  // wrapping the text "Save" is still the thing you click, and an alert is the
+  // thing you read.
+  const norm = s => (s || '').replace(/\s+/g, ' ').trim().toLowerCase()
+  const deduped = raw.filter((it, i) => {
+    if (INTERACTABLE.has(it.role) || SIGNAL.has(it.role) || !it.name) return true
+    const mine = norm(it.name)
+    if (!mine) return true
+    // Descendants are the deeper-indented run that follows this node.
+    let covered = ''
+    for (let j = i + 1; j < raw.length && raw[j].indent > it.indent; j++) {
+      if (raw[j].name) covered += (covered ? ' ' : '') + norm(raw[j].name)
+    }
+    return !covered || !covered.includes(mine)
+  })
+
   // Collapse consecutive option runs longer than OPTION_CAP.
   const items = []
-  for (let i = 0; i < raw.length;) {
-    if (raw[i].role === 'option') {
+  for (let i = 0; i < deduped.length;) {
+    if (deduped[i].role === 'option') {
       let j = i
-      while (j < raw.length && raw[j].role === 'option') j++
-      const run = raw.slice(i, j)
+      while (j < deduped.length && deduped[j].role === 'option') j++
+      const run = deduped.slice(i, j)
       if (run.length > OPTION_CAP) {
         items.push({
           role: 'option-list', ref: run[0].ref,
@@ -187,7 +276,7 @@ export function extract(yaml) {
         })
       } else items.push(...run)
       i = j
-    } else { items.push(raw[i]); i++ }
+    } else { items.push(deduped[i]); i++ }
   }
   return items
 }

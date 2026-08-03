@@ -5,6 +5,61 @@ every version bump. The full granular history is in the git log. Forge is young
 and pre-1.0 (built over June 2026), so a minor version can still carry a
 meaningful architecture change.
 
+## 0.61.0 — Watched actions, and perception that isn't selectively blind (2026-07-27)
+
+Ported from the standalone `forge-cli` engine, then measured against it: five
+drives of the same task on the same site, scored on wall-clock, call counts,
+and the quality of the snippets each produced. The headline is the last of
+those — snippets carrying a real gate went from **0 of 3** to **3 of 3**, and a
+spec composed from a watched drive verified cold on the first round.
+
+- **`observe` no longer silently drops elements whose accessible name contains
+  `": "`.** Playwright quotes such a key wholesale, and the line parser couldn't
+  match the quoted form — so the element vanished with no warning and a header
+  count that agreed with itself. On a real project's captured snapshots, 13 of
+  102 were affected; on the sample shop it was hiding *every product link*.
+  A dropdown of colon-named options observed as empty, which is
+  indistinguishable from "the options never loaded".
+- **`observe` stops filtering by an allowlist of interesting roles.** The old
+  list excluded whole categories by construction — a validation message
+  rendered as a heading, a data grid's rows and cells, a status line as a
+  paragraph. Measured: a failed login showed the driver an unnamed dismiss
+  button and *not* the error beside it. Relevance is now "can you act on it, or
+  does it tell you something", with the noise named instead of the signal. The
+  view roughly doubles (10% → 23% of the raw snapshot) and still compresses ~4x.
+- **New verb `act` — perform an action and watch the page through it.** A
+  MutationObserver is installed before the action and drained after, so a toast
+  that lives 200ms can't slip between turns; then it settles on network
+  quiescence before reporting. Refs are `observe`'s, resolved via the `aria-ref`
+  engine, so the two are interchangeable.
+- **Gates reach the library.** After each action `act` reports the gate
+  candidates it *actually observed*, ranked by durability, for the curator to
+  choose from. There is deliberately no way to declare an expected outcome:
+  nominating a signal in advance drags the run toward the guess, and a
+  confirmed guess forecloses a better gate sitting in the same diff. Candidates
+  carry a timeout derived from the measured settle. An empty shortlist is a
+  real answer — a snippet with no gate and an honest caveat beats a confident
+  wrong one.
+- **`act` targets a ref *or* a selector.** A ref is per-snapshot and never
+  survives into a snippet; a selector is what the curator can keep. Taking only
+  refs meant a driver reaching for the generalisable form had to drop to
+  `run-code` — losing the watched window and the gate candidates on exactly the
+  actions most worth capturing, which is what happened on the measured
+  spec-mode drive.
+- **`act type … --delay=<ms>`** for inputs that drop characters typed at full
+  speed (Kendo/DevExpress/Telerik, async-validated fields) — previously a trip
+  to `run-code`, which cost the watched window on a step that is fiddly
+  precisely because it is worth capturing.
+- **`NO OBSERVABLE EFFECT`** is reported structurally when nothing measurable
+  changed — a stuck-signal that needs no prediction and so can't bias anything.
+- **Curator:** promote a chosen candidate to real code, and carry its **timeout**
+  across whatever form you write it in — an untimed wait pends to the whole test
+  timeout and surfaces as a mystery hang rather than a failed wait. Translating
+  the form is fine and often necessary (`waitFor({ state: 'attached' })` for a
+  visually-hidden input, a `waitForResponse` fence for an async save); where a
+  project documents its own gating convention, that wins. Also: mark any
+  selector generalised beyond what the drive actually executed as unverified.
+
 ## 0.60.1 — `/forge export` actually produces a portable spec (2026-07-30)
 
 Export was inlining one import form and silently reporting success for the

@@ -95,7 +95,27 @@ When collaborativeness is high (teaching) the user may steer your library decisi
 
 **Before writing, re-scan INDEX.md for overlap** (verb + noun). Prefer to **extend** an existing snippet, **compose** with it (`composes: [...]`), or **supersede** it (`supersedes: [...]`) over a near-duplicate. Author fresh only when genuinely orthogonal. This is also where the **patch-vs-new** call lives: if a chunk is *almost* an existing snippet but needs one more capability (e.g. an event-create that also ticks a module), **amend that snippet to parameterize the capability** (a new optional arg, default unchanged) rather than authoring a parallel one or leaving the driver's hand-drive as a one-off.
 
+**A selector you generalised is unverified — say so.** Turning what the drive ran into something reusable is your job (a hardcoded per-record id becomes a by-name lookup), but the generalised form is code *no drive executed*, so it carries no evidence. Note it in the snippet's caveats. This is not hypothetical: a by-name product lookup authored exactly this way used `hasText: /^Name$/` against markup whose text is `" Name "`, so the anchors could never match — the drive had clicked by id, never exercised the path, and the snippet failed the first time it ran cold. Anchored regexes against element text are the specific trap: the text is not trimmed for you.
+
 **Preserve what the driver actually ran.** Lift the echoed Playwright code and `run-code` bodies from the trace **verbatim** — same selectors, same waits, same `dispatchEvent`. Parameterize only the literal values that vary (`'sauce-labs-backpack'` → `args.item`). Refine a locator only when it's fragile by inspection (or `curator.md` points you to documented selector vocabulary worth preferring). Don't fabricate a cleaner version; the working code is the durable code.
+
+**Give every snippet the gate the drive relied on — you make that call.** A snippet that acts without waiting for its own outcome races on the next run: the commonest way a library snippet turns flaky. After each action `act` prints a shortlist of what it *actually observed*:
+
+```
+// forge: gate candidates — all OBSERVED after this action; pick one for the snippet:
+//   1. [live region] await expect(page.getByRole('alert', { name: "Product added…" })).toBeVisible();
+//   2. [landmark]    await expect(page.getByRole('button', { name: "Compare" })).toBeVisible();
+```
+
+**Pick one and promote it to real code** in the snippet body. They arrive as comments because none of them ran — `act` settled and watched, but never evaluated them as assertions — so encoding one is your decision, not a transcription.
+
+**Whatever form you write it in, keep it bounded.** The candidate arrives as `expect(locator).toBeVisible({ timeout })`, and that timeout is the load-bearing part: a scaffolded config leaves `actionTimeout` unset, so an *untimed* wait pends to the entire test timeout and surfaces as a mysterious "Test timeout exceeded" rather than "this never appeared". Dropping the timeout on the way into the snippet is the failure — and it has happened, turning a safe gate into the exact footgun `lint-spec` exists to catch. The value is derived from how long the action actually took to settle, so it already fits this flow; carry it across.
+
+Translating the *form* is fine, and often right. `locator.waitFor({ state, timeout })`, a `waitForResponse` fence, or a project helper are all legitimate gates — sometimes the only ones that work, as with a visually-hidden input that needs `state: 'attached'` because `'visible'` never resolves. **If `curator.md` or `forge.md` documents a house gating convention, follow it** — a project that has worked out how its own async writes settle knows something this shortlist doesn't.
+
+It's a shortlist rather than a single pick because the choice needs what only you know: what the snippet is *for*, which values get parameterized, whether the flow is reused across products or users. The `[tier]` ordering is a hint from role alone. Prefer the signal that survives different inputs — a live region, a navigation, a control that always appears. A price, an item name, or a row's contents verifies this one run and breaks the next; note that a product's own heading can show up tiered as a landmark, and it is still instance content.
+
+**An empty list, or `NO OBSERVABLE EFFECT`, is a real answer.** When the action clearly has an outcome worth gating (a submit, a create, an add-to-cart) but nothing durable was observed, say so in the snippet's caveats. A snippet with no gate and an honest caveat is worth more than a confident wrong wait — and inventing one the drive never saw is exactly the fabrication the verbatim rule exists to prevent.
 
 **Primitives (`_`-prefixed files) are the one sanctioned refactor.** Files like `snippets/_wait-until-stable.ts` are shared helpers — no `meta`, excluded from the INDEX, *imported* by snippets rather than invoked. When the driver's trace shows a hand-rolled settle loop (poll-until-unchanged, retry-until-count), bake it into the snippet as a composition of the existing primitive — same reads, same thresholds, expressed through `waitUntilStable(...)` — instead of preserving the loop's scaffolding literally. Author a *new* primitive only when the same mechanism has recurred across snippets; the mechanism itself must still come verbatim from traces.
 
