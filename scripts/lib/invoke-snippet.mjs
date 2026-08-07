@@ -59,7 +59,7 @@ import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { ensureRunnerDeps, esbuildBinFor, loadFromRunner } from './ensure-runner.mjs'
-import { looksLikeForgeRoot } from './common.mjs'
+import { looksLikeForgeRoot, extractMetaSource, evalMeta } from './common.mjs'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -135,6 +135,47 @@ try {
 if (!/export\s+(?:async\s+)?function\s+run\s*\(/.test(rawSrc) &&
     !/export\s*\{[^}]*\brun\b[^}]*\}/.test(rawSrc)) {
   die(`snippet at ${snippetPath} does not export a run(page, args) function`)
+}
+
+// Declared args the caller did not supply.
+//
+// Without this the omission surfaces from inside Playwright as
+// `locator.fill: value: expected string, got undefined` — an error naming neither
+// the snippet nor the argument, and raised only after earlier fields have already
+// been written to the page. So the caller gets an opaque message plus a
+// half-filled form to reason about.
+//
+// Every declared arg is required unless marked `optional: true`; an empty string
+// is a legitimate value, so only absent or null counts as missing.
+function missingDeclaredArgs(metaObj, supplied) {
+  const declared = metaObj && metaObj.args
+  if (!declared || typeof declared !== 'object') return []
+  const given = supplied && typeof supplied === 'object' ? supplied : {}
+  const missing = []
+  for (const [name, spec] of Object.entries(declared)) {
+    if (spec && typeof spec === 'object' && spec.optional) continue
+    const v = given[name]
+    if (v === undefined || v === null) missing.push(name)
+  }
+  return missing
+}
+
+// Check the call against the snippet's own declared signature before the page is
+// touched. A meta block we cannot parse is NOT grounds for refusal — the index
+// reports that separately, and blocking a drive over it would be worse than the
+// error being prevented.
+{
+  const metaSrc = extractMetaSource(rawSrc)
+  if (metaSrc) {
+    const { meta } = evalMeta(metaSrc)
+    if (meta) {
+      const missing = missingDeclaredArgs(meta, parsedArgs)
+      if (missing.length) {
+        const declared = Object.keys(meta.args || {})
+        die(`snippet ${snippetPath} missing required arg(s): ${missing.join(', ')} — it declares (${declared.join(', ')})`)
+      }
+    }
+  }
 }
 
 // Bundle the snippet. esbuild handles:
