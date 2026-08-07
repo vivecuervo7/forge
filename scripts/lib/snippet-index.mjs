@@ -19,7 +19,15 @@
 //      `misc` group at the bottom. Each line is
 //        `  - <name>(<args>)  → <description> [phase: ...] [enters: ...] [requires: ...]`
 //      Optional metadata bracket-suffixes are only emitted when present.
-//   5. Idempotent — running twice produces the same file.
+//   5. Also writes <forge>/snippets/index/ — FLOWS.md (every flow, its size,
+//      where its detail lives, and the bare snippet names it holds) plus one
+//      <flow>.md slice per flow carrying the full lines. The driver reads FLOWS.md
+//      and then only the flows its task touches; reading INDEX.md whole costs it
+//      the entire library on every drive, which for a mature one is ~20k tokens of
+//      which nearly all describes work the task will never reach. INDEX.md itself
+//      is unchanged — the curator needs the whole picture to spot duplicates, and
+//      cleanup wants to survey everything.
+//   6. Idempotent — running twice produces the same files.
 //
 // Schema (see agents/curator.md for the canonical doc):
 //   description: string           (required, one-liner)
@@ -48,11 +56,11 @@
 //                                            # (default is a per-category summary)
 //
 // Exit codes:
-//   0   INDEX.md written (or no-op if no snippets directory exists)
+//   0   INDEX.md and index/ written (or no-op if no snippets directory exists)
 //   1   no forge root found
 //   2   usage / parse error
 
-import { existsSync, readdirSync, readFileSync, writeFileSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, writeFileSync, statSync, mkdirSync, rmSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import {
   findForgeRoot,
@@ -155,7 +163,7 @@ function buildIndex(snippetsDir, opts = {}) {
 
   emitHygieneWarnings(records, opts)
 
-  return renderMarkdown(records, primitives)
+  return { markdown: renderMarkdown(records, primitives), records, primitives }
 }
 
 // Heuristic: does the description suggest a multi-step flow?
@@ -254,6 +262,118 @@ function emitHygieneWarnings(records, opts = {}) {
   }
 }
 
+// Group records by meta.flow; ungrouped land under ''.
+function groupByFlow(records) {
+  const byFlow = new Map()
+  for (const r of records) {
+    const flow = (r.meta && r.meta.flow) || ''
+    if (!byFlow.has(flow)) byFlow.set(flow, [])
+    byFlow.get(flow).push(r)
+  }
+  return byFlow
+}
+
+// Named flows first (alphabetical), misc last.
+function sortedFlows(byFlow) {
+  return [...byFlow.keys()].sort((a, b) => {
+    if (a === '' && b !== '') return 1
+    if (b === '' && a !== '') return -1
+    return a.localeCompare(b)
+  })
+}
+
+// The `  - name(args)  → description [tags]` lines for one flow. Shared by the
+// full index and the per-flow slices so the two can never drift.
+function sectionLines(section) {
+  // Pad name(args) within each section so the `→` columns line up loosely.
+  // No global alignment — keeps small sections tight.
+  const heads = section.map(r => `${r.name}${formatArgs(r.meta.args)}`)
+  const widest = heads.reduce((m, h) => Math.max(m, h.length), 0)
+  // Cap padding so a single long arg list doesn't blow out the section.
+  const padTo = Math.min(widest, 56)
+
+  const out = []
+  for (let i = 0; i < section.length; i++) {
+    const r = section[i]
+    const head = heads[i]
+    const padded = head.length >= padTo ? head : head + ' '.repeat(padTo - head.length)
+
+    const description = r.error
+      ? `(${r.error})`
+      : compactDescription(r.meta.description)
+
+    const phase = bracketSuffix('phase', r.meta && r.meta.phase)
+    const enters = bracketSuffix('enters', r.meta && r.meta.enters)
+    const requires = bracketSuffix('requires', r.meta && r.meta.requires)
+
+    const tail = description
+      ? `  → ${description}${phase}${enters}${requires}`
+      : `${phase}${enters}${requires}`
+
+    out.push(`  - ${padded}${tail}`)
+  }
+  return out
+}
+
+// A flow name as a filename stem. Flow names are free-form, so they can carry
+// spaces, slashes and arrows (e.g. 'cart→payment').
+export function flowSlug(flow) {
+  const s = String(flow || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+  return s || 'misc'
+}
+
+// The orientation file: every flow, its size, where its detail lives, and the
+// bare snippet names it holds.
+//
+// Reading the full index costs the driver the whole library on every drive — for
+// a mature one that is ~20k tokens, of which all but a flow or two describes work
+// the task will never touch. This is the small read that makes a targeted second
+// read possible: names are enough to choose a flow, often enough to choose the
+// snippet outright, and the descriptions and preconditions stay in the slice.
+function renderFlowsToc(byFlow, primitives = []) {
+  const flows = sortedFlows(byFlow)
+  const total = [...byFlow.values()].reduce((a, s) => a + s.length, 0)
+  const lines = []
+  lines.push('# Snippet FLOWS (auto-generated) — read this first, then only the flows your task needs.')
+  lines.push('# Refresh: node <plugin-root>/scripts/forge-cli.mjs snippet-index')
+  lines.push('#')
+  lines.push(`# ${total} snippet(s) across ${flows.length} flow(s). Per-flow detail: snippets/index/<flow>.md`)
+  lines.push('# snippets/INDEX.md holds every entry in one file — for browsing and cleanup, not for driving.')
+  if (primitives.length) {
+    lines.push(`# ${primitives.length} primitive(s) (import into snippets/specs; not invocable) are listed in INDEX.md.`)
+  }
+  lines.push('')
+  for (const flow of flows) {
+    const section = byFlow.get(flow)
+    lines.push(`flow: ${flow === '' ? 'misc' : flow}  (${section.length})  → snippets/index/${flowSlug(flow)}.md`)
+    // Bare names, wrapped — enough to pick a flow without pulling its detail.
+    let line = '  '
+    for (const r of section) {
+      const piece = (line.trim() === '' ? '' : ', ') + r.name
+      if (line.length + piece.length > 96) {
+        lines.push(line)
+        line = '  ' + r.name
+      } else {
+        line += piece
+      }
+    }
+    if (line.trim() !== '') lines.push(line)
+    lines.push('')
+  }
+  return lines.join('\n').replace(/\n+$/, '\n')
+}
+
+function renderFlowFile(flow, section) {
+  const lines = []
+  lines.push(`# Snippet flow: ${flow === '' ? 'misc' : flow} (auto-generated)`)
+  lines.push('# Refresh: node <plugin-root>/scripts/forge-cli.mjs snippet-index')
+  lines.push(`# ${section.length} snippet(s). Other flows: snippets/index/FLOWS.md`)
+  lines.push('')
+  lines.push(flow === '' ? 'misc' : `flow: ${flow}`)
+  lines.push(...sectionLines(section))
+  return lines.join('\n').replace(/\n+$/, '\n')
+}
+
 function renderMarkdown(records, primitives = []) {
   const lines = []
   lines.push('# Snippet INDEX (auto-generated)')
@@ -265,52 +385,10 @@ function renderMarkdown(records, primitives = []) {
   }
   lines.push('')
 
-  // Group by flow
-  const byFlow = new Map()
-  for (const r of records) {
-    const flow = (r.meta && r.meta.flow) || ''
-    if (!byFlow.has(flow)) byFlow.set(flow, [])
-    byFlow.get(flow).push(r)
-  }
-
-  // Sort: named flows first (alphabetical), misc last.
-  const flows = [...byFlow.keys()].sort((a, b) => {
-    if (a === '' && b !== '') return 1
-    if (b === '' && a !== '') return -1
-    return a.localeCompare(b)
-  })
-
-  // Pad name(args) within each section so the `→` columns line up loosely.
-  // No global alignment — keeps small sections tight.
-  for (const flow of flows) {
-    const heading = flow === '' ? 'misc' : `flow: ${flow}`
-    lines.push(heading)
-
-    const section = byFlow.get(flow)
-    const heads = section.map(r => `${r.name}${formatArgs(r.meta.args)}`)
-    const widest = heads.reduce((m, h) => Math.max(m, h.length), 0)
-    // Cap padding so a single long arg list doesn't blow out the section.
-    const padTo = Math.min(widest, 56)
-
-    for (let i = 0; i < section.length; i++) {
-      const r = section[i]
-      const head = heads[i]
-      const padded = head.length >= padTo ? head : head + ' '.repeat(padTo - head.length)
-
-      const description = r.error
-        ? `(${r.error})`
-        : compactDescription(r.meta.description)
-
-      const phase = bracketSuffix('phase', r.meta && r.meta.phase)
-      const enters = bracketSuffix('enters', r.meta && r.meta.enters)
-      const requires = bracketSuffix('requires', r.meta && r.meta.requires)
-
-      const tail = description
-        ? `  → ${description}${phase}${enters}${requires}`
-        : `${phase}${enters}${requires}`
-
-      lines.push(`  - ${padded}${tail}`)
-    }
+  const byFlow = groupByFlow(records)
+  for (const flow of sortedFlows(byFlow)) {
+    lines.push(flow === '' ? 'misc' : `flow: ${flow}`)
+    lines.push(...sectionLines(byFlow.get(flow)))
     lines.push('')
   }
 
@@ -345,8 +423,32 @@ if (!existsSync(snippetsDir) || !statSync(snippetsDir).isDirectory()) {
   process.exit(0)
 }
 
-const md = buildIndex(snippetsDir, { verbose })
+const { markdown, records, primitives } = buildIndex(snippetsDir, { verbose })
 const outPath = join(snippetsDir, 'INDEX.md')
-writeFileSync(outPath, md + '\n', 'utf8')
-console.log(`forge-snippet-index: wrote ${outPath}`)
+writeFileSync(outPath, markdown + '\n', 'utf8')
+
+// Per-flow slices plus a FLOWS.md orientation file. Rewritten wholesale each run
+// so a renamed or emptied flow cannot leave a stale slice behind for the driver
+// to read.
+const indexDir = join(snippetsDir, 'index')
+try { rmSync(indexDir, { recursive: true, force: true }) } catch { /* first run */ }
+mkdirSync(indexDir, { recursive: true })
+
+const byFlow = groupByFlow(records)
+writeFileSync(join(indexDir, 'FLOWS.md'), renderFlowsToc(byFlow, primitives) + '\n', 'utf8')
+
+const slugs = new Map()
+for (const flow of sortedFlows(byFlow)) {
+  // Two flow names can reduce to the same stem ('cart payment' and
+  // 'cart→payment'); suffix rather than silently overwriting one with the other.
+  let slug = flowSlug(flow)
+  if (slugs.has(slug)) {
+    let n = 2
+    while (slugs.has(`${slug}-${n}`)) n++
+    slug = `${slug}-${n}`
+  }
+  slugs.set(slug, flow)
+  writeFileSync(join(indexDir, `${slug}.md`), renderFlowFile(flow, byFlow.get(flow)) + '\n', 'utf8')
+}
+console.log(`forge-snippet-index: wrote ${outPath} and ${slugs.size} flow slice(s) in ${indexDir}`)
 }

@@ -113,10 +113,20 @@ Optional. It encodes everything project-specific about driving this app: env con
 ### Scan the snippet library
 
 ```
-Read <PROJECT_FORGE_ROOT>/snippets/INDEX.md
+Read <PROJECT_FORGE_ROOT>/snippets/index/FLOWS.md
 ```
 
-Compact listing of every snippet — grouped by `flow:`, one line each. If it doesn't exist, `ls <PROJECT_FORGE_ROOT>/snippets/*.ts` and `Read` each for its `meta` block. Hold the library in context as name → { what it does, args, state it requires/enters }.
+Every flow, its size, and the bare snippet names it holds. Then read only the flows your task touches:
+
+```
+Read <PROJECT_FORGE_ROOT>/snippets/index/<flow>.md
+```
+
+Each slice carries the full line per snippet — what it does, its args, and the state it requires and enters. Hold those in context as name → { what it does, args, state it requires/enters }. If the first flow turns out to be the wrong guess, read a second; that is far cheaper than carrying the whole library.
+
+Reading `snippets/INDEX.md` instead pulls in every flow the task will never touch — on a mature library that is nearly all of it, and it crowds out the work. Prefer the full index only when you genuinely need to survey everything: a cleanup pass, or hunting a snippet whose flow you cannot guess.
+
+If `index/` is missing the library predates it — refresh with `node <plugin-root>/scripts/forge-cli.mjs snippet-index`, or fall back to `Read <PROJECT_FORGE_ROOT>/snippets/INDEX.md`. If there are no snippets at all, `ls <PROJECT_FORGE_ROOT>/snippets/*.ts` and `Read` each for its `meta` block.
 
 ### Plan
 
@@ -235,8 +245,10 @@ When the drive is finished, send the curator the `drive complete` signal (above)
 **Re-scan the index first** — the curator just changed it:
 
 ```
-Read <PROJECT_FORGE_ROOT>/snippets/INDEX.md
+Read <PROJECT_FORGE_ROOT>/snippets/index/FLOWS.md
 ```
+
+Then re-read the slices for the flows your spec composes from.
 
 ### Intent — every spec carries one
 
