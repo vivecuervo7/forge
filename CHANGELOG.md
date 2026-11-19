@@ -5,6 +5,21 @@ every version bump. The full granular history is in the git log. Forge is young
 and pre-1.0 (built over June 2026), so a minor version can still carry a
 meaningful architecture change.
 
+## 0.62.0 — A drive reads only the snippets it needs (2026-11-19)
+
+- **The snippet index is sliced by flow.** A drive used to read the whole
+  `snippets/INDEX.md` before its first action — 20,330 tokens on a library of
+  299 snippets across 40 flows. `snippet-index` now also writes
+  `snippets/index/FLOWS.md` (every flow with its snippet names, no
+  descriptions) and one `snippets/index/<flow>.md` per flow. The driver reads
+  the overview, then only the flows its task touches: 3,316 tokens on that
+  library, an 84% reduction, and 71% in the worst case of the largest slice.
+- **A snippet call missing a declared arg is refused by name, before the page
+  is touched.** It used to fail inside Playwright as `expected string, got
+  undefined`, after earlier fields were already filled. It now reports
+  `missing required arg(s): postalCode, state`. Every declared arg is required
+  unless marked `optional: true`; an empty string counts as a value.
+
 ## 0.61.0 — Watched actions, and perception that isn't selectively blind (2026-07-27)
 
 Ported from the standalone `forge-cli` engine, then measured against it: five
